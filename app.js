@@ -70,6 +70,7 @@
   const vmeta = (v) => VERDICT_META[v] || VERDICT_META.Unverifiable;
 
   let fcCards = [], fcId = 0, fcInflight = 0, lastUtterance = "";
+  let recentClaims = new Map();   // F2 dedupe: normalized claim → last card-creation epoch ms (cleared per stream)
   let fcPublish = null;   // set in control view → publishes an aired card to the OBS /overlay channel
   let opBridge = null;    // set in control view → second-phone operator bridge (P3-J): queue snapshot push + command poll
   let fcRoom = null;      // control view's room id — sent on verify calls for per-room caps/BYOK
@@ -112,8 +113,9 @@
      One entry per checked claim, updated as the operator acts. Downloadable JSON from the queue
      header; aired checks are also mirrored server-side (durability backstop) via /api/onair.
 
-     DISPOSITION COMPLETENESS (P1-F, re-verified after P3-F + M5): every logged claim ends in
-     exactly ONE terminal action — aired | skipped | held | error | expired | stale_generation | paused.
+     DISPOSITION COMPLETENESS (P1-F, re-verified after P3-F + M5; F2 added duplicate): every
+     logged claim ends in exactly ONE terminal action —
+     aired | skipped | held | error | expired | stale_generation | paused | duplicate.
      Lifecycle paths:
        · verify ok → "pending" → operator AIR / SKIP / HOLD → aired / skipped / held
                               → auto-air fires → aired (autoAired flag) · operator veto → skipped/held (vetoed flag)
@@ -121,6 +123,8 @@
        · verify fails → error (retry is a NEW check + NEW entry; the error entry stands)
        · extract or verify answered by the 503 kill-switch → paused (no card enters the queue)
        · extract or verify straddles an End/Start Stream boundary → stale_generation (never enqueued)
+       · extract returns a claim already carded < DUP_CLAIM_WINDOW_MS earlier (F2 dedupe)
+         → duplicate (never enqueued; operator retry and typed input bypass via force)
        · "checking" card killed by a reload → restored as error w/ restored flag (M5 — logged at
          restore time, because checking cards are otherwise only logged when verify settles)
      Flags, never dispositions: corrected, vetoed, autoAired, restored (aired:boolean mirrors action).
@@ -195,6 +199,7 @@
         errors: es.filter((e) => e.action === "error").length,
         stale_generation: es.filter((e) => e.action === "stale_generation").length,   // P3-F: dropped across an End/Start Stream boundary
         paused: es.filter((e) => e.action === "paused").length,                       // kill-switch gap — the record shows it honestly
+        duplicate: es.filter((e) => e.action === "duplicate").length,                 // F2: same claim carded again inside the dedupe window
         latency: {
           extract: pp(es.map((e) => e.extractMs).filter(num)),
           verify: pp(es.map((e) => e.verifyMs).filter(num)),
@@ -285,12 +290,70 @@
     else setStatus("ready", "");
   }
 
+  // mirror of src/core/utterance.js — test/prompt-sync pattern (test/utterance-sync.test.js
+  // asserts the block below is byte-identical, modulo indentation, with the module's copy).
+  /* ===== MIRROR BLOCK (utterance guards) — keep byte-identical with the copy in app.js;
+     test/utterance-sync.test.js compares them (indentation-insensitive). ===== */
+  // TUNABLE — F2 dedupe: a claim that already produced a card this recently is dropped.
+  const DUP_CLAIM_WINDOW_MS = 60000;
+  // TUNABLE — F3 merge: max gap between two finals for them to be considered one thought.
+  const MERGE_MAX_GAP_MS = 3500;
+  // TUNABLE — F3 merge: a final this short (in words) is presumed a continuation fragment.
+  const MERGE_SHORT_WORDS = 4;
+  /**
+   * Canonical claim key for dedupe: lowercase, punctuation stripped, whitespace collapsed.
+   * @param {string|null|undefined} claim extracted claim text
+   * @returns {string} normalized key ("" for empty/nullish input)
+   */
+  function normalizeClaim(claim) {
+    return String(claim == null ? "" : claim)
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+  /**
+   * F2 — is a claim first carded at `createdAt` still a duplicate at `nowAt`?
+   * @param {number|null|undefined} createdAt epoch ms of the prior card's creation, if any
+   * @param {number} nowAt epoch ms of the would-be new card
+   * @returns {boolean} true → drop the new card as a duplicate
+   */
+  function withinDupWindow(createdAt, nowAt) {
+    return createdAt != null && nowAt - createdAt >= 0 && nowAt - createdAt < DUP_CLAIM_WINDOW_MS;
+  }
+  /**
+   * F3 — should two consecutive STT finals ALSO be checked as one joined utterance?
+   * True when they arrived close together AND the boundary looks like a split thought:
+   * the earlier final didn't end in sentence-terminal punctuation, or the later one is a
+   * short fragment ("Was 4%.").
+   * @param {string|null|undefined} prev earlier final transcript
+   * @param {number} prevAt epoch ms the earlier final arrived
+   * @param {string|null|undefined} next later final transcript
+   * @param {number} nowAt epoch ms the later final arrived
+   * @returns {boolean} true → also run the joined check
+   */
+  function shouldMergeFinals(prev, prevAt, next, nowAt) {
+    const p = String(prev == null ? "" : prev).trim();
+    const n = String(next == null ? "" : next).trim();
+    if (!p || !n) return false;
+    const gap = nowAt - prevAt;
+    if (!(gap >= 0 && gap <= MERGE_MAX_GAP_MS)) return false;
+    const unterminated = !/[.!?]$/.test(p);
+    const shortNext = n.split(/\s+/).filter(Boolean).length <= MERGE_SHORT_WORDS;
+    return unterminated || shortNext;
+  }
+  /* ===== END MIRROR BLOCK ===== */
+
   // entry point: a spoken final (or a typed claim). Guard → Haiku extract → Perplexity verify.
   async function checkUtterance(text, opts) {
     opts = opts || {};
     const t = (text || "").trim();
     const words = t.split(/\s+/).filter(Boolean);
-    if (!opts.force && (words.length < 6 || t === lastUtterance)) return;   // skip fragments / dupes
+    /* F3 — opts.merged (joined split-finals) bypasses ONLY the word minimum: a joined pair of
+       fragments can be a real claim under 6 words ("The GDP? Was 4%."). It still respects the
+       consecutive-dupe guard here and the F2 claim dedupe below — force (typed/retry) is the
+       only full bypass, because those are deliberate operator acts. */
+    if (!opts.force && ((words.length < 6 && !opts.merged) || t === lastUtterance)) return;   // skip fragments / dupes
     if (tabReadOnly) { warnReadOnly(); return; }                            // M6: a read-only tab runs no checks
     lastUtterance = t;
     /* GENERATION GUARD (P3-F, red-team H2 full closure): capture the stream generation at entry.
@@ -301,7 +364,7 @@
     const g = gen;
     const spokenAt = Date.now();   // ≈ utterance final; extract starts immediately (client stt lag ~0)
     const cid = "u" + (++ftUid);
-    FT.log("check_start", { cid, spoken: t, typed: !!opts.force });
+    FT.log("check_start", { cid, spoken: t, typed: !!opts.force, merged: !!opts.merged });
     fcInflight++; setOps();
     const t0 = performance.now();
     let claim = null, extractFailed = false, extractPaused = false, polarity, harmClass;
@@ -335,7 +398,23 @@
       DBG.push({ t: new Date().toISOString(), source: "fc", spoken: t, claim: null, extract_ms: +extractMs.toFixed(0), error: extractFailed || undefined });
       return;
     }
+    /* F2 — claim-level dedupe at card-creation time. The consecutive-utterance guard above is
+       defeated by interleaved finals (field test: same claim re-extracted 3× in 20s, two cards
+       AIRED 2s apart). Key = normalized claim text; window keys on card CREATION time, survives
+       across utterances, resets on clearFactChecks (stream boundaries). Operator retry and typed
+       input enter with force:true and bypass — a deliberate re-check is never blocked. */
+    const normClaim = normalizeClaim(claim);
+    if (!opts.force && withinDupWindow(recentClaims.get(normClaim), Date.now())) {
+      fcInflight--; setOps();
+      FT.log("gate", { cid, outcome: "duplicate_claim" });
+      DBG.event("info", "duplicate claim dropped (same claim carded moments ago)", { claim: claim.slice(0, 80), extract_ms: +extractMs.toFixed(0) });
+      const dup = { id: ++fcId, spoken: t, claim, state: "checking", spokenAt, extractMs: +extractMs.toFixed(0) };
+      SESSION.log(dup); SESSION.mark(dup.id, "duplicate");   // terminal disposition — same log-then-mark shape as stale_generation
+      return;
+    }
     const card = { id: ++fcId, _gen: g, _cid: cid, spoken: t, claim, polarity, harm_class: harmClass, state: "checking", spokenAt, extractStartedAt: spokenAt, extractMs: +extractMs.toFixed(0) };   // real claim → checking card now
+    recentClaims.set(normClaim, Date.now());   // F2: register at creation (force-created cards too — they still dedupe later voice repeats)
+    if (recentClaims.size > 200) { const nowMs = Date.now(); recentClaims.forEach((at, k) => { if (!withinDupWindow(at, nowMs)) recentClaims.delete(k); }); }
     fcCards.unshift(card); renderQueue(); setOps();
     const t1 = performance.now();
     let v = null, verifyPaused = false;
@@ -543,7 +622,8 @@
     let n = 0;
     SESSION.byId.forEach((e) => { if (e.action === "pending" && !live.has(e.id)) { e.action = "expired"; e.expiredAt = new Date().toISOString(); n++; } });
     if (n) { DBG.event("info", `${n} unactioned check(s) → expired`); updateSessionBtn(); }
-    lastUtterance = ""; renderQueue(); hideOnAir(); setOps();
+    lastUtterance = ""; recentClaims.clear();   // F2: dedupe window is per-stream — a new broadcast may legitimately re-air a claim
+    renderQueue(); hideOnAir(); setOps();
   }
 
   /* ================= PLATFORM SKINS ================= */
@@ -834,6 +914,7 @@
     "Senate", "Congress", "Ukraine", "Putin", "Zelensky", "Taiwan", "Iran", "Gaza", "NATO", "WHO", "CDC",
     "Bitcoin", "Elon Musk", "GDP", "tariffs", "inflation", "recession", "unemployment", "emissions", "billion"];
   let dgWs = null, dgProc = null, dgCtx = null, dgSource = null, dgFinalWords = [], dgGotResult = false;
+  let prevFinalText = "", prevFinalAt = 0;   // F3 split-final merge: single prev-final buffer (text + arrival ms), reset on stream start/end
   let dgEverWorked = false, dgRetryN = 0, dgRetryT = 0;   // mid-session drop → auto-reconnect (unattended/auto-air safe)
   const dgUrl = (sr) => `wss://api.deepgram.com/v1/listen?model=nova-3&language=en&encoding=linear16&sample_rate=${sr}`
     + `&channels=1&punctuate=true&smart_format=true&interim_results=true&` + DG_KEYTERMS.map((t) => "keyterm=" + encodeURIComponent(t)).join("&");
@@ -858,7 +939,7 @@
     if (g !== gen) return false;                                       // stream ended while fetching auth
     if (!auth) { DBG.event("err", "no Deepgram auth available"); return false; }
     DBG.event("info", auth[0] === "bearer" ? "Deepgram auth · server token" : "Deepgram auth · inlined key (legacy)");
-    dgFinalWords = []; dgGotResult = false;
+    dgFinalWords = []; dgGotResult = false; prevFinalText = ""; prevFinalAt = 0;   // F3: never merge across a (re)connect boundary
     let ws; try { ws = new WebSocket(dgUrl(dgCtx.sampleRate), auth); } catch (e) { DBG.event("err", "Deepgram WS construct failed", { error: String(e && e.message || e) }); return false; }
     ws.binaryType = "arraybuffer"; dgWs = ws;
     ws.onerror = () => { if (g === gen) DBG.event("err", "Deepgram WS error", { readyState: ws.readyState, gotResult: dgGotResult }); };
@@ -889,7 +970,22 @@
       if (d.is_final) { dgFinalWords.push(...tr.split(/\s+/)); if (dgFinalWords.length > 50) dgFinalWords = dgFinalWords.slice(-50); tail = dgFinalWords.slice(-18).join(" "); }
       else { tail = (dgFinalWords.slice(-10).join(" ") + " " + tr).trim().split(/\s+/).slice(-18).join(" "); }
       ssTranscript.textContent = tail;
-      if (d.is_final) checkUtterance(tr);
+      if (d.is_final) {
+        checkUtterance(tr);
+        /* F3 — split-final merge (field test: "GDP growth in the United States in 2025?" /
+           "Was 4%." — neither fragment extracts alone). When this final closely follows the
+           previous one AND the boundary looks like a split thought (shouldMergeFinals), ALSO
+           check the JOINED string. merged (not force): bypasses only the word minimum — the
+           F2 claim dedupe still applies, so fragment + join extracting the same claim yields
+           exactly one card. */
+        const nowAt = Date.now();
+        if (prevFinalText && shouldMergeFinals(prevFinalText, prevFinalAt, tr, nowAt)) {
+          const joined = prevFinalText + " " + tr;
+          FT.log("stt_merge", { gap_ms: nowAt - prevFinalAt, joined: joined.slice(0, 160) });
+          checkUtterance(joined, { merged: true });
+        }
+        prevFinalText = tr; prevFinalAt = nowAt;
+      }
     };
     ws.onclose = (ev) => {
       if (g !== gen) return;                                            // clean stop
@@ -988,7 +1084,7 @@
     if (strideTimer) { clearInterval(strideTimer); strideTimer = 0; }
     if (dgWs) { try { dgWs.send(JSON.stringify({ type: "CloseStream" })); } catch {} try { dgWs.close(); } catch {} dgWs = null; }
     if (dgProc) { try { dgProc.disconnect(); } catch {} dgProc = null; }
-    dgSource = null; dgCtx = null; dgFinalWords = [];
+    dgSource = null; dgCtx = null; dgFinalWords = []; prevFinalText = ""; prevFinalAt = 0;   // F3: merge buffer dies with the stream
     callTabSource = null; mixBus = null;   // nodes die with the context; the tab STREAM survives for the next start
     if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
     audioStream = null;
