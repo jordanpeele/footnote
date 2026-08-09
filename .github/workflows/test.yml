@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: [20, 22]   # engines: >=20; test the floor and current LTS
+        node: [22, 24]   # engines: >=22 (node --test glob args need 21+; Node 20 is EOL)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
