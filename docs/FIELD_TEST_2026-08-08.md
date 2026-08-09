@@ -136,3 +136,88 @@ queue — and speech is adversarial on the street), F2 (double-air on stream loo
 amateurish), and F5 (the first air of any exchange — the money moment — eats an extra
 ~2s). Fix F1/F2/F5 and re-run a short confirmation session (including the un-run PASS 2
 and a real person_private case) before pointing this at a stranger.
+
+---
+
+# PASS-2 ADDENDUM — vertical test-air session, 2026-08-09
+
+**Scope:** the owed PASS-2 (R28 pre-street gate): `?testair=1` auto-air with TEST
+watermark, VERTICAL 1080×1920 OBS canvas, ~9.5 min free-talk, OBS recording.
+First field exposure for round-5 code: split-final merge (F3 fix), claim dedupe
+(F2 fix), grounding gate (P4-F1), overlay wake (P4-F2), portrait layout (P5-F).
+**Raw:** `eval/results/fieldtest-2026-08-09-pass2.jsonl` (177 in-session events) ·
+session record `footnote-session-2026-08-09T23-09-50.json` (auto-exported by R20 —
+worked) · drafts `eval/golden/drafts-2026-08-09-pass2.jsonl` (9).
+
+## Test-air path verdict: WORKS
+
+9/9 settled verdicts test-aired immediately (`autoAired: 9`), 9/9 renders carried
+the TEST watermark, dispositions complete (0 errors/expired/stale). The watermark
+itself only exists on screen because of the pre-session clip fix — first time it
+has ever rendered.
+
+## Portrait verdict: WORKS — with one OBS footgun (P5F-1)
+
+Viewport probes confirm CEF handed the page 1080×1920 and aspect detection chose
+portrait unaided (no `?layout=` override needed). Cards landed full-width in the
+60–75% band. **P5F-1 (LOW, docs):** resizing an EXISTING browser source to
+vertical left a stale scene-item transform that scaled a 16:9 page into the
+portrait canvas — mid-frame miniature card, ~7 min of session lost to it. The
+page was correctly rendering landscape for the viewport it was actually given;
+detection was never wrong. Fix is OBS-side: Reset Transform after resizing, or
+prefer delete-and-re-add / the shipped `Footnote 9:16` scene. Docs updated.
+
+## The true machine number
+
+Test-air removes operator-decide, so this is the pipeline floor (n=9, small):
+
+| stage | pass-2 p50 | pass-2 p95 | Friday (manual) p50 |
+|---|---|---|---|
+| extract | 1,007ms | 1,895ms | 989ms |
+| verify | 2,629ms | 4,015ms | 2,975ms |
+| air → render | **274ms** | 560ms max | 366ms (p95 2,015) |
+| **spoken → screen** | **~3.5–3.8s** | ~5.3s | 8,392ms |
+
+Friday's 8.4s p50 was ~4.4s machine + ~4s human. The machine floor measured
+today: **3.5s p50, 5.3s worst** — and the air→render tail is GONE (max 560ms vs
+Friday's 2.4s spikes): the P4-F2 overlay wake did exactly what it was built for.
+Every second beyond ~3.5s on the street is operator-decide time.
+
+## Round-5 fixes in the field
+
+- **F3 split-final merge: PROVEN.** 9 joins fired; **3 of 9 aired claims came
+  from merged finals** ("Reggie Watts is the president of Afghanistan",
+  "Isaac Newton invented black hole geometry", "Isaac Newton invented algebra")
+  — all three would have been missed on Friday's build. Overhead as predicted:
+  ~5 joins on backchannel filler ("That's cool. It's working.") burned extracts
+  that gated null. 17 extracts for 24 finals ≈ +40% extract volume — within the
+  P5-B estimate; watch MERGE_SHORT_WORDS if it grows.
+- **P4-F1 grounding gate: FIRST LIVE FIRING.** One meta-speech fragment
+  ("That didn't work. Isaac Newton invented…") drew an extractor echo and the
+  gate killed it before verify. Zero garbage cards reached air.
+- **F2 dedupe: NOT EXERCISED** — no claim was repeated inside the 60s window
+  this session (the Kenya claims are distinct assertions, correctly NOT deduped).
+  Unit-covered (102 tests); still owed a deliberate field repeat. Carry forward.
+
+## Quality + transcription notes
+
+- 9/9 verdicts correct, conf 0.97–0.99, sources: Britannica ×3, BEA ×2, Forbes,
+  PBS, one "ARCHIVES" (display-name oddity, cosmetic — filed P5F-3 LOW) and one
+  **tier-1** (`webspace.science.uu.nl` for the Newton/black-hole claim). That
+  card aired because test-air bypasses eligibility BY DESIGN; in street veto
+  mode the operator sees the tier chip. Noted, not a bug.
+- STT: clean session — "Reggie Watts", "Muhammad Ali", "Isaac Newton" all
+  transcribed correctly (no F8 keyterm candidates earned); one suspected slip
+  ("resuming deep" ≈ "resuming demo", inconsequential). 24 finals / 45 interims.
+
+## Findings filed
+
+| id | sev | finding |
+|---|---|---|
+| P5F-1 | LOW/docs | OBS resize-in-place leaves stale transform → landscape render in portrait canvas (docs updated; scene download is the safe path) |
+| P5F-2 | INFO | merge joins fire on backchannel filler → ~+40% extract volume; tunables to watch |
+| P5F-3 | LOW | verifier source display-name "ARCHIVES" (non-domain caps name) — prettyName pass candidate |
+| — | carry | F2 dedupe still needs one deliberate field repeat; Meet-call capture test still owed |
+
+**R28 pre-street gate: CLEARED** (pass-2 run, vertical, recorded). Street
+posture unchanged: veto-everything, /op is the authority, machine floor ~3.5s.

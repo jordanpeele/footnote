@@ -59,3 +59,5 @@ Footnote transcribes whatever the control page's **Audio in** picker is set to.
   or just after an air/pull, backing off to ~2.5s when idle. So airing/pulling feels near-instant
   without a persistent connection. Tune with `&poll=` (active ms) and `&pollIdle=` (idle ms) on the
   overlay URL if needed.
+
+> **Resizing an existing source to vertical?** After changing Width/Height, right-click the source → **Transform → Reset Transform** — OBS keeps the old bounding box otherwise and will scale the 16:9 page into your portrait canvas (tiny mid-frame card). Cleaner: delete + re-add, or import the downloaded `Footnote 9:16` scene.

@@ -100,6 +100,8 @@
   function applyLayout() {
     const portrait = layoutOverride === "portrait" || (layoutOverride !== "landscape" && aspectMq.matches);
     document.body.classList.toggle("portrait", portrait);
+    // field diagnostic: what viewport does the embedder (OBS CEF / Moblin) actually give us?
+    ftLog("layout", { w: innerWidth, h: innerHeight, portrait, override: layoutOverride || null });
   }
   applyLayout();
   if (aspectMq.addEventListener) aspectMq.addEventListener("change", applyLayout);
