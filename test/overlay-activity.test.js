@@ -20,6 +20,8 @@ delete process.env.UPSTASH_REDIS_REST_TOKEN;
 process.env.FOOTNOTE_STATE = "memory";
 const { _setFlagReader } = await import("../src/core/spendgate.js");
 const { default: onair } = await import("../api/onair.js");
+// same module instance the registry hands the handler — used to pin the merge() contract
+const mem = await import("../src/adapters/state/memory-ws/index.js");
 _setFlagReader(() => false);
 
 const KEY = "test-write-key-12345678";
@@ -97,6 +99,44 @@ test("zero-card snapshot → activeAt neither created nor refreshed", async () =
   await post({ room, writeKey: KEY, op: "queue", cards: [] });
   g = await get({ room });
   assert.equal(g.body.activeAt, stamped, "empty snapshot must leave the prior stamp untouched");
+});
+
+test("merge() contract: stale read cannot influence the stamp; missing room merges into the empty RoomEvent", async () => {
+  // P4-F2 known residual, closed: the stamp used to be get→assign→publish, so an air
+  // landing inside that gap was clobbered by the stale re-publish. merge() writes ONLY
+  // its fields — deterministically replay the old hazard window at the adapter level.
+  const room = "wake-atomic";
+  const stale = await mem.get(room);   // the "old" read: room is empty
+  assert.equal(stale, null);
+  await mem.publish(room, { card: { claim: "live air" }, seq: 7, airedAt: 7, durationMs: 10000 }, { ttlSec: 300 });   // air lands in the gap
+  await mem.merge(room, { activeAt: 123 }, { ttlSec: 180 });   // stamp fires AFTER, oblivious to the air
+  const cur = await mem.get(room);
+  assert.equal(cur.card.claim, "live air", "the concurrent air survives the stamp");
+  assert.equal(cur.seq, 7, "seq untouched — overlay edge-trigger intact");
+  assert.equal(cur.activeAt, 123, "the stamp itself landed");
+  // no record → merge produces the empty RoomEvent + fields (GET contract: card:null, seq:0)
+  await mem.merge("wake-atomic-empty", { activeAt: 5 }, { ttlSec: 60 });
+  assert.deepEqual(await mem.get("wake-atomic-empty"), { card: null, seq: 0, activeAt: 5 });
+});
+
+test("concurrent air + queue snapshot: the air survives every interleaving (P4-F2 clobber)", async () => {
+  // handler-level: fire a real air POST and a stamping queue push together, repeatedly,
+  // so the await interleavings vary. With the old read-merge-write the queue push's
+  // stale re-publish could erase the air; with merge() the card must survive always.
+  for (let i = 0; i < 10; i++) {
+    const room = "wake-race-" + i;
+    await post({ room, writeKey: KEY, op: "queue", cards: [] });   // register the key first (empty push: no stamp)
+    const [qr, ar] = await Promise.all([
+      post({ room, writeKey: KEY, op: "queue", cards: [qcard(1)] }),
+      post({ room, writeKey: KEY, card: { verdict: "False", claim: "race claim", correction: "no" }, durationMs: 10000 }),
+    ]);
+    assert.equal(qr.statusCode, 200);
+    assert.equal(ar.statusCode, 200);
+    const g = await get({ room });
+    assert.ok(g.body.card, `iteration ${i}: the activeAt stamp must never clobber a concurrent air`);
+    assert.equal(g.body.card.claim, "race claim");
+    assert.equal(g.body.seq, ar.body.seq);
+  }
 });
 
 test("?log=1 CORS contract unchanged by the stamp path", async () => {

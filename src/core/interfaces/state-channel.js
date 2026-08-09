@@ -39,6 +39,16 @@
  *   semantics may ignore it.
  * @property {(room: string) => Promise<RoomEvent|null>} get
  *   Current on-air state, or null if nothing was ever published / it expired.
+ * @property {(room: string, fields: Object, opts?: {ttlSec?: number}) => Promise<void>} [merge]
+ *   OPTIONAL. Atomically shallow-merge `fields` into the room's current event — the
+ *   adapter must guarantee no concurrent publish() can be lost between its read and its
+ *   write (in-process single-threaded for memory; server-side Lua EVAL for upstash).
+ *   When no record exists, merge into the empty RoomEvent `{card:null, seq:0}`. The
+ *   resulting TTL is max(remaining life, ttlSec): a merge may LENGTHEN a record's life,
+ *   never shorten it. Added for P4-F2's activeAt wake stamp, whose original
+ *   get→assign→publish sequence could clobber an air landing inside the store RTT
+ *   (round-3 re-probe, known residual). Callers must feature-test (`typeof state.merge
+ *   === "function"`) and fall back to read-merge-publish on adapters without it.
  * @property {(room: string, writeKey: string, opts?: {ttlSec?: number}) => Promise<boolean>} registerRoom
  *   TOFU write auth: first caller registers `writeKey` for the room (with a rolling TTL,
  *   `ttlSec` when given, else an adapter default); later calls return true and refresh the

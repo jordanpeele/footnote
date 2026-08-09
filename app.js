@@ -367,13 +367,13 @@
     FT.log("check_start", { cid, spoken: t, typed: !!opts.force, merged: !!opts.merged });
     fcInflight++; setOps();
     const t0 = performance.now();
-    let claim = null, extractFailed = false, extractPaused = false, polarity, harmClass;
+    let claim = null, extractFailed = false, extractPaused = false, ungrounded = false, polarity, harmClass;
     try {
       const r = await fetch("/api/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: t }) });
       const j = await r.json().catch(() => ({}));
       if (r.status === 503 && j && j.paused === true) extractPaused = true;   // operator kill-switch — not a failure
       else if (!r.ok) { noteUnpaused(); extractFailed = true; DBG.event("err", `extract failed${j && j.upstream_status ? ` · Anthropic ${j.upstream_status}` : ` · HTTP ${r.status}`}`, { status: r.status, upstream_status: j && j.upstream_status, upstream: j && j.upstream, spoken: t.slice(0, 80) }); }
-      else { noteUnpaused(); claim = j.claim; polarity = j.polarity; harmClass = j.harm_class; }   // null claim is a legit "no checkable claim", not a failure
+      else { noteUnpaused(); claim = j.claim; polarity = j.polarity; harmClass = j.harm_class; ungrounded = j.rejected === "ungrounded"; }   // null claim is a legit "no checkable claim", not a failure
     } catch (e) { extractFailed = true; DBG.event("err", "extract network error", { error: String(e && e.message || e), spoken: t.slice(0, 80) }); }
     const extractMs = performance.now() - t0;
     FT.log("extract_done", { cid, ms: +extractMs.toFixed(0), status: extractPaused ? "paused" : extractFailed ? "failed" : "ok", claim, polarity: polarity || null, harm_class: harmClass || null });
@@ -393,8 +393,10 @@
     }
     if (!claim) {
       fcInflight--; setOps();
-      FT.log("gate", { cid, outcome: extractFailed ? "extract_error" : "no_claim", words: words.length });
-      if (!extractFailed) DBG.event("info", "no checkable claim", { spoken: t.slice(0, 80), extract_ms: +extractMs.toFixed(0) });
+      // "ungrounded" = the P4-F1 grounding gate rejected the extractor's output server-side —
+      // distinguished from a plain no_claim so field monitoring can watch the gate fire
+      FT.log("gate", { cid, outcome: extractFailed ? "extract_error" : ungrounded ? "ungrounded" : "no_claim", words: words.length });
+      if (!extractFailed) DBG.event("info", ungrounded ? "extraction rejected (ungrounded)" : "no checkable claim", { spoken: t.slice(0, 80), extract_ms: +extractMs.toFixed(0) });
       DBG.push({ t: new Date().toISOString(), source: "fc", spoken: t, claim: null, extract_ms: +extractMs.toFixed(0), error: extractFailed || undefined });
       return;
     }

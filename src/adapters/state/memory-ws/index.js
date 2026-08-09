@@ -7,6 +7,7 @@
 // Semantics deliberately mirror the upstash adapter verb-for-verb so routes can't tell
 // them apart:
 //   - publish   : SET onair:<room> EX (ttlSec ?? 3600)  → stored with an expiry timestamp
+//   - merge     : atomic shallow-merge into the current event (Lua EVAL on upstash)
 //   - registerRoom: TOFU write key, 86400s rolling TTL, refreshed on every matching write
 //   - appendLog : LPUSH + LTRIM 0..499 + EXPIRE 604800s (7 days, reset on every append)
 //   - readLog   : newest first
@@ -52,6 +53,23 @@ export async function publish(room, event, { ttlSec } = {}) {
 /** @type {import("../../../core/interfaces/state-channel.js").StateChannel["get"]} */
 export async function get(room) {
   return fresh(rooms, room)?.event ?? null;
+}
+
+/** @type {import("../../../core/interfaces/state-channel.js").StateChannel["merge"]} */
+export async function merge(room, fields, { ttlSec } = {}) {
+  // Atomic by construction: single-threaded read→assign→set with NO await between them,
+  // so a concurrent publish() (which also completes synchronously) can never interleave
+  // inside the merge — the P4-F2 activeAt stamp can't clobber an air. Missing/expired
+  // record merges into the empty RoomEvent. TTL is max(remaining, ttlSec): a merge may
+  // lengthen the record's life, never shorten it (mirrors the upstash Lua semantics).
+  sweep(rooms);
+  const slot = fresh(rooms, room);
+  const event = Object.assign({}, slot ? slot.event : { card: null, seq: 0 }, fields);
+  const expiresAt = Math.max(slot ? slot.expiresAt : 0, now() + (ttlSec ?? 3600) * 1000);
+  rooms.set(room, { event, expiresAt });
+  for (const h of subs.get(room) || []) {
+    try { h(event); } catch (e) { console.error("memory state subscriber error", e && e.message); }
+  }
 }
 
 /** @type {import("../../../core/interfaces/state-channel.js").StateChannel["registerRoom"]} */

@@ -47,6 +47,31 @@ export async function get(room) {
   return v ? JSON.parse(v) : null;
 }
 
+// Atomic shallow-merge, server-side: GET→merge→SET runs as ONE Lua script inside Redis's
+// single command thread, so a concurrent publish() can never land between the read and the
+// write (P4-F2 activeAt stamp vs air clobber — round-3 known residual). Notes:
+//   - lua-cjson decodes JSON null to the cjson.null sentinel (NOT nil), so `card: null`
+//     survives the decode→encode round trip intact.
+//   - TTL becomes max(current TTL, ttlSec) — a merge may lengthen the record's life,
+//     never shorten it (TTL returns -2/-1 for missing/persistent keys; both < ttlSec).
+//   - Missing/expired record merges into the empty RoomEvent (ARGV[3]).
+const MERGE_LUA = `local v = redis.call('GET', KEYS[1])
+local t = v and cjson.decode(v) or cjson.decode(ARGV[3])
+for k, val in pairs(cjson.decode(ARGV[1])) do t[k] = val end
+local ttl = tonumber(ARGV[2])
+local left = redis.call('TTL', KEYS[1])
+if left > ttl then ttl = left end
+redis.call('SET', KEYS[1], cjson.encode(t), 'EX', ttl)
+return 1`;
+
+/** @type {import("../../../core/interfaces/state-channel.js").StateChannel["merge"]} */
+export async function merge(room, fields, { ttlSec } = {}) {
+  // EVAL rides the same single-command REST endpoint as every other verb (redis() throws
+  // on non-2xx, same failure surface as publish). Not EVALSHA: one round trip either way
+  // over REST, and shipping the script inline avoids a NOSCRIPT retry dance.
+  await redis(["EVAL", MERGE_LUA, "1", `onair:${room}`, JSON.stringify(fields), String(ttlSec ?? 3600), JSON.stringify({ card: null, seq: 0 })]);
+}
+
 /** @type {import("../../../core/interfaces/state-channel.js").StateChannel["registerRoom"]} */
 export async function registerRoom(room, writeKey, { ttlSec } = {}) {
   // TOFU, atomically (red-team L6): SET NX EX claims first-writer status in ONE pipeline

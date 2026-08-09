@@ -58,8 +58,28 @@ function slimCard(c) {
    written, or read through the public room surface. Both directions are writeKey-gated
    via the same TOFU registerRoom as the write path: the queue holds UNAIRED claims, which
    are NOT public (unlike the aired log). */
-const qRoom = (room) => "q." + room;      // queue snapshot   (publish/get, EX 180s)
+const qRoom = (room) => "q." + room;      // queue snapshot   (publish/get, EX QUEUE_SNAPSHOT_TTL_SEC)
 const cmdRoom = (room) => "cmd." + room;  // command list      (appendLog/readLog; adapter retention)
+// TUNABLE — lifetime of the q.<room> snapshot: a dead /control stops offering stale AIR
+// targets within this window (the /op page empties when the snapshot expires).
+const QUEUE_SNAPSHOT_TTL_SEC = 180;
+/* TUNABLE — N4 (round-3 re-probe): max age of the snapshot an operator air may be served
+   from. Deliberately EQUAL to the snapshot TTL, not the ~10s a "control pushes constantly"
+   model would suggest: /control pushes snapshots ONLY on queue mutations (the
+   schedulePersist choke points + stream start/end) — there is NO periodic re-push — so a
+   live-but-quiet control legitimately leaves qseq minutes old while the operator
+   deliberates over a pending card. Any ceiling tighter than the (unbounded) push cadence
+   would 409 legitimate airs, and /op renders a 409 as "already handled" (operator.js act())
+   — a false rejection looks like a ghost AIR on the phone. What this bound buys instead:
+   the air path stops depending on the adapter honoring ttlSec (the StateChannel contract
+   lets adapters IGNORE it — the _stub does), so on an expiry-less store a snapshot can
+   still never back an air past its intended lifetime. The parts of N4 this can't reach are
+   handled/bounded elsewhere: /op-originated HOLD/SKIPs are server-logged and scanned
+   against qseq in the air branch below; control-LOCAL dismissals reach the server only via
+   the next snapshot push, so a hold inside the ~400ms debounce (+RTT), or one whose
+   best-effort re-push silently failed, remains airable for up to this window — that
+   residual is closable only control-side (synchronous push on dismiss). */
+const OP_AIR_MAX_SNAPSHOT_AGE_MS = QUEUE_SNAPSHOT_TTL_SEC * 1000;
 // sanitize one queue card with the same strip/cut budget as the on-air path; extra
 // operator-facing fields (confidence, harm_class, …) get their own tight budgets.
 function slimQCard(c) {
@@ -182,7 +202,7 @@ export default async function handler(req, res) {
         const cards = (Array.isArray(req.body.cards) ? req.body.cards : []).slice(0, 20).map(slimQCard).filter(Boolean);
         const qseq = Date.now();
         const onAirId = typeof req.body.onAirId === "number" ? req.body.onAirId : null;
-        await state.publish(qRoom(room), { cards, qseq, onAirId }, { ttlSec: 180 });
+        await state.publish(qRoom(room), { cards, qseq, onAirId }, { ttlSec: QUEUE_SNAPSHOT_TTL_SEC });
         /* P4-F2 (field F5): a non-empty queue means an air is likely soon, but an idle
            overlay is on its 2.5s cadence — the first air after a quiet stretch eats up to
            a full slow poll. Stamp activeAt onto the room's MAIN record so the overlay's
@@ -194,17 +214,23 @@ export default async function handler(req, res) {
            and the recomputed ttl can only lengthen, never shorten, the record's remaining
            life (a held card keeps its 3600s; a timed card keeps its remaining run + 15s).
            Zero-card snapshots (stream-end clear) deliberately do NOT refresh the stamp,
-           so an emptied queue lets the overlay fall back to SLOW within ~90s. Known
-           residual: read→merge→write isn't atomic, so an air landing inside the ~store-RTT
-           gap could be clobbered by the stale merge; the 30s throttle keeps exposure to
-           milliseconds per half-minute (see task notes). */
+           so an emptied queue lets the overlay fall back to SLOW within ~90s.
+           Atomicity (closes the round-3 known residual): the stamp itself rides the
+           adapter's atomic merge() — an air landing between our read and our write can no
+           longer be clobbered, because the write only touches activeAt. The read below
+           survives ONLY for the 30s throttle and the ttl hint, both of which are benign
+           against staleness: a stale throttle read at worst skips/duplicates one stamp,
+           and merge()'s TTL is max(remaining, ttlSec) so a stale ttl hint can never
+           shorten a record's life. Adapters without merge (the _stub) keep the old
+           read-merge-publish path — dev-only, residual documented on the interface. */
         if (cards.length > 0) {
           const cur = (await state.get(room)) || { card: null, seq: 0 };
           if (!(typeof cur.activeAt === "number" && qseq - cur.activeAt < 30000)) {
             const left = cur.card && typeof cur.durationMs === "number" && typeof cur.airedAt === "number"
               ? Math.ceil((cur.airedAt + cur.durationMs - qseq) / 1000) + 15 : 0;
             const ttlSec = cur.card && cur.durationMs == null ? 3600 : Math.max(180, left);
-            await state.publish(room, Object.assign({}, cur, { activeAt: qseq }), { ttlSec });
+            if (typeof state.merge === "function") await state.merge(room, { activeAt: qseq }, { ttlSec });
+            else await state.publish(room, Object.assign({}, cur, { activeAt: qseq }), { ttlSec });
           }
         }
         res.status(200).json({ ok: true, qseq });
@@ -216,7 +242,9 @@ export default async function handler(req, res) {
            state HERE — through the exact publish path below (mintId + log mirror + ttl) —
            so the overlay updates even if /control hiccups; "pull" publishes card:null.
            Air is idempotent on (cardId, spokenAt): a double-tap can't double-air or
-           double-log (card ids restart per /control session; spokenAt disambiguates). */
+           double-log (card ids restart per /control session; spokenAt disambiguates) —
+           made race-proof by append-then-elect (N2, below). Air also refuses cards the
+           server can SEE were held/skipped after the backing snapshot was taken (N4). */
         const c = req.body.cmd && typeof req.body.cmd === "object" ? req.body.cmd : {};
         const action = c.action;
         if (action !== "air" && action !== "skip" && action !== "hold" && action !== "pull") { res.status(400).json({ error: "bad cmd" }); return; }
@@ -228,22 +256,66 @@ export default async function handler(req, res) {
           const q = await state.get(qRoom(room));
           const qc = q && Array.isArray(q.cards) ? q.cards.find((x) => x && x.id === cardId && x.state === "pending") : null;
           if (!qc) { res.status(409).json({ error: "card not airable" }); return; }   // gone / already actioned / still checking
-          const prior = (await state.readLog(cmdRoom(room))).find((e) => e && e.action === "air" && e.cardId === cardId && e.spokenAt === qc.spokenAt);
+          /* N4 guard 1 — snapshot freshness bound: never air from a snapshot past its
+             intended lifetime, even on a store that ignores ttlSec (see the tunable's
+             comment for why the ceiling is the TTL, not tighter). */
+          const qseq = typeof q.qseq === "number" ? q.qseq : 0;
+          if (t - qseq > OP_AIR_MAX_SNAPSHOT_AGE_MS) { res.status(409).json({ error: "card not airable", stale: true }); return; }
+          /* N4 guard 2 — hold/skip recency scan: /op-originated HOLD/SKIPs are server-
+             logged, so a hold the backing snapshot can't yet reflect is still visible
+             here. Reject the air when a hold/skip for this card either (a) matches the
+             card instance exactly (spokenAt — covers holds control hasn't APPLIED and
+             re-pushed yet, e.g. two phones on one key) or (b) postdates the snapshot
+             (t >= qseq; >= because same-ms is ambiguous and a held card never returns to
+             the /op queue, so over-rejecting here has no false-positive path). Control-
+             LOCAL dismissals stay invisible until the next snapshot — see the tunable. */
+          const log = await state.readLog(cmdRoom(room));
+          const heldAfter = log.some((e) => e && (e.action === "hold" || e.action === "skip") && e.cardId === cardId
+            && ((e.spokenAt != null && qc.spokenAt != null) ? e.spokenAt === qc.spokenAt : (typeof e.t === "number" && e.t >= qseq)));
+          if (heldAfter) { res.status(409).json({ error: "card not airable", stale: true }); return; }
+          // serialized re-tap fast path: a prior COMPLETED air for this card instance → dup
+          const prior = log.find((e) => e && e.action === "air" && e.cardId === cardId && e.spokenAt === qc.spokenAt);
           if (prior) { res.status(200).json({ ok: true, id: prior.id, airedId: prior.airedId || null, dup: true }); return; }
+          /* N2 — concurrent double-air TOCTOU: two simultaneous airs can both pass the
+             `prior` scan. Close it with append-then-elect: append our cmd entry FIRST,
+             read the log back, and elect the entry that landed FIRST (deepest matching
+             position in the newest-first list — position, not timestamps: t is minted
+             before the store append, so arrival order is the only total order both
+             racers agree on; both adapters' logs are arrival-ordered). The store
+             serializes appends, so whichever racer appended second is guaranteed to see
+             the winner on its read-back → exactly one publish + one aired-log entry;
+             the loser answers dup with the winner's airedId. Cost: the loser's cmd
+             entry stays in the log (control no-ops it: card no longer pending) and the
+             overlay publish now happens after the cmd append, so a store failing
+             mid-sequence can log a cmd whose publish never landed — the mirror image of
+             the old ordering's partial-failure mode, equally narrow. */
           const dur = durationMs === null ? null : (typeof durationMs === "number" ? Math.max(0, Math.min(600000, durationMs)) : 10000);
+          entry.airedId = mintId(t); entry.durationMs = dur; entry.spokenAt = qc.spokenAt;
+          await state.appendLog(cmdRoom(room), entry);
+          const rivals = (await state.readLog(cmdRoom(room))).filter((e) => e && e.action === "air" && e.cardId === cardId && e.spokenAt === qc.spokenAt);
+          const winner = rivals[rivals.length - 1] || entry;   // newest-first ⇒ last = first appended
+          if (winner.id !== entry.id) { res.status(200).json({ ok: true, id: winner.id, t, airedId: winner.airedId || null, dup: true }); return; }
           const seq = Date.now();
           const slim = slimCard(qc);
-          const airedId = mintId(seq);
-          await state.publish(room, { card: slim, seq, id: airedId, airedAt: seq, durationMs: dur },
+          await state.publish(room, { card: slim, seq, id: entry.airedId, airedAt: seq, durationMs: dur },
             { ttlSec: dur == null ? 3600 : Math.max(120, Math.ceil(dur / 1000) + 15) });
-          await state.appendLog(room, Object.assign({ id: airedId, airedAt: seq }, slim));   // same durability backstop as a control air
-          entry.airedId = airedId; entry.durationMs = dur; entry.spokenAt = qc.spokenAt;
+          await state.appendLog(room, Object.assign({ id: entry.airedId, airedAt: seq }, slim));   // same durability backstop as a control air
+          res.status(200).json({ ok: true, id: entry.id, t, airedId: entry.airedId });
+          return;
+        }
+        if (action === "skip" || action === "hold") {
+          // Stamp the card INSTANCE onto the mark when the snapshot still has it, so the
+          // air branch's N4 scan can match holds precisely across snapshot refreshes
+          // (cardId alone restarts per /control session; spokenAt disambiguates).
+          const q = await state.get(qRoom(room));
+          const qc = q && Array.isArray(q.cards) ? q.cards.find((x) => x && x.id === cardId) : null;
+          if (qc && qc.spokenAt != null) entry.spokenAt = qc.spokenAt;
         } else if (action === "pull") {
           const seq = Date.now();
           await state.publish(room, { card: null, seq, id: null, airedAt: seq, durationMs: 0 }, { ttlSec: 120 });
         }
         await state.appendLog(cmdRoom(room), entry);
-        res.status(200).json({ ok: true, id: entry.id, t, airedId: entry.airedId || null });
+        res.status(200).json({ ok: true, id: entry.id, t, airedId: null });
         return;
       }
       // durationMs: number = auto-retire after that long; null = hold until pulled

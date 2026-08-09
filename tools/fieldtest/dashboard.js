@@ -5,7 +5,7 @@
    Ctrl-C prints the end-of-session latency table. Read-only — touches nothing. */
 import fs from "node:fs";
 
-const LOG = process.argv[2] || process.env.FOOTNOTE_FIELDTEST_LOG || "eval/results/fieldtest-2026-08-08.jsonl";
+const LOG = process.argv[2] || process.env.FOOTNOTE_FIELDTEST_LOG || "eval/results/fieldtest-2026-08-09-pass2.jsonl";
 const C = { dim: "\x1b[2m", red: "\x1b[31m", grn: "\x1b[32m", yel: "\x1b[33m", cyn: "\x1b[36m", mag: "\x1b[35m", b: "\x1b[1m", r: "\x1b[0m" };
 const ts = (t) => new Date(t).toTimeString().slice(0, 8);
 const pad = (s, n) => String(s).padEnd(n);
@@ -52,9 +52,20 @@ function handle(e) {
       else if (e.claim) line(t, `${C.b}● CLAIM${C.r}`, `[${e.cid}] "${e.claim.slice(0, 80)}" ${C.dim}pol=${e.polarity} harm=${e.harm_class} ${e.ms}ms${C.r}`, flag);
       break;
     }
+    case "stt_merge":
+      line(t, `${C.cyn}⧉ MERGE${C.r}`, `P5-B join fired: "${(e.joined || e.transcript || "").slice(0, 80)}"`);
+      break;
     case "gate": {
       const s = byCid.get(e.cid) || {};
       const miss = e.outcome === "no_claim" && e.words >= 8;
+      if (e.outcome === "duplicate_claim") {
+        line(t, `${C.grn}▣ DEDUPE${C.r}`, `[${e.cid}] duplicate suppressed ${C.dim}"${(s.spoken || "").slice(0, 60)}"${C.r} ${C.grn}✓ F2 fix firing${C.r}`);
+        break;
+      }
+      if (e.outcome === "ungrounded") {
+        line(t, `${C.mag}⛒ GROUND${C.r}`, `[${e.cid}] extraction rejected as ungrounded ${C.dim}"${(s.spoken || "").slice(0, 60)}"${C.r} ${C.mag}✓ P4-F1 gate firing${C.r}`);
+        break;
+      }
       line(t, `${C.dim}○ GATE${C.r}`, `[${e.cid}] ${e.outcome}${e.words ? ` (${e.words}w)` : ""} ${C.dim}"${(s.spoken || "").slice(0, 60)}"${C.r}`,
         miss ? ` ${C.yel}⚑ ${e.words}-word utterance gated null — checkable?${C.r}` : "");
       break;
