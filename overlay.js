@@ -91,7 +91,21 @@
 
   const qs = new URLSearchParams(location.search);
 
-  // ?y=<px> — override the card's bottom offset (dodge platform UI chrome, e.g. TikTok's caption band)
+  /* P5-F: portrait/landscape layout. AUTO from viewport aspect (a 1080×1920 OBS source or
+     Moblin widget just works — no special URL), with ?layout=portrait|landscape as the
+     escape hatch for aspect-ambiguous embeds. body.portrait drives the CSS; re-evaluated
+     live so an OBS source resize mid-show lands on the right layout. */
+  const layoutOverride = (qs.get("layout") || "").toLowerCase();
+  const aspectMq = matchMedia("(max-aspect-ratio: 1/1)");
+  function applyLayout() {
+    const portrait = layoutOverride === "portrait" || (layoutOverride !== "landscape" && aspectMq.matches);
+    document.body.classList.toggle("portrait", portrait);
+  }
+  applyLayout();
+  if (aspectMq.addEventListener) aspectMq.addEventListener("change", applyLayout);
+  window.addEventListener("resize", applyLayout);
+
+  // ?y=<px> — override the card's bottom offset (dodge platform UI chrome; wins over both layouts)
   const yOff = parseInt(qs.get("y"), 10);
   if (yOff > 0) onAir.style.bottom = yOff + "px";
 

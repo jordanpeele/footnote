@@ -52,27 +52,38 @@ html,body{width:100%;height:100%;background:transparent;overflow:hidden;-webkit-
 .oa-timer{position:absolute;left:0;bottom:0;height:5px;width:100%;
   background:linear-gradient(90deg,var(--fn),#26f0aa)}
 
-/* Portrait / vertical canvas (e.g. a 1080×1920 Moblin Browser widget for TikTok-style streams).
-   The row layout doesn't fit 1080 wide — stack: verdict strip on top, claim+correction, then a
-   brand/source footer. Sits higher off the bottom to clear vertical-platform UI chrome. */
-@media (max-aspect-ratio: 1/1){
-  .onair{left:28px;right:28px;bottom:200px;flex-direction:column;min-height:0}
-  .onair .oa-verdict{width:100%;flex-direction:row;justify-content:center;gap:10px;padding:13px 14px;font-size:25px}
-  .oa-mid{padding:16px 20px;gap:7px}
-  .oa-claimline{flex-wrap:wrap;gap:8px 10px}
-  .oa-kicker{font-size:13px;padding:3px 7px 2px}
-  .oa-claim{font-size:24px;-webkit-line-clamp:3}
-  .oa-correction{font-size:21px;-webkit-line-clamp:3}
-  .oa-right{width:100%;flex-direction:row;align-items:center;justify-content:space-between;
-    gap:12px;padding:11px 20px;border-left:0;border-top:1.5px solid rgba(255,255,255,.1);text-align:left}
-  .oa-brand{font-size:21px}
-  .oa-src{font-size:14px;text-align:right}
-}
+/* Portrait / vertical canvas (P5-F): first-class 1080×1920 layout for TikTok/Reels/Shorts
+   streams (OBS vertical canvas, Moblin Browser widget). Driven by body.portrait — set by
+   overlay.js from viewport aspect (auto) or the ?layout= escape hatch — so OBS sources and
+   odd aspect ratios behave identically to a real phone.
+   SAFE ZONES (why the numbers): vertical platforms draw UI over the video — the engagement
+   rail eats the right ~130px and captions/actions eat the bottom ~250px of a 1080×1920
+   frame. The card is a full-width lower-third placed in the 60–75% height band
+   (bottom:480px ≈ card top around y1150 at 1080×1920), clear of both zones. Type is sized
+   for phone-screen legibility at 1080-wide, not desktop. */
+body.portrait .onair{left:28px;right:132px;bottom:480px;flex-direction:column;min-height:0}
+body.portrait .onair .oa-verdict{width:100%;flex-direction:row;justify-content:center;gap:10px;padding:14px;font-size:29px}
+body.portrait .oa-mid{padding:18px 22px;gap:8px}
+body.portrait .oa-claimline{flex-wrap:wrap;gap:8px 10px}
+body.portrait .oa-kicker{font-size:14px;padding:3px 7px 2px}
+body.portrait .oa-claim{font-size:30px;-webkit-line-clamp:3}
+body.portrait .oa-correction{font-size:26px;-webkit-line-clamp:3}
+body.portrait .oa-right{width:100%;flex-direction:row;align-items:center;justify-content:space-between;
+  gap:12px;padding:12px 22px;border-left:0;border-top:1.5px solid rgba(255,255,255,.1);text-align:left}
+body.portrait .oa-brand{font-size:23px}
+body.portrait .oa-src{font-size:16px;text-align:right}
+body.portrait .onair.v-corr .oa-correction{font-size:19px}
 
-/* field-test watermark — cards aired by the local TESTAIR flag carry test:true */
-.onair.test::after{content:"TEST";position:absolute;top:-14px;right:14px;padding:2px 10px;
+/* field-test watermark — cards aired by the local TESTAIR flag carry test:true.
+   INSIDE the card (top-right): .onair is overflow:hidden, so anything hung outside
+   the border box gets clipped — the original top:-14px badge was invisible. */
+.onair.test::after{content:"TEST";position:absolute;top:8px;left:10px;z-index:3;padding:2px 10px;
   border-radius:4px;background:#d79321;color:#0b0b0b;font:700 13px/1.4 system-ui,sans-serif;
   letter-spacing:.12em;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+/* landscape: badge rides the verdict color block's top corner (empty space); portrait's
+   top-right corner is the empty end of the verdict strip — the brand corner is bottom-right
+   in both layouts, so neither position can collide with text */
+body.portrait .onair.test::after{font-size:16px;top:10px;left:auto;right:12px}
 
 /* degraded-network hint: 6px near-invisible dot while the poll loop is reconnecting */
 .net-dot{position:fixed;right:12px;bottom:12px;width:6px;height:6px;border-radius:50%;

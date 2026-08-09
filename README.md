@@ -32,7 +32,7 @@ The pipeline is deliberately **human-in-the-loop**: a check lands in the operato
 
 ## Quickstart A — self-host (BYOK)
 
-Clone → keys → running control room and overlay, in about two minutes. One Node ≥ 20 process, zero npm dependencies, no external store: locally the control→overlay state channel runs in-memory inside the server.
+Clone → keys → running control room and overlay, in about two minutes. One Node ≥ 22 process, zero npm dependencies, no external store: locally the control→overlay state channel runs in-memory inside the server.
 
 ```sh
 git clone https://github.com/jordanpeele/footnote && cd footnote
@@ -52,6 +52,14 @@ Bring your own keys:
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | state channel + rate limiting (Upstash Redis) | [upstash.com](https://upstash.com) — **not needed for self-host** (`npm start` defaults to the in-memory state channel, `FOOTNOTE_STATE=memory`); required on serverless deploys, or set `FOOTNOTE_STATE=upstash` locally to use it |
 
 Then: open `/control`, allow the mic, hit **Start Stream**, say something checkable ("the Great Wall is visible from space"), and AIR the card that lands in the queue. Add the overlay URL from the OBS OVERLAY bar as a 1920×1080 Browser Source ([OBS_SETUP.md](./OBS_SETUP.md)).
+
+### Vertical / portrait streams (TikTok, Reels, Shorts)
+
+The overlay is aspect-aware: give it a portrait-sized viewport and it switches to a stacked vertical card automatically — no separate URL. On a **1080×1920** canvas the card renders as a full-width lower-third in the 60–75% height band, clear of the zones vertical platforms draw UI over (the engagement rail on the right edge, captions in the bottom ~250px), with type sized for phone screens.
+
+- **OBS vertical canvas:** Settings → Video → set **Base (Canvas)** and **Output (Scaled)** to `1080x1920`, then add the overlay URL as a Browser Source at **width 1080, height 1920**. The "Download OBS scene" button on `/control` ships both a `Footnote 16:9` and a `Footnote 9:16` scene pre-sized.
+- **Moblin / phone streaming:** add the overlay URL as a Browser widget sized to the full portrait frame — details in [REMOTE_CALL_SETUP.md](./REMOTE_CALL_SETUP.md).
+- Escape hatches: `?layout=portrait|landscape` forces a layout when the embed's aspect lies; `?y=<px>` overrides the card's bottom offset in either layout.
 
 ## Quickstart B — deploy to Vercel (hosted)
 

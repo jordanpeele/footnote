@@ -1057,28 +1057,37 @@
     byId("dbgClr").onclick = () => { DBG.records = []; DBG.events = []; DBG.windows = 0; DBG.errors = 0; renderDbg(); };
   }
 
-  // Build an OBS scene collection (OBS 28+) with the overlay pre-added as a 1920×1080 Browser
-  // Source. Convenience for a fresh OBS; the manual "add Browser Source with the URL" path is
-  // the guaranteed one. Importing a collection creates a NEW collection (doesn't merge).
+  // Build an OBS scene collection (OBS 28+) with the overlay pre-added as TWO scenes:
+  // "Footnote 16:9" (1920×1080 Browser Source) and "Footnote 9:16" (1080×1920 — vertical
+  // TikTok/Reels/Shorts canvas; the overlay auto-detects portrait from the source size, P5-F).
+  // The OBS base canvas itself is a per-profile setting (Settings → Video), NOT part of a
+  // scene collection — pick the scene that matches your canvas. Convenience for a fresh OBS;
+  // the manual "add Browser Source with the URL" path is the guaranteed one. Importing a
+  // collection creates a NEW collection (doesn't merge).
   function obsSceneCollection(url) {
     const uid = () => (crypto.randomUUID ? crypto.randomUUID()
       : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16); }));
-    const bUuid = uid(), sUuid = uid(), SRC = "Footnote Fact-Check Overlay", SCENE = "Footnote";
     const base = { balance: 0.5, enabled: true, flags: 0, hotkeys: {}, mixers: 0, monitoring_type: 0, muted: false, prev_ver: 503644160, private_settings: {}, "push-to-mute": false, "push-to-mute-delay": 0, "push-to-talk": false, "push-to-talk-delay": 0, sync: 0, volume: 1.0 };
+    const mkBrowser = (name, u, w, h) => Object.assign({}, base, { id: "browser_source", versioned_id: "browser_source", name, uuid: u,
+      deinterlace_field_order: 0, deinterlace_mode: 0,
+      settings: { height: h, width: w, url, reroute_audio: false } });
+    const mkScene = (name, u, srcName, srcUuid) => Object.assign({}, base, { id: "scene", versioned_id: "scene", name, uuid: u,
+      settings: { custom_size: false, id_counter: 1, items: [{
+        align: 5, blend_method: "default", blend_type: "normal", bounds: { x: 0, y: 0 }, bounds_align: 0, bounds_type: 0,
+        crop_bottom: 0, crop_left: 0, crop_right: 0, crop_top: 0, group_item_backup: false, id: 1, locked: false,
+        name: srcName, pos: { x: 0, y: 0 }, private_settings: {}, rot: 0, scale: { x: 1, y: 1 }, scale_filter: "disable",
+        source_uuid: srcUuid, visible: true }] } });
+    const bL = uid(), sL = uid(), bP = uid(), sP = uid();
+    const SRC_L = "Footnote Overlay 1920x1080", SRC_P = "Footnote Overlay 1080x1920";
     const col = {
-      current_program_scene: SCENE, current_scene: SCENE, current_transition: "Fade",
+      current_program_scene: "Footnote 16:9", current_scene: "Footnote 16:9", current_transition: "Fade",
       groups: [], name: "Footnote Overlay", preview_locked: false, scaling_enabled: false,
-      scene_order: [{ name: SCENE }],
+      scene_order: [{ name: "Footnote 16:9" }, { name: "Footnote 9:16" }],
       sources: [
-        Object.assign({}, base, { id: "browser_source", versioned_id: "browser_source", name: SRC, uuid: bUuid,
-          deinterlace_field_order: 0, deinterlace_mode: 0,
-          settings: { height: 1080, width: 1920, url, reroute_audio: false } }),
-        Object.assign({}, base, { id: "scene", versioned_id: "scene", name: SCENE, uuid: sUuid,
-          settings: { custom_size: false, id_counter: 1, items: [{
-            align: 5, blend_method: "default", blend_type: "normal", bounds: { x: 0, y: 0 }, bounds_align: 0, bounds_type: 0,
-            crop_bottom: 0, crop_left: 0, crop_right: 0, crop_top: 0, group_item_backup: false, id: 1, locked: false,
-            name: SRC, pos: { x: 0, y: 0 }, private_settings: {}, rot: 0, scale: { x: 1, y: 1 }, scale_filter: "disable",
-            source_uuid: bUuid, visible: true }] } }),
+        mkBrowser(SRC_L, bL, 1920, 1080),
+        mkBrowser(SRC_P, bP, 1080, 1920),
+        mkScene("Footnote 16:9", sL, SRC_L, bL),
+        mkScene("Footnote 9:16", sP, SRC_P, bP),
       ],
       transition_duration: 300, transitions: [],
     };

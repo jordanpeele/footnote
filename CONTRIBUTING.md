@@ -101,3 +101,13 @@ Four skin directions are pre-drafted as [good first issues](./launch/good-first-
 ## Good first issues
 
 Start with the [`good first issue` label](https://github.com/jordanpeele/footnote/issues?q=label%3A%22good+first+issue%22) — nine are pre-drafted in [`launch/good-first-issues/`](./launch/good-first-issues/), each with exact file pointers and a definition of done: four overlay skins, a verifier adapter, an STT adapter, a state-channel adapter, Spanish i18n, and an eval-set contribution. Claim one by commenting on the issue.
+
+## What happens to your PR
+
+So you know what you're signing up for:
+
+- **The bar is correctness over cleverness.** Anything on the on-air path — extract, verify, editorial, state channel, overlay — is held to broadcast standard, because a bug there doesn't crash a page, it puts a wrong thing on someone's live video. Boring code that obviously does the right thing beats elegant code that probably does.
+- **CI must be green.** Same `npm test` you run locally. A red check won't get reviewed, mostly because the fix is usually faster than the conversation.
+- **Small PRs merge faster.** One adapter, one skin, one fix. A 200-line PR often lands the same week; a 2000-line PR sits until there's a clear afternoon, and there aren't many of those.
+- **Adapters are the easiest on-ramp.** The contracts in [`src/core/interfaces/`](./src/core/interfaces/) are small, the reference adapters show the shape, and an adapter can't weaken the editorial layer — which makes them low-risk to review and quick to say yes to.
+- Honest note on latency: the maintainer is a video journalist who reviews between shoots. Sometimes that's same-day, sometimes it's a week — it's not a signal about your PR. If something's sat quiet for two weeks, a bump comment is welcome and not rude.
