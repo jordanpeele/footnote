@@ -1,0 +1,1 @@
+it's open source now. the whole thing. the pipeline, the overlay, the rules for what's allowed to air. bring your own api keys and it runs on your stream in about two minutes. costs maybe a dollar an hour to run. every fact check it airs keeps a receipt with the source. https://github.com/jordanpeele/footnote

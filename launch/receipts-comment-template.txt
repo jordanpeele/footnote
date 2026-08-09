@@ -1,0 +1,8 @@
+# template: paste under any video showing a fact-check on stream.
+# fill [RECEIPTS_URL] with that specific stream's receipts page, https://github.com/jordanpeele/footnote with the repo.
+# receipts pages: <!-- landing in sprint-01 (P1-G) --> confirm the page is live before posting.
+# one comment, no thread. pin it if it's your video.
+
+every check it aired in this video has a receipt. the claim, the verdict, the correction, the source it cited, the timestamp. this stream's full record is here: [RECEIPTS_URL]
+
+the tool is open source if you want to check the checker: https://github.com/jordanpeele/footnote

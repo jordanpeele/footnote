@@ -1,0 +1,15 @@
+DESCRIPTION (<= 350 chars):
+Real-time fact-checking for livestreams. Streaming STT finds checkable claims, an LLM verifies them against trust-tiered sources (wires, .gov, fact-checkers), a human airs or vetoes, and a broadcast lower-third lands in OBS or Moblin seconds later. BYOK (Deepgram + Anthropic + Perplexity), pluggable verifiers/STT/skins, receipts for every aired check. MIT.
+
+TOPICS (~10):
+fact-checking
+livestream
+obs-studio
+broadcast-graphics
+real-time
+deepgram
+anthropic
+perplexity
+journalism
+misinformation
+overlay

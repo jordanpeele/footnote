@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Footnote — OBS overlay</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="overlay.css">
+</head>
+<body>
+  <!-- transparent 1920x1080 broadcast canvas; OBS composites this over its scene -->
+  <div class="stage">
+    <div class="onair" id="onAir" hidden>
+      <div class="oa-verdict" id="oaVerdict">TRUE</div>
+      <div class="oa-mid">
+        <div class="oa-claimline"><span class="oa-kicker">FACT CHECK</span><span class="oa-claim" id="oaClaim"></span></div>
+        <div class="oa-correction" id="oaCorrection"></div>
+      </div>
+      <div class="oa-right">
+        <div class="oa-brand"><span class="oa-sup">¹</span>Footnote</div>
+        <div class="oa-src" id="oaSrc"></div>
+      </div>
+      <div class="oa-timer" id="oaTimer"></div>
+    </div>
+  </div>
+  <script src="overlay.js"></script>
+</body>
+</html>

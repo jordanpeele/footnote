@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Footnote — Receipts</title>
+<meta name="description" content="Public record of every fact-check aired in this room.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="receipts.css">
+</head>
+<body>
+  <!-- /receipts?room=<room> — the shareable accountability page: every AIRED check, newest first.
+       All log strings are rendered via textContent in receipts.js (claims are adversarial speech). -->
+  <header class="hd">
+    <div class="hd-brand"><span class="hd-sup">¹</span>Footnote</div>
+    <h1 class="hd-title">Receipts — live fact-check record</h1>
+    <div class="hd-meta">
+      <span class="hd-room" id="roomChip"></span>
+      <span class="hd-range" id="dateRange"></span>
+    </div>
+  </header>
+  <main class="feed" id="feed" aria-live="polite">
+    <div class="empty" id="empty" hidden></div>
+  </main>
+  <footer class="ft">
+    <p>receipts cover the last 7 days of aired checks in this room.</p>
+    <p>powered by <a href="#" rel="noopener">Footnote — open source</a></p>
+  </footer>
+  <script src="receipts.js"></script>
+</body>
+</html>

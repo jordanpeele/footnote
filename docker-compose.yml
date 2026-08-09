@@ -1,0 +1,19 @@
+# Footnote self-host — single container, zero build step (the repo is plain ESM with no
+# runtime deps, so we mount it straight into stock node and `npm start`).
+#   cp .env.example .env   # paste your keys
+#   docker compose up      # → http://localhost:3000/control
+services:
+  footnote:
+    image: node:22-alpine
+    working_dir: /app
+    command: npm start
+    volumes:
+      - .:/app
+    env_file:
+      - path: .env
+        required: false   # keys can also live in .env.local — the server loads both itself
+    environment:
+      HOST: 0.0.0.0       # listen beyond the container loopback so the port map works
+    ports:
+      - "3000:3000"
+    restart: unless-stopped

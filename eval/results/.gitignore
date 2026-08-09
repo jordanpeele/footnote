@@ -1,0 +1,3 @@
+# eval results are runs, not fixtures — never commit them
+*
+!.gitignore

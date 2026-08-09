@@ -1,0 +1,13 @@
+{
+  "//": "No-build repo: interfaces are JSDoc typedefs (src/core/interfaces/). checkJs stays OFF so nothing gates the build; opt in locally with `npx tsc -p jsconfig.json --checkJs` for docs-grade shape checking.",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext"
+  },
+  "include": ["api/**/*.js", "src/**/*.js"],
+  "exclude": ["node_modules"]
+}

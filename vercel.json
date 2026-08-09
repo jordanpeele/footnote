@@ -1,0 +1,19 @@
+{
+  "functions": {
+    "api/*.js": { "includeFiles": "prompts/**" }
+  },
+  "rewrites": [
+    { "source": "/overlay", "destination": "/overlay.html" },
+    { "source": "/control", "destination": "/index.html" },
+    { "source": "/receipts", "destination": "/receipts.html" },
+    { "source": "/op", "destination": "/operator.html" }
+  ],
+  "headers": [
+    {
+      "source": "/(app.js|app.css|index.html|overlay.html|overlay.js|overlay.css|receipts.html|receipts.js|receipts.css|operator.html|operator.js|operator.css)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
+      ]
+    }
+  ]
+}

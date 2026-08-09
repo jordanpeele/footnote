@@ -1,0 +1,2 @@
+# judge cache is a local cost-saver, not a fixture — keyed on prompt+inputs hash
+.judge-cache.json

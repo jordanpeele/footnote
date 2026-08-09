@@ -1,0 +1,82 @@
+/* Footnote OBS overlay — the on-air lower-third on a TRANSPARENT 1920x1080 canvas.
+   Same graphic as the demo, scaled up ~1.8x for broadcast legibility. */
+:root{
+  --fn:#00d68f; --up:#00e08a; --down:#ff4d5e;
+  --disp:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;background:transparent;overflow:hidden;-webkit-font-smoothing:antialiased}
+.stage{position:fixed;inset:0}
+
+.onair{position:absolute;left:60px;right:60px;bottom:72px;display:flex;align-items:stretch;
+  min-height:132px;border-radius:12px;overflow:hidden;color:#fff;font-family:var(--disp);
+  background:linear-gradient(180deg,rgba(11,13,17,.94),rgba(8,9,12,.97));
+  border:1.5px solid rgba(255,255,255,.12);box-shadow:0 22px 60px rgba(0,0,0,.6);
+  opacity:0;transform:translateY(26px);pointer-events:none}
+.onair[hidden]{display:none}
+.onair.show{opacity:1;transform:none;transition:opacity .45s cubic-bezier(.2,.8,.2,1),transform .45s cubic-bezier(.2,.8,.2,1)}
+
+.onair .oa-verdict{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  flex:none;width:210px;padding:16px 14px;gap:3px;font:900 27px var(--disp);letter-spacing:.02em;
+  text-align:center;line-height:1.05;color:#fff;background:#333}
+.onair.v-true .oa-verdict{background:linear-gradient(180deg,#0b8f5f,#0a7a52)}
+.onair.v-false .oa-verdict{background:linear-gradient(180deg,#d33143,#b3212f)}
+.onair.v-warn .oa-verdict{background:linear-gradient(180deg,#d79321,#b9791a);color:#0b0b0b}
+.onair.v-gray .oa-verdict{background:linear-gradient(180deg,#4a5160,#3a404c)}
+.onair.v-corr .oa-verdict{background:linear-gradient(180deg,#2f7fd6,#2565b0)}
+.onair.v-true{border-color:rgba(0,214,143,.5)}
+.onair.v-false{border-color:rgba(255,77,94,.5)}
+.onair.v-warn{border-color:rgba(245,166,35,.5)}
+.onair.v-corr{border-color:rgba(79,155,232,.5)}
+/* correction dress: the mid leads with the correction text (in .oa-claim), the "corrects: …"
+   linkage rides small + muted in the .oa-correction slot; the static FACT CHECK kicker would
+   misread next to a correction, so it hides */
+.onair.v-corr .oa-kicker{display:none}
+.onair.v-corr .oa-correction{font:600 18px/1.3 var(--mono);color:#9aa3af}
+.onair.v-corr .oa-timer{background:linear-gradient(90deg,#2f7fd6,#5aa7f0)}
+
+.oa-mid{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:8px;padding:18px 26px}
+.oa-claimline{display:flex;align-items:baseline;gap:16px;min-width:0}
+.oa-kicker{flex:none;font:800 15px var(--mono);letter-spacing:.14em;color:var(--fn);
+  border:1.5px solid rgba(0,214,143,.4);border-radius:4px;padding:4px 8px 2px}
+.oa-claim{font:700 27px/1.25 var(--disp);color:#eef1f4;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.oa-correction{font:600 24px/1.3 var(--disp);color:#fff;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.oa-right{flex:none;width:250px;display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;
+  gap:10px;padding:18px 26px 18px 20px;border-left:1.5px solid rgba(255,255,255,.1);text-align:right}
+.oa-brand{font:800 27px var(--disp);color:#fff;display:inline-flex;align-items:center;gap:3px}
+.oa-brand .oa-sup{font:800 17px Georgia,serif;color:var(--fn);vertical-align:super}
+.oa-src{font:600 18px/1.3 var(--mono);color:#9aa3af;word-break:break-word}
+.oa-timer{position:absolute;left:0;bottom:0;height:5px;width:100%;
+  background:linear-gradient(90deg,var(--fn),#26f0aa)}
+
+/* Portrait / vertical canvas (e.g. a 1080×1920 Moblin Browser widget for TikTok-style streams).
+   The row layout doesn't fit 1080 wide — stack: verdict strip on top, claim+correction, then a
+   brand/source footer. Sits higher off the bottom to clear vertical-platform UI chrome. */
+@media (max-aspect-ratio: 1/1){
+  .onair{left:28px;right:28px;bottom:200px;flex-direction:column;min-height:0}
+  .onair .oa-verdict{width:100%;flex-direction:row;justify-content:center;gap:10px;padding:13px 14px;font-size:25px}
+  .oa-mid{padding:16px 20px;gap:7px}
+  .oa-claimline{flex-wrap:wrap;gap:8px 10px}
+  .oa-kicker{font-size:13px;padding:3px 7px 2px}
+  .oa-claim{font-size:24px;-webkit-line-clamp:3}
+  .oa-correction{font-size:21px;-webkit-line-clamp:3}
+  .oa-right{width:100%;flex-direction:row;align-items:center;justify-content:space-between;
+    gap:12px;padding:11px 20px;border-left:0;border-top:1.5px solid rgba(255,255,255,.1);text-align:left}
+  .oa-brand{font-size:21px}
+  .oa-src{font-size:14px;text-align:right}
+}
+
+/* field-test watermark — cards aired by the local TESTAIR flag carry test:true */
+.onair.test::after{content:"TEST";position:absolute;top:-14px;right:14px;padding:2px 10px;
+  border-radius:4px;background:#d79321;color:#0b0b0b;font:700 13px/1.4 system-ui,sans-serif;
+  letter-spacing:.12em;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+
+/* degraded-network hint: 6px near-invisible dot while the poll loop is reconnecting */
+.net-dot{position:fixed;right:12px;bottom:12px;width:6px;height:6px;border-radius:50%;
+  background:#8b93a0;opacity:0;transition:opacity .8s;pointer-events:none}
+.net-dot.on{opacity:.2}
+
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}}

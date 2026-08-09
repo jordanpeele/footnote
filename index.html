@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Footnote — live fact-checks</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a0b0d'/%3E%3Ctext x='16' y='23' font-size='20' font-family='Georgia' fill='%2300d68f' text-anchor='middle'%3E%C2%B9%3C/text%3E%3C/svg%3E">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;800;900&family=Archivo+Narrow:wght@600;700&family=JetBrains+Mono:wght@500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ===== OPERATOR CONTROL BAR (not part of the "stream") ===== -->
+  <div class="control">
+    <div class="ctrl-brand">
+      <span class="cb-mark">¹</span>
+      <b>Footnote</b><span class="cb-sub">live fact-check</span>
+    </div>
+    <div class="ctrl-actions">
+      <label class="plat-pick">
+        <span>Stream on</span>
+        <select id="platformSel" aria-label="Platform">
+          <option value="youtube">YouTube</option>
+          <option value="twitch">Twitch</option>
+          <option value="kick">Kick</option>
+          <option value="clean">Clean Feed</option>
+        </select>
+      </label>
+      <button id="streamBtn" class="stream-btn">● Start Stream</button>
+      <button id="dbgToggle" class="dbg-toggle" title="Toggle instrumentation panel">⚙ Debug</button>
+      <div class="typed-drive">
+        <input id="typedInput" type="text" autocomplete="off" spellcheck="false"
+               placeholder="or type a claim to fact-check, hit enter">
+        <button id="typedSend" title="fact-check this">→</button>
+      </div>
+      <span class="ctrl-status" id="ctrlStatus">idle · pick a platform and go live</span>
+    </div>
+  </div>
+
+  <!-- ===== THE "STREAM" (a mock of the selected platform) ===== -->
+  <div class="site skin-youtube" id="site">
+
+    <!-- top navigation bar -->
+    <header class="topbar">
+      <div class="tb-left">
+        <span class="tb-logo" id="tbLogo"></span>
+        <nav class="tb-nav" id="tbNav"></nav>
+      </div>
+      <div class="tb-mid">
+        <div class="tb-searchbox">
+          <input class="tb-search" id="tbSearch" placeholder="Search" readonly>
+          <span class="tb-searchbtn" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M20.9 20.2l-5.4-5.4a7 7 0 10-.7.7l5.4 5.4.7-.7zM10 15a5 5 0 110-10 5 5 0 010 10z"/></svg></span>
+        </div>
+        <span class="tb-mic" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 14a3 3 0 003-3V6a3 3 0 00-6 0v5a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.92V21h2v-3.08A7 7 0 0019 11h-2z"/></svg></span>
+      </div>
+      <div class="tb-right" id="tbRight"></div>
+    </header>
+
+    <div class="layout">
+      <!-- left sidebar (channel list / guide) -->
+      <nav class="sidenav" id="sidenav"></nav>
+
+      <!-- main column: player + streamer meta -->
+      <main class="main">
+        <div class="player" id="player">
+          <video id="cam" autoplay muted playsinline></video>
+          <div class="cam-off" id="camOff">
+            <div class="cam-off-inner">
+              <span class="camdot"></span>
+              camera off — hit <b>Start Stream</b> to go live
+            </div>
+          </div>
+
+          <!-- platform-native live badge + viewer count on the player -->
+          <div class="player-badges">
+            <span class="p-live" id="pLive">LIVE</span>
+            <span class="p-view" id="pView">0 viewers</span>
+          </div>
+
+          <!-- persistent broadcast bug: Footnote (all skins) -->
+          <div class="net-bug"><span class="nb-footnote"><span class="nb-sup">¹</span>Footnote</span></div>
+
+          <!-- ===== THE PRODUCT: on-air fact-check lower-third (when the operator airs one) ===== -->
+          <div class="onair" id="onAir" hidden>
+            <div class="oa-verdict" id="oaVerdict">TRUE</div>
+            <div class="oa-mid">
+              <div class="oa-claimline"><span class="oa-kicker">FACT CHECK</span><span class="oa-claim" id="oaClaim"></span></div>
+              <div class="oa-correction" id="oaCorrection"></div>
+            </div>
+            <div class="oa-right">
+              <div class="oa-brand"><span class="oa-sup">¹</span>Footnote</div>
+              <div class="oa-src" id="oaSrc"></div>
+            </div>
+            <div class="oa-timer" id="oaTimer"></div>
+          </div>
+
+          <!-- live-signal strip: proves it's really transcribing -->
+          <div class="sig-strip" id="sigStrip">
+            <div class="ss-meter" id="ssMeter"></div>
+            <div class="ss-mid">
+              <div class="ss-transcript" id="ssTranscript"><span class="dim">mic idle</span></div>
+            </div>
+            <div class="ss-topic">
+              <span class="ss-eng">DEEPGRAM streaming</span>
+              <span class="ss-lock" id="ssLock">—</span>
+            </div>
+          </div>
+
+          <!-- YouTube/Kick player control bar (scrubber + controls) -->
+          <div class="yt-controls">
+            <div class="ytc-bar"><i></i><span class="ytc-scrub"></span></div>
+            <div class="ytc-row">
+              <div class="ytc-left">
+                <span class="ytc-ic ytc-play">❚❚</span>
+                <span class="ytc-ic">🔊</span>
+                <span class="ytc-live"><span class="ytc-dot"></span>LIVE</span>
+              </div>
+              <div class="ytc-right">
+                <span class="ytc-ic">⚙</span><span class="ytc-ic ytc-mini">▭</span><span class="ytc-ic">◲</span><span class="ytc-ic">⛶</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- under-player streamer meta (channel info) — built per platform -->
+        <div class="meta" id="meta"></div>
+      </main>
+
+      <!-- right: live chat -->
+      <aside class="chat" id="chatPanel">
+        <div class="chat-head" id="chatHead">STREAM CHAT</div>
+        <div class="chat-body" id="chatBody"></div>
+        <div class="chat-input">
+          <input id="chatInput" placeholder="Send a message" readonly>
+          <button class="chat-send" id="chatSend">Chat</button>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- ===== OPERATOR PANEL — the fact-check queue (only the presenter sees this) ===== -->
+  <div class="ops" id="ops">
+    <div class="ops-head">
+      <span class="ops-title"><span class="ops-sup">¹</span> FACT-CHECK QUEUE</span>
+      <span class="ops-status" id="opsStatus">idle</span>
+      <label class="ops-auto" title="Keep an aired check on screen until you Pull it, instead of auto-retiring">
+        <input type="checkbox" id="holdAir"> Hold
+      </label>
+      <button class="ops-pull" id="pullAir" type="button" title="Take the current graphic off-air now">Pull</button>
+      <label class="ops-auto" title="Auto-air definitive, high-confidence checks with a veto countdown">
+        <input type="checkbox" id="autoAir"> Auto-air
+      </label>
+      <button class="ops-log" id="sessionLog" type="button" disabled title="Download this broadcast's fact-check record (JSON)">⭳ Session</button>
+    </div>
+    <div class="ops-queue" id="opsQueue">
+      <div class="ops-empty"><span>go live and make a factual claim — checks land here to <b>AIR</b> or <b>SKIP</b>.</span></div>
+    </div>
+  </div>
+
+  <!-- instrumentation / latency panel -->
+  <div class="dbg" id="dbg" hidden></div>
+
+  <p class="fineprint">
+    Mock platform frames for demonstration — not affiliated with Twitch, Kick, or YouTube. The webcam
+    feed is local (never uploaded). Speech is transcribed live via Deepgram; checkable claims are
+    verified against authoritative sources (Perplexity) and shown only when the operator airs them.
+    Fact-checks are AI-generated — the operator reviews the cited source before airing.
+  </p>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
