@@ -1,0 +1,19 @@
+# CI: the full node --test suite on every push to main and every PR.
+# Zero-dependency project — no install step; npm test runs node's built-in runner.
+name: test
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22]   # engines: >=20; test the floor and current LTS
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm test

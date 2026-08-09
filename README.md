@@ -1,5 +1,7 @@
 # Footnote¹
 
+[![test](https://github.com/jordanpeele/footnote/actions/workflows/test.yml/badge.svg)](https://github.com/jordanpeele/footnote/actions/workflows/test.yml)
+
 **Live fact-checks on your livestream, with sources, while you're still talking.**
 
 Footnote listens to a live conversation, pulls out checkable claims, verifies them against high-trust sources, and puts a broadcast-quality verdict lower-third on the stream — seconds later, with a human holding the AIR button.
