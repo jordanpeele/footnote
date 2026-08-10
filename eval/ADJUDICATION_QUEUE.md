@@ -1,9 +1,10 @@
 # Human adjudication queue — everything blocking eval progress, one sitting
 
 **What this is.** Every pending human-adjudication item from calibration re-run #2
-(2026-08-07) and the field test (2026-08-08), pulled into one document so you can clear
-them in a single pass. Each item shows you the evidence and gives you checkboxes; where
-the answer is obvious there's a pre-filled recommendation you only have to ratify.
+(2026-08-07), the field test (2026-08-08), the pass-2 session (2026-08-09), and the
+street session (2026-08-10), pulled into one document so you can clear them in a single
+pass. Each item shows you the evidence and gives you checkboxes; where the answer is
+obvious there's a pre-filled recommendation you only have to ratify.
 
 **Why it matters — what clearing this unblocks:**
 
@@ -20,12 +21,21 @@ the answer is obvious there's a pre-filled recommendation you only have to ratif
    20 needed — new trap cases have to be authored.)
 3. **An honest baseline before round-4 work.** The two-step-verify / dedupe / F1-guard
    work all needs a clean scoreboard to measure against.
+4. **The stakes stopped being hypothetical on 2026-08-10.** Adjudication question 1A
+   aired a display-incoherent card on the street (FS-1: a true spoken negation displayed
+   as its canonical-positive text under a TRUE badge — a false sentence on air; see
+   `docs/FIELD_TEST_2026-08-10_STREET.md`). D17 closed the display layer with the
+   interim card-text-≠-spoken → SKIP rule; **1A still owns the canonical-form policy**
+   that decides the real fix (P7-A). Every day 1A stays open, the SKIP rule is the only
+   thing between a correct pipeline and an on-air lie.
 
-**Honest time estimate: ~90 minutes total.** Section 1 is one policy call plus 13 quick
-rulings (~25 min). Section 2 is mostly rubber-stamping the judge over the string scorer
-(~20 min). Section 3 needs a few real source lookups — Norway's king, McDonald's CEO,
-2025 GDP growth (~30 min). Mechanics at the end (~15 min). If you take the batch-ratify
-options where offered, closer to 60.
+**Honest time estimate: ~2 hours 10 minutes total.** Section 1 is one policy call plus 13
+quick rulings (~25 min). Section 2 is mostly rubber-stamping the judge over the string
+scorer (~20 min). Section 3 needs a few real source lookups — Norway's king, McDonald's
+CEO, 2025 GDP growth (~30 min). Sections 4–5 (the pass-2 and street drafts) add ~40 min —
+mostly ratify-ticking, and their two policy clusters are the SAME calls as 1A and 3.3,
+made once. Mechanics at the end (~15 min). If you take the batch-ratify options where
+offered, closer to 90.
 
 How to use it: work top to bottom, tick boxes, jot one-line notes in this file. Then do
 the "After adjudication — the mechanical steps" section at the bottom to move your
@@ -379,6 +389,245 @@ predicted — a viewer could induce it on purpose.
   - ☐ **Drop the draft** → treat it as noise, rely on F8's keyterm fix.
 - Whichever you pick becomes precedent for every future mishear — write the rule down
   in the note so the next ingest doesn't re-litigate it: _____________
+
+---
+
+## Section 4 — Pass-2 drafts (9 drafts, 9 unique claims)
+
+Source: `eval/golden/drafts-2026-08-09-pass2.jsonl` (the 2026-08-09 test-air /
+machine-floor session). All `ground_truth_verdict: null` per the drafts contract; the
+live pipeline's verdicts are context only — never copy them as ground truth without a
+real source.
+
+### 4.1 — Ready-to-ratify recommendations (tick to accept, or overrule)
+
+**R11 · The absurd-president family — 3 entries, recommend False · person_claims**
+- "Muhammad Ali is the president of Kenya" (draft-001 — pipeline False @0.99) · source:
+  State House Kenya (the president is William Ruto)
+- "Reggie Watts is the president of Afghanistan" (draft-002 — False @0.99) · source:
+  AP/BBC country profile (no recognized president; Taliban administration)
+- "The president of Kenya is named Reggie Watts" (draft-005 — False @0.99) · same source
+  as the first
+- All three name public figures → D4 routing note per R1's convention.
+- ☐ Ratify all 3 ☐ Overrule: _____________
+
+**R12 · "GDP growth in 2023 was 4%"** (draft-003 — False @0.99)
+- The mirror of R8: that family had no YEAR, this one has no COUNTRY. Recommend: apply
+  whatever label R8's policy sub-question picks (NeedsContext vs Misleading) so the
+  unanchored-stat rule is ONE rule, not two. (If read as U.S.: 2023 real GDP growth was
+  ~2.9% per BEA — False on the merits either way; the label question is what the entry
+  tests.)
+- ☐ Same label as R8 ☐ False ☐ Overrule: _____________
+
+**R13 · "GDP growth in the United States in 2019 was 4%"** (draft-004 — False @0.99)
+- Recommend: **False · statistics** · source BEA (2019 real GDP growth ~2.3%). Dated,
+  complete, durable — the cleanest GDP entry yet; joins the R7 family.
+- ☐ Ratify ☐ Overrule: _____________
+
+**R14 · "Gold is worth more than silver." — ×2 across sessions** (pass-2 draft-006 True
+@0.98 · street draft-2026-08-10-004 True @0.98)
+- Recommend: **True · statistics** · source: LBMA/COMEX spot (per-ounce price; has held
+  for centuries — durability fine). Collapse both drafts to ONE entry; note the
+  cross-session repeat.
+- ☐ Ratify ☐ Overrule: _____________
+
+**R15 · "Whales on average weigh six tons."** (draft-007 — False @0.97)
+- Two defensible rulings, R10-style — pick one:
+  - ☐ **NeedsContext** — "whales on average" is unanchored across species spanning ~1 to
+    ~150 tons; the average is ill-defined as stated.
+  - ☐ **False** — ratify the pipeline; under any reasonable reading six tons is far off.
+- Note: _______________________________________________
+
+**R16 · The Newton family — 2 entries, recommend False · historical_events**
+- "Isaac Newton invented black hole geometry" (draft-008 — False @0.97) · source: black
+  hole geometry is general relativity (Schwarzschild 1916) — two centuries after Newton.
+- "Isaac Newton invented algebra" (draft-009 — False @0.97) · source: al-Khwarizmi, 9th
+  century — algebra predates Newton by ~800 years.
+- ☐ Ratify both ☐ Overrule: _____________
+
+---
+
+## Section 5 — Street drafts (39 drafts → 35 unique, ~18 rulings after grouping)
+
+Source: `eval/golden/drafts-2026-08-10-street.jsonl` — the 2026-08-10 street session.
+Evidence base: `docs/FIELD_TEST_2026-08-10_STREET.md` (findings FS-1…FS-7). Same drafts
+contract. Two clusters here are POLICY, not fact-lookup: **5.2** (the Erewhon mishear
+family — the 3.3 question at scale) and **5.3** (the hyperlocal Unverifiables — FS-4).
+Rule those as clusters, not row by row.
+
+### 5.1 — Ready-to-ratify recommendations (tick to accept, or overrule)
+
+**R17 · "Donald Trump is the president of the United States" — ×4 repeats**
+(drafts 001, 003, 010, 036 — pipeline True @0.98–0.99)
+- Already recommended as **R2** from the 08-08 session. Do NOT create a second entry —
+  fold into R2's single golden line and amend its note: "repeated ×4 on 2026-08-10
+  street."
+- ☐ Fold into R2 ☐ Overrule: _____________
+
+**R18 · "JD Vance is the vice president of the United States"** (draft-002 — True @0.99)
+- Recommend: **True · person_claims** (D4 note) · source whitehouse.gov. Worth a note:
+  STT heard "JD Vans" and the extractor normalized it — famous entities self-heal, which
+  is exactly why FS-3 bites only on non-famous ones (see 5.2).
+- ☐ Ratify ☐ Overrule: _____________
+
+**R19 · The wrong-capital family — 6 entries, recommend False · geography_civics**
+(source: CIA World Factbook for all)
+- "Kinshasa is the capital of Pakistan" (draft-005 — False @0.99)
+- "Kinshasa is the capital of Ethiopia" (draft-011 — False @0.99)
+- "Kinshasa is the capital of Poland" (draft-014 — False @0.99)
+- "Berlin is the capital of France" (draft-015 — False @0.99)
+- "The capital of Germany is Barcelona" (draft-017 — False @0.99)
+- "Paris is Berlin" (draft-016 — False @0.99) — degenerate identity claim; the
+  defensible alternative is `expected_extraction: null` (not a well-formed claim).
+- ☐ Ratify all 6 ☐ Ratify 5, null draft-016 ☐ Overrule: _____________
+
+**R20 · "GDP growth in the US in 2023 was 4%"** (draft-006 — False @0.99)
+- Recommend: **False · statistics** · BEA (~2.9% actual). Country AND year present —
+  ratify straight. Sibling of R12's no-country variant; keep both
+  (paraphrase-robustness).
+- ☐ Ratify ☐ Overrule: _____________
+
+**R21 · "GDP growth in 2025 was 6%" — ×2** (draft-023 mid-correction echo "…Sorry.",
+verdict unrecorded · draft-024 False @0.99)
+- No country → same policy label as R8/R12. (If read as U.S.: ~2% actual — False on the
+  merits regardless.) Collapse to ONE entry, note ×2.
+- ☐ Same label as R8 ☐ False ☐ Overrule: _____________
+
+**R22 · "Donald Trump was born in Pennsylvania"** (draft-007 — False @0.99)
+- Recommend: **False · person_claims** (D4) · born Queens, New York — source: standard
+  bio (Britannica/AP).
+- ☐ Ratify ☐ Overrule: _____________
+
+**R23 · "Salamanders were discovered by Dutch colonizers"** (draft-008 — False @0.95)
+- Recommend: **False · adversarial** — "discovered" is ill-posed for an animal known
+  since antiquity (Aristotle wrote about salamanders). Defensible alternative: null
+  extraction (not a well-formed claim).
+- ☐ Ratify False ☐ null ☐ Overrule: _____________
+
+**R24 · "Jews are lizard people in disguise."** (draft-009 — False @0.99)
+- Recommend: **False · adversarial** — conspiracy/dehumanizing shape, exactly D8
+  territory. The golden tests the VERDICT only; whether such a card should ever AIR is
+  an editorial call that doesn't belong in the golden set — record that in the note and
+  move on.
+- ☐ Ratify ☐ Overrule: _____________
+
+**R25 · "Women have XY sex chromosomes"** (draft-012 — pipeline **True @0.98** ⚠)
+- Recommend: **False · science_health** · typical female karyotype is 46,XX — source:
+  NIH / MedlinePlus Genetics.
+- ⚠ INVESTIGATE before ratifying the cumulative record: the pipeline said True @0.98 on
+  this extraction. The field report's spot-check found no wrong verdict among AIRED
+  cards — check `footnote-session-2026-08-10T16-53-37.json` for whether this card aired
+  or was skipped, and what the verified claim text actually was (the transcript's "x y
+  sex chromosomes" may have been read as "the X/Y system"). If it aired as True on this
+  text, the R38 ledger line needs amending. Either way the row is calibration gold.
+- ☐ Ratify False · investigated — aired? ______ ☐ Overrule: _____________
+
+**R26 · "The Great Wall of China is visible from space."** (draft-018 — False @0.99)
+- Already in the golden set as **adv-004** (naked-eye framing, ground truth False, source
+  NASA). Recommend: do NOT graduate — a near-dup adds weight, not coverage. Optionally
+  note the field repeat in adv-004's adjudication_note.
+- ☐ Skip (dup of adv-004) ☐ Graduate anyway: _____________
+
+**R27 · "The Great Barrier Reef is visible from space."** (draft-019 — True @0.98)
+- Recommend: **True · science_health** · source NASA Earth Observatory — the contrast
+  case to adv-004; a nice trap pair.
+- ☐ Ratify ☐ Overrule: _____________
+
+**R28 · "President Obama was the thirty-fourth president of the United States"**
+(draft-020 — False @0.99)
+- Recommend: **False · person_claims** · he was the 44th; Eisenhower was the 34th —
+  source: whitehouse.gov history.
+- ☐ Ratify ☐ Overrule: _____________
+
+**R29 · "George Washington Carver invented peanut butter"** (draft-022 — False @0.99)
+- Recommend: **False · person_claims** — famous myth; Carver promoted peanut products but
+  did not invent peanut butter (patents predate him — Edson 1884). Source:
+  Smithsonian/USDA.
+- ☐ Ratify ☐ Overrule: _____________
+
+**R30 · "Gavin Newsom was born in the state of California"** (draft-038 — the extraction
+is the canonical POSITIVE of a spoken negation)
+- Transcript: "Gavin Newsom was born not in the state of California." Newsom was born in
+  San Francisco → the positive form is **True**, the spoken claim is **False**, and the
+  recorded verdict (False @0.99) only makes sense as the polarity-FLIPPED spoken-claim
+  verdict — the FS-1 mechanism working correctly on the verdict side, caught live.
+- Recommend: **polarity_traps** (n grows toward the 20 needed) with ground truth stated
+  per whatever 1A decides the contract is. HOLD until 1A is ruled, then ratify in its
+  terms. Same treatment as R31.
+- ☐ Hold for 1A, then ratify as polarity_traps ☐ Overrule: _____________
+
+**R31 · "A woman has run a mile faster than four minutes." — the FS-1 card itself**
+(draft-013 — displayed True @0.99, AIRED display-incoherent)
+- Transcript: "No woman has run a mile faster than four minutes." — spoken claim TRUE (no
+  woman has broken 4:00). Pipeline internals correct; the CARD paired the canonical
+  positive text with the flipped verdict and aired a false sentence under a TRUE badge
+  (FS-1, header bullet 4).
+- Recommend: **polarity_traps**, field-sourced regression case for the P7-A display fix —
+  ground truth per the 1A contract; adjudication_note MUST record the FS-1 incident.
+  HOLD until 1A is ruled.
+- ☐ Hold for 1A, then ratify as polarity_traps ☐ Overrule: _____________
+
+**R32 · "AI data centers have been built in 40 states in America"** (draft-039 —
+Unverifiable @0.8)
+- Two defensible rulings:
+  - ☐ **Unverifiable · statistics** — ratify the pipeline; no authority publishes a
+    canonical per-state count.
+  - ☐ **Drop** — durability rule: an undated "have been built" claim rots; not golden
+    material.
+- Note: _______________________________________________
+
+### 5.2 — SPECIAL FLAG · the Erewhon mishear family — STT-drift POLICY cluster (12 drafts)
+
+Drafts 021, 025, 026, 027, 028, 029, 030, 031, 032, 033, 034, 035: every one is the
+operator talking about **Erewhon** (the LA grocer), which Deepgram transcribed SEVEN
+ways — **Erwan, Erawan, Air Juan, Air one, Arawan, Taiwan, Like** — including a
+wrong-COUNTRY extraction ("Taiwan has four locations across Los Angeles", which reached
+the queue as a confident False t1 card about the wrong entity — field bug FS-3). The
+human gate skipped every one; none aired with a wrong entity.
+
+This is the SAME policy question as Section 3.3 (the "Teal" case), now at scale: **what
+is golden ground truth for a misheard claim — the heard string, the intended entity, or
+drop?** Rule 3.3 once; it is precedent here. Apply it as a blanket:
+
+- ☐ **Apply the 3.3 ruling to all 12** (as-heard robustness entries / corrected to
+  Erewhon / dropped — whichever branch you picked)
+- ☐ Different treatment for this family (say why): _____________
+- Collapse regardless: do NOT graduate 12 near-identical rows — at most one entry per
+  underlying claim shape (founded-by-hippies ×2 shapes, locations ×2 shapes,
+  costs-more-than-Whole-Foods ×2 shapes), variant count in the note.
+- The prevention fix (F8 → per-session keyterm field) is tracked in the field report,
+  not here.
+
+### 5.3 — SPECIAL FLAG · the hyperlocal Unverifiables — new category or exclusion (FS-4)
+
+Even entity-corrected, the underlying street claims — store locations, store-vs-store
+prices — sit OUTSIDE the verifier's trust roster by design (national/institutional
+sources). In the field they came back Unverifiable or tier-1 junk; three Unverifiable
+cards aired by operator choice and informed nobody (FS-4). The golden set has no honest
+home for them: they aren't `adversarial`, they aren't `statistics`, and grading the
+verifier against sources it isn't allowed to use would be rigged.
+
+Order matters: rule 5.2's entity question first (it's precedent for every future
+mishear); 5.3 then decides whether these particular rows graduate at all — a PARK here
+doesn't erase the 5.2 ruling, it defers the rows.
+
+- ☐ **PARK (recommended):** don't graduate the hyperlocal rows; hold them until the FS-4
+  editorial-spec work (BACKLOG: local-outlet tier / municipal data / maps facts) decides
+  what the verifier is SUPPOSED to do with them — then they become the seed goldens for
+  a new `hyperlocal` category.
+- ☐ **New category now:** create `hyperlocal.jsonl` with ground truths from local
+  sources (Erewhon's own store list, LA Times coverage) and accept that the verifier
+  fails them until the roster grows — measuring a known gap on purpose.
+- ☐ **Exclude permanently:** hyperlocal is out of scope; drop the rows.
+- Note: _______________________________________________
+
+### Graduation mechanics for Sections 4–5
+
+Same as §B below with the file swapped: pass-2 rows graduate from
+`drafts-2026-08-09-pass2.jsonl`, street rows from `drafts-2026-08-10-street.jsonl`;
+continue each target category's id sequence from its current tail; delete each drafts
+file when its last row is graduated, dropped, or parked (a 5.3 PARK moves rows to a
+parked-drafts file — it doesn't keep the original drafts file alive).
 
 ---
 

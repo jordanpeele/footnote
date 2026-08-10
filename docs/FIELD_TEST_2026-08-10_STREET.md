@@ -105,3 +105,23 @@ next PUBLIC street stream: fix FS-2 (one line, done in arm.sh), fix FS-1's
 display pairing (small, display-only, needs the 1A adjudication call first or
 an interim always-show-spoken-text rule), and add the per-session keyterm field
 (FS-3). With those three, this rig is ready for a real audience.
+
+## FS-8 · HIGH (post-report addendum, found in adjudication prep) — WRONG-VERDICT CARD AIRED
+
+The R25 check came back positive: *"Women have XY sex chromosomes" ✓ TRUE @0.98*
+(NIH tier-3 citation) WAS aired, from the phone, during the street session. Chain:
+speaker ASSERTED the false claim → extractor emitted `polarity=denies` (no negation
+exists in the transcript — a polarity misclassification) → verifier correctly found
+the canonical form False → the polarity flip inverted it → True aired. This is the
+first wrong-verdict card in the field record (ledger amended; R38's ratified language
+was based on incomplete data and is contradicted — flagged to the orchestrator).
+
+D17 does NOT close this class: the spoken framing is also an assertion, so the card
+reads wrong either way. The closure is upstream. Proposed for orchestrator ruling
+(NOT hotfixed — polarity handling is gate-adjacent): a deterministic negation
+tripwire — when the extractor says `denies` but the utterance contains no negation
+token, treat as `polarity_conflict` instead of silently flipping (existing conflict
+machinery then applies: never auto-airs per D4, ⚠ tag on /op, spoken framing on
+display). Replay evidence: this tripwire would have flagged today's card and the
+08-08 "Teal" era has zero false positives against it (all other field denials
+contain explicit negation tokens).

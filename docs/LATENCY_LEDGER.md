@@ -174,3 +174,11 @@ at a latency price — and the P5-B merge already recovers splits for free, so t
 default wins on BOTH axes. Decision: no default change, ever, absent new evidence;
 the `?ep=` hatch stays for experiments. Also this session: F2 dedupe FIELD-FIRED
 (duplicate suppressed live), 3/3 verdicts correct, air→render p50 306ms.
+
+Cumulative field record (R38, AMENDED post-ratification — see FS-8): 4 sessions ·
+102 checks · **1 wrong-verdict card aired** (street 08-10: "Women have XY sex
+chromosomes" ✓ TRUE — extractor emitted polarity=denies on an ASSERTION with no
+negation in the transcript; the flip inverted a correct False into an aired True;
+found by the P7-E adjudication prep, confirmed against the session record) ·
+1 display-incoherent pairing (FS-1, closed by D17 — which does NOT close the FS-8
+class; that closure is polarity-classification quality, orchestrator ruling pending).

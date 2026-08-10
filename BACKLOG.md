@@ -23,6 +23,18 @@ capability model) is adequate for a team tool running real broadcasts.
   **Trigger:** a producer says the ~0.4–0.5s feels laggy, the overlay runs always-on (polling then
   wastes commands), or you want a pitch to feel instant. (Adaptive polling already covers most of it.)
 
+## Editorial scope (verifier trust roster)
+- **FS-4 · Hyperlocal editorial-spec extension (per R41).** Street conversations are hyperlocal by
+  nature and the trust roster is national/institutional by design, so the street's natural claims land
+  Unverifiable or tier-1 junk. Evidence: the 2026-08-10 street session's Erewhon location/price family
+  all came back Unverifiable/t1; three Unverifiable cards aired by operator choice and informed nobody
+  (receipts: `docs/FIELD_TEST_2026-08-10_STREET.md`, finding FS-4). Scope sketch: a local-outlet source
+  tier (LA Times / LAist-class, per metro), municipal open data, and maps facts for existence/location
+  claims — each needs trust-roster rules written, not just new domains. Until then the R41 norm holds
+  on the street: operator discretion retained, but the norm is don't air Unverifiable.
+  **Trigger:** the editorial standards doc work — when the source-trust roster is next opened for
+  editorial extension, this rides along.
+
 ## Ops / misc
 - **Rotate the inlined Deepgram key** if it ever spreads beyond the current audience (Coby decided
   not to for now — it's a restricted, transcription-only key).

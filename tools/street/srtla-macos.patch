@@ -1,0 +1,105 @@
+diff --git a/common.c b/common.c
+index da1bf6b..41b582e 100644
+--- a/common.c
++++ b/common.c
+@@ -16,7 +16,11 @@
+     along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+ 
++#ifdef __APPLE__
++#include "macos_compat.h"
++#else
+ #include <endian.h>
++#endif
+ #include <stdlib.h>
+ #include <string.h>
+ #include <sys/socket.h>
+diff --git a/macos_compat.h b/macos_compat.h
+new file mode 100644
+index 0000000..b0375fa
+--- /dev/null
++++ b/macos_compat.h
+@@ -0,0 +1,39 @@
++/*
++    macOS portability shim for srtla (footnote street rig, P7-D / R45).
++    Upstream is Linux-only; the README notes porting to other *nix is
++    expected to be straightforward. This header supplies:
++      - glibc <endian.h> byte-order macros via libkern/OSByteOrder.h
++      - O_NONBLOCK plumbing (SOCK_NONBLOCK does not exist on macOS;
++        callers use a fcntl() fallback guarded by __APPLE__)
++    epoll is provided separately by epoll-shim (kqueue-backed), pulled in
++    through the include path so <sys/epoll.h> resolves unmodified.
++*/
++#ifndef MACOS_COMPAT_H
++#define MACOS_COMPAT_H
++
++#ifdef __APPLE__
++#include <libkern/OSByteOrder.h>
++#include <fcntl.h>
++#include <time.h>
++
++/* Linux's coarse (low-res, cheap) monotonic clock; plain CLOCK_MONOTONIC
++   is the closest portable equivalent — strictly more precise, never wrong. */
++#ifndef CLOCK_MONOTONIC_COARSE
++#define CLOCK_MONOTONIC_COARSE CLOCK_MONOTONIC
++#endif
++
++#ifndef htobe16
++#define htobe16(x) OSSwapHostToBigInt16(x)
++#endif
++#ifndef htobe32
++#define htobe32(x) OSSwapHostToBigInt32(x)
++#endif
++#ifndef be16toh
++#define be16toh(x) OSSwapBigToHostInt16(x)
++#endif
++#ifndef be32toh
++#define be32toh(x) OSSwapBigToHostInt32(x)
++#endif
++
++#endif /* __APPLE__ */
++#endif /* MACOS_COMPAT_H */
+diff --git a/srtla_rec.c b/srtla_rec.c
+index 0154368..86a6117 100644
+--- a/srtla_rec.c
++++ b/srtla_rec.c
+@@ -20,7 +20,11 @@
+ #include <stdio.h>
+ #include <string.h>
+ #include <unistd.h>
++#ifdef __APPLE__
++#include "macos_compat.h"
++#else
+ #include <endian.h>
++#endif
+ #include <netdb.h>
+ #include <sys/types.h>
+ #include <sys/socket.h>
+diff --git a/srtla_send.c b/srtla_send.c
+index ac23d85..26c7ce0 100644
+--- a/srtla_send.c
++++ b/srtla_send.c
+@@ -30,6 +30,9 @@
+ #include <arpa/inet.h>
+ 
+ #include "common.h"
++#ifdef __APPLE__
++#include "macos_compat.h"
++#endif
+ 
+ #define PKT_LOG_SZ 256
+ #define CONN_TIMEOUT 4
+@@ -533,7 +536,13 @@ int open_socket(conn_t *c, int quiet) {
+   }
+ 
+   // Set up the socket
++#ifdef __APPLE__
++  /* macOS has no SOCK_NONBLOCK; emulate with fcntl */
++  int fd = socket(AF_INET, SOCK_DGRAM, 0);
++  if (fd >= 0) fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
++#else
+   int fd = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0);
++#endif
+   if (fd < 0) {
+     err("Failed to open a socket");
+     return -1;
