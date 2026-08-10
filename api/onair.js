@@ -4,11 +4,12 @@
 //   POST /api/onair  { room, writeKey, op:"keys", keys:{…} }  -> store room BYOK keys   (write, gated)
 //   POST /api/onair  { room, writeKey, op:"queue", cards }    -> operator-queue snapshot (write, gated; P3-J)
 //   POST /api/onair  { room, writeKey, op:"cmd", cmd:{…} }    -> operator command        (write, gated; P3-J)
-//   GET  /api/onair?room=<room>                                -> { card, seq, activeAt? } (read, open)
+//   GET  /api/onair?room=<room>                                -> { card, seq, activeAt?, renderedId?, renderedAt? } (read, open)
 //   GET  /api/onair?room=<room>&byok=1                         -> { perplexity, anthropic, deepgram } booleans ONLY
 //   GET  /api/onair?room=<room>&log=1                           -> { log } aired record — public, CORS * (R9)
 //   POST /api/onair  { room, writeKey, op:"queue-read" }        -> { cards, qseq } UNAIRED queue — writeKey-gated, no CORS (P3-J/N1)
 //   POST /api/onair  { room, writeKey, op:"cmds-read", after }  -> { cmds } operator commands since `after` — writeKey-gated (P3-J/N1)
+//   POST /api/onair  { room, op:"rendered", id }                 -> overlay render-ack — UNAUTHENTICATED, id-gated (P7-B/R39)
 // Backed by the active StateChannel adapter (default: Upstash Redis REST). Rooms isolate
 // streams; a per-room write key (TOFU) stops randos airing to someone's overlay. seq is
 // server-stamped so the overlay edge-triggers on change regardless of poll timing.
@@ -42,6 +43,11 @@ function slimCard(c) {
     correction: cut(strip(c.correction || ""), 300),
     source: src,
   };
+  /* P7-A/D17: `claim` is the display framing (as-spoken, negation preserved); `canonical`
+     is the pipeline-internal positive form — verification substrate, NEVER rendered on any
+     surface (not overlay, /op, or receipts). It rides the slim card so the aired LOG keeps
+     the substrate for accountability review; same strip/cut budget as claim. */
+  if (typeof c.canonical === "string" && c.canonical) slim.canonical = cut(strip(c.canonical), 300);
   if (typeof c.kind === "string") slim.kind = cut(strip(c.kind), 24);   // passthrough (e.g. "correction" cards — overlay renders)
   if (c.test === true) slim.test = true;   // field-test watermark flag (local TESTAIR) — boolean only, overlay renders "TEST"
   if (typeof c.refId === "string" && c.refId) slim.refId = cut(strip(c.refId), 32);         // correction → original join key (R9)
@@ -123,6 +129,9 @@ function slimQCard(c) {
   // operator air — which re-slims the queue card — lands them in the aired log too.
   if (base.tier !== undefined) q.tier = base.tier;
   if (base.citations !== undefined) q.citations = base.citations;
+  // P7-A: canonical rides the queue snapshot for the same reason — an operator air must
+  // land the verification substrate in the aired log too. /op never renders it (D17).
+  if (base.canonical !== undefined) q.canonical = base.canonical;
   return q;
 }
 
@@ -183,8 +192,18 @@ export default async function handler(req, res) {
         if (!okRoom(room) || typeof writeKey !== "string" || writeKey.length < 8) { res.status(403).json({ error: "forbidden" }); return; }
         if (!(await state.registerRoom(room, writeKey, { ttlSec: ROOM_TTL_SEC }))) { res.status(403).json({ error: "forbidden" }); return; }
         if (op === "queue-read") {
-          const q = await state.get(qRoom(room));
-          res.status(200).json({ cards: (q && Array.isArray(q.cards)) ? q.cards : [], qseq: (q && q.qseq) || 0, onAirId: q && q.onAirId != null ? q.onAirId : null, serverNow: Date.now() });
+          // P7-B: the main room record rides along so /op sees the overlay's render-ack
+          // (renderedId/renderedAt) without a second request; muted (P7-C) comes off the
+          // snapshot — /control is the source of truth for the latch.
+          const [q, cur] = await Promise.all([state.get(qRoom(room)), state.get(room)]);
+          res.status(200).json({
+            cards: (q && Array.isArray(q.cards)) ? q.cards : [], qseq: (q && q.qseq) || 0,
+            onAirId: q && q.onAirId != null ? q.onAirId : null,
+            muted: !!(q && q.muted),
+            renderedId: cur && cur.renderedId != null ? cur.renderedId : null,
+            renderedAt: cur && typeof cur.renderedAt === "number" ? cur.renderedAt : null,
+            serverNow: Date.now(),
+          });
           return;
         }
         // cmds-read {after} — operator commands newer than `after`, oldest→newest so
@@ -194,6 +213,38 @@ export default async function handler(req, res) {
         const after = typeof req.body.after === "string" ? req.body.after : "";
         const idx = after ? list.findIndex((e) => e && e.id === after) : -1;
         res.status(200).json({ cmds: (idx >= 0 ? list.slice(0, idx) : list).reverse() });
+        return;
+      }
+      if (op === "rendered") {
+        /* P7-B render-ack (R39 — the trust-gap closure: 8 cards silently missed broadcast
+           while /op said success). The overlay reports "I actually painted this card" so
+           /op can distinguish AIRED (server accepted) from ON AIR (pixels on the program
+           feed).
+           TRUST MODEL — UNAUTHENTICATED BY DESIGN: the overlay is an OBS Browser Source
+           holding only the public room URL — it has no writeKey and must never need one.
+           The gate is the aired id itself: op:"rendered" is accepted ONLY when body.id
+           equals the room's CURRENT on-air record id, and ids are minted server-side
+           (mintId: ms timestamp + random suffix) — an unguessable weak capability. A
+           spoofer who somehow learns the current id could only falsely mark the CURRENT
+           card rendered — cosmetic stakes (a green ✓✓ on /op that should have been a
+           stall warning); it cannot air, pull, mutate, or read anything. Rate class is
+           read-ish (onair-r): one ack per air, but it shares the overlay's poll budget. */
+        if (!(await rateLimit(req, res, "onair-r", 600))) return;
+        if (!okRoom(room)) { res.status(400).json({ error: "bad room" }); return; }
+        const rid = typeof req.body.id === "string" ? req.body.id : "";
+        if (!rid) { res.status(400).json({ error: "bad id" }); return; }
+        const cur = await state.get(room);
+        if (!cur || !cur.card || cur.id !== rid) { res.status(409).json({ error: "not current" }); return; }
+        // atomic merge (P5-E verb) — the ack can never clobber the card, and merge's TTL
+        // is max(remaining, ttlSec) so this hint can't shorten the record's life. Same
+        // ttl shape as the publish path: held card 3600s, timed card remaining + 15s.
+        const tNow = Date.now();
+        const left = typeof cur.durationMs === "number" && typeof cur.airedAt === "number"
+          ? Math.ceil((cur.airedAt + cur.durationMs - tNow) / 1000) + 15 : 0;
+        const ttlSec = cur.durationMs == null ? 3600 : Math.max(120, left);
+        if (typeof state.merge === "function") await state.merge(room, { renderedId: rid, renderedAt: tNow }, { ttlSec });
+        else await state.publish(room, Object.assign({}, cur, { renderedId: rid, renderedAt: tNow }), { ttlSec });
+        res.status(200).json({ ok: true });
         return;
       }
       if (!(await spendGate(req, res))) return;   // D14: kill switch gates every spend/broadcast path (it 503s itself)
@@ -226,7 +277,8 @@ export default async function handler(req, res) {
         const cards = (Array.isArray(req.body.cards) ? req.body.cards : []).slice(0, 20).map(slimQCard).filter(Boolean);
         const qseq = Date.now();
         const onAirId = typeof req.body.onAirId === "number" ? req.body.onAirId : null;
-        await state.publish(qRoom(room), { cards, qseq, onAirId }, { ttlSec: QUEUE_SNAPSHOT_TTL_SEC });
+        const muted = req.body.muted === true;   // P7-C: mic-mute latch — control owns it, /op mirrors it
+        await state.publish(qRoom(room), { cards, qseq, onAirId, muted }, { ttlSec: QUEUE_SNAPSHOT_TTL_SEC });
         /* P4-F2 (field F5): a non-empty queue means an air is likely soon, but an idle
            overlay is on its 2.5s cadence — the first air after a quiet stretch eats up to
            a full slow poll. Stamp activeAt onto the room's MAIN record so the overlay's
@@ -271,9 +323,13 @@ export default async function handler(req, res) {
            server can SEE were held/skipped after the backing snapshot was taken (N4). */
         const c = req.body.cmd && typeof req.body.cmd === "object" ? req.body.cmd : {};
         const action = c.action;
-        if (action !== "air" && action !== "skip" && action !== "hold" && action !== "pull") { res.status(400).json({ error: "bad cmd" }); return; }
+        // P7-C: mute/unmute are LOG-ONLY commands (no cardId, no publish, no card checks)
+        // — /control consumes them from the cmd list and flips its own mic latch; the
+        // latched state comes back to /op via the queue snapshot's `muted` boolean.
+        if (action !== "air" && action !== "skip" && action !== "hold" && action !== "pull"
+          && action !== "mute" && action !== "unmute") { res.status(400).json({ error: "bad cmd" }); return; }
         const cardId = Number(c.cardId);
-        if (action !== "pull" && !Number.isFinite(cardId)) { res.status(400).json({ error: "bad cmd" }); return; }
+        if (action !== "pull" && action !== "mute" && action !== "unmute" && !Number.isFinite(cardId)) { res.status(400).json({ error: "bad cmd" }); return; }
         const t = Date.now();
         const entry = { id: mintId(t), t, action, cardId: Number.isFinite(cardId) ? cardId : null };
         if (action === "air") {

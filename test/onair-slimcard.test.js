@@ -82,6 +82,44 @@ test("citations: non-http(s) schemes and non-strings drop; survivors keep their 
   assert.deepEqual(got.citations, ["https://bea.gov/gdp", "http://example.org/ok"]);
 });
 
+/* P7-A/D17: `claim` stays the display framing (as-spoken, negation preserved) and renders
+   exactly as before; `canonical` (pipeline-internal positive form) passes through with the
+   same strip/cut budget so the aired LOG keeps the verification substrate. NO surface
+   renders it — that's a client-side rule (overlay/op/receipts never touch the field). */
+test("canonical: passes through to the on-air card AND the aired log, claim untouched", async () => {
+  const room = "slim-canon-ok";
+  const got = await air(room, card({ claim: "the moon is not made of cheese", canonical: "the moon is made of cheese" }));
+  assert.equal(got.claim, "the moon is not made of cheese", "display framing preserved verbatim");
+  assert.equal(got.canonical, "the moon is made of cheese");
+  const lg = await get({ room, log: "1" });
+  assert.equal(lg.body.log[0].canonical, "the moon is made of cheese", "the log keeps the substrate");
+  assert.equal(lg.body.log[0].claim, "the moon is not made of cheese");
+});
+
+test("canonical: same strip/cut budget as claim (control chars stripped, 300-char cap)", async () => {
+  const got = await air("slim-canon-budget", card({ canonical: "a\u0000b\u200b" + "x".repeat(400) }));
+  assert.equal(got.canonical.length, 300);
+  assert.ok(got.canonical.startsWith("abxxx"), "control + zero-width chars stripped before the cut");
+});
+
+test("canonical: non-string / empty come out ABSENT (sanitizers bound, they don't repair)", async () => {
+  for (const [i, bad] of [[42], [null], [""], [{ v: "x" }]].entries()) {
+    const got = await air("slim-canon-bad-" + i, card({ canonical: bad[0] }));
+    assert.equal("canonical" in got, false, `canonical ${JSON.stringify(bad[0])} must be absent`);
+  }
+});
+
+test("canonical: survives the operator-air path (queue snapshot → op air → aired log)", async () => {
+  const room = "slim-canon-opair";
+  const qc = { id: 1, state: "pending", verdict: "False", claim: "spoken form", canonical: "positive form", correction: "c", spokenAt: 1001 };
+  await post({ room, writeKey: KEY, op: "queue", cards: [qc] });
+  const a = await post({ room, writeKey: KEY, op: "cmd", cmd: { action: "air", cardId: 1 } });
+  assert.equal(a.statusCode, 200);
+  const lg = await get({ room, log: "1" });
+  assert.equal(lg.body.log[0].canonical, "positive form", "op airs keep the substrate in the log too");
+  assert.equal(lg.body.log[0].claim, "spoken form");
+});
+
 test("citations: empty-after-filter and non-array both leave the field ABSENT", async () => {
   const a = await air("slim-cite-empty", card({ citations: ["javascript:alert(1)"] }));
   assert.equal("citations" in a, false);

@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   DUP_CLAIM_WINDOW_MS, MERGE_MAX_GAP_MS, MERGE_SHORT_WORDS,
-  normalizeClaim, withinDupWindow, shouldMergeFinals,
+  normalizeClaim, withinDupWindow, shouldMergeFinals, pickSpokenSentence,
 } from "../../src/core/utterance.js";
 
 /* ================= normalizeClaim ================= */
@@ -134,4 +134,34 @@ test("interaction: same claim re-extracted after the window (new segment) is all
   const claim = "Unemployment is at four percent.";
   recentClaims.set(normalizeClaim(claim), 10_000);
   assert.equal(withinDupWindow(recentClaims.get(normalizeClaim(claim)), 10_000 + DUP_CLAIM_WINDOW_MS), false);
+});
+
+/* ================= pickSpokenSentence (D17 display framing) ================= */
+
+test("D17 FS-1 replay: the four-minute-mile denial keeps its negation", () => {
+  const spoken = "Okay. Let's try this. No woman has run a mile faster than four minutes.";
+  const claim = "A woman has run a mile faster than four minutes";
+  assert.equal(pickSpokenSentence(spoken, claim), "No woman has run a mile faster than four minutes.");
+});
+
+test("D17: filler-prefixed utterance trims to the claim-bearing sentence", () => {
+  const spoken = "Okay. So let's try another one. The CEO of McDonald's is a man named Ronald McDonald.";
+  const claim = "The CEO of McDonald's is a man named Ronald McDonald";
+  assert.equal(pickSpokenSentence(spoken, claim), "The CEO of McDonald's is a man named Ronald McDonald.");
+});
+
+test("D17: single-sentence utterance returns itself", () => {
+  assert.equal(pickSpokenSentence("Kinshasa is not the capital of Pakistan.", "Kinshasa is the capital of Pakistan"),
+    "Kinshasa is not the capital of Pakistan.");
+});
+
+test("D17: no-overlap fallback returns the whole utterance trimmed", () => {
+  assert.equal(pickSpokenSentence("  Something unrelated entirely.  ", "GDP growth was 4%"),
+    "Something unrelated entirely.");
+});
+
+test("D17: split-negation denial falls back to the whole utterance (street Taiwan case)", () => {
+  const spoken = "it says Taiwan has four locations. No. That's not";
+  const claim = "Taiwan has four locations";
+  assert.equal(pickSpokenSentence(spoken, claim, true), spoken);
 });

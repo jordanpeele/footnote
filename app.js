@@ -135,6 +135,7 @@
       if (!this.startedAt) this.startedAt = new Date().toISOString();
       const e = {
         id: card.id, at: new Date().toISOString(), spoken: card.spoken, claim: card.claim,
+        displayClaim: card.displayClaim || null,   // D17: what actually aired (speaker framing)
         verdict: card.verdict || null, confidence: card.confidence != null ? card.confidence : null,
         correction: card.correction || null, source: card.source || null, citations: card.citations || null,
         action: card.state === "error" ? "error" : "pending", aired: false, autoAired: false, vetoed: false,
@@ -210,7 +211,7 @@
     },
     json() {
       return JSON.stringify({
-        session: { startedAt: this.startedAt, generatedAt: new Date().toISOString(), platform, counts: this.counts(), summary: this.summary() },
+        session: { startedAt: this.startedAt, generatedAt: new Date().toISOString(), platform, keyterms: this.keyterms || [], counts: this.counts(), summary: this.summary() },
         entries: this.entries(),
       }, null, 2);
     },
@@ -244,7 +245,7 @@
      mid-session reload doesn't lose the operator's night. Slim cards only — no timers/DOM. ---- */
   let sessPersistKey = null, sessPersistT = 0, keepQueueOnce = false;   // keepQueueOnce: a restored queue survives the next Start Stream
   const SESS_MAX_AGE = 4 * 3600 * 1000;
-  const slimCard = (c) => ({ id: c.id, spoken: c.spoken, claim: c.claim, state: c.state,
+  const slimCard = (c) => ({ id: c.id, spoken: c.spoken, claim: c.claim, displayClaim: c.displayClaim || null, state: c.state,
     verdict: c.verdict || null, correction: c.correction || null, source: c.source || null,
     confidence: c.confidence != null ? c.confidence : null, errMsg: c.errMsg || null,
     harm_class: c.harm_class || null, polarity_conflict: !!c.polarity_conflict, autoAirEligible: c.autoAirEligible === true,
@@ -342,6 +343,28 @@
     const shortNext = n.split(/\s+/).filter(Boolean).length <= MERGE_SHORT_WORDS;
     return unterminated || shortNext;
   }
+  /**
+   * D17 — pick the claim-bearing sentence from a (possibly filler-prefixed) utterance:
+   * best content-word overlap with the canonical claim wins; whole utterance is the
+   * fallback. Used to render the SPEAKER'S framing (denials keep their negation).
+   * @param {string} spoken the utterance that produced the claim
+   * @param {string} claim the canonical (positive-form) claim
+   * @returns {string} the sentence to display
+   */
+  function pickSpokenSentence(spoken, claim, preferNegation) {
+    const words = (s) => new Set(String(s).toLowerCase().split(/[^a-z0-9%]+/).filter((w) => w.length >= 3));
+    const NEG = /\b(no|not|never|isn't|wasn't|aren't|doesn't|don't|didn't|hasn't|haven't|won't|can't|cannot)\b|n't\b/i;
+    const cw = words(claim);
+    let best = null, bestScore = 0;
+    for (const sent of String(spoken).split(/(?<=[.!?])\s+/)) {
+      let n = 0; words(sent).forEach((w) => { if (cw.has(w)) n++; });
+      if (n > bestScore) { bestScore = n; best = sent.trim(); }
+    }
+    // A denial whose picked sentence lost its negation (split across sentences — field case:
+    // "it says X. No. That's not") falls back to the whole utterance, which carries it.
+    if (preferNegation && best && !NEG.test(best) && NEG.test(String(spoken))) return String(spoken).trim();
+    return best || String(spoken).trim();
+  }
   /* ===== END MIRROR BLOCK ===== */
 
   // entry point: a spoken final (or a typed claim). Guard → Haiku extract → Perplexity verify.
@@ -414,7 +437,13 @@
       SESSION.log(dup); SESSION.mark(dup.id, "duplicate");   // terminal disposition — same log-then-mark shape as stale_generation
       return;
     }
-    const card = { id: ++fcId, _gen: g, _cid: cid, spoken: t, claim, polarity, harm_class: harmClass, state: "checking", spokenAt, extractStartedAt: spokenAt, extractMs: +extractMs.toFixed(0) };   // real claim → checking card now
+    /* D17 (round 7, from FS-1): cards ALWAYS display the speaker's framing — the canonical-
+       positive form is verification substrate and never airs. For asserts, the canonical
+       claim IS a faithful restatement; for denials (and, later, polarity conflicts) the
+       spoken sentence carries the negation the canonical form strips. pickSpokenSentence
+       trims multi-sentence utterances to the claim-bearing sentence by content-word overlap. */
+    const displayClaim = polarity === "denies" ? pickSpokenSentence(t, claim, true) : claim;
+    const card = { id: ++fcId, _gen: g, _cid: cid, spoken: t, claim, displayClaim, polarity, harm_class: harmClass, state: "checking", spokenAt, extractStartedAt: spokenAt, extractMs: +extractMs.toFixed(0) };   // real claim → checking card now
     recentClaims.set(normClaim, Date.now());   // F2: register at creation (force-created cards too — they still dedupe later voice repeats)
     if (recentClaims.size > 200) { const nowMs = Date.now(); recentClaims.forEach((at, k) => { if (!withinDupWindow(at, nowMs)) recentClaims.delete(k); }); }
     fcCards.unshift(card); renderQueue(); setOps();
@@ -447,6 +476,9 @@
     if (!v) { card.state = "error"; card.errMsg = (DBG.events[DBG.events.length - 1] || {}).msg || "verify failed"; renderQueue(); DBG.push({ t: new Date().toISOString(), source: "fc", claim, error: true, verify_ms: card.verifyMs }); SESSION.log(card); return; }
     Object.assign(card, { state: "pending", verdict: v.verdict, correction: v.correction, source: v.source, citations: v.citations, confidence: v.confidence,
       autoAirEligible: v.autoAirEligible === true, polarity_conflict: !!v.polarity_conflict, pendingAt: Date.now() });
+    // D17: a polarity CONFLICT means the canonical form's relationship to the spoken claim is
+    // in doubt — fall back to the speaker's own words for display regardless of polarity field
+    if (card.polarity_conflict) card.displayClaim = pickSpokenSentence(card.spoken, card.claim, true);
     renderQueue(); setOps(); SESSION.log(card);
     DBG.push({ t: new Date().toISOString(), source: "fc", claim, verdict: v.verdict, confidence: v.confidence, extract_ms: card.extractMs, verify_ms: card.verifyMs, sourceUrl: v.source && v.source.url });
     maybeAutoAir(card);
@@ -471,9 +503,9 @@
     const el = document.createElement("div");
     el.className = "fc-card " + c.state + (c.state === "pending" ? " " + vmeta(c.verdict).cls : "");
     if (c.state === "checking") {
-      el.innerHTML = `<div class="fc-claim">“${esc(c.claim)}”</div><div class="fc-checking"><span class="fc-spin"></span> checking against sources…</div>`;
+      el.innerHTML = `<div class="fc-claim">“${esc(c.displayClaim || c.claim)}”</div><div class="fc-checking"><span class="fc-spin"></span> checking against sources…</div>`;
     } else if (c.state === "error") {
-      el.innerHTML = `<div class="fc-claim">“${esc(c.claim)}”</div><div class="fc-checking err">${esc(c.errMsg || "couldn't verify")} — <button class="fc-retry" data-id="${c.id}">retry</button></div>`;
+      el.innerHTML = `<div class="fc-claim">“${esc(c.displayClaim || c.claim)}”</div><div class="fc-checking err">${esc(c.errMsg || "couldn't verify")} — <button class="fc-retry" data-id="${c.id}">retry</button></div>`;
     } else {
       const m = vmeta(c.verdict);
       const srcUrl = safeUrl(c.source && c.source.url);
@@ -504,7 +536,7 @@
           <div class="fc-cc-acts"><button class="fc-cc-air" data-id="${c.id}">AIR CORRECTION</button><button class="fc-cc-cancel" data-id="${c.id}">cancel</button></div>
         </div>` : "";
       el.innerHTML = `<div class="fc-top"><span class="fc-badge ${m.cls}">${m.icon} ${m.label}</span>${tagHtml}<span class="fc-conf">${Math.round((c.confidence || 0) * 100)}%</span></div>
-        <div class="fc-claim">“${esc(c.claim)}”</div>
+        <div class="fc-claim">“${esc(c.displayClaim || c.claim)}”</div>
         <div class="fc-correction">${esc(c.correction || "")}</div>
         <div class="fc-foot">${src}${acts}</div>${composer}`;
     }
@@ -587,7 +619,7 @@
     const m = vmeta(c.verdict);
     onAir.className = "onair " + m.cls;
     byId("oaVerdict").textContent = m.icon + " " + m.label;
-    byId("oaClaim").textContent = "“" + c.claim + "”";
+    byId("oaClaim").textContent = "“" + (c.displayClaim || c.claim) + "”";   // D17: speaker framing
     byId("oaCorrection").textContent = c.correction || "";
     byId("oaSrc").innerHTML = (c.source && c.source.name) ? "Source: " + esc(c.source.name) : "";
     onAir.hidden = false; onAir.classList.remove("show"); void onAir.offsetWidth; onAir.classList.add("show");
@@ -930,9 +962,15 @@
      P5-B merge absorbs those), higher = intact finals + more wait. Default: absent (vendor
      default). Measure final-latency vs split-rate on the dashboard, pick the knee, THEN default. */
   const DG_EP = (() => { const v = parseInt(new URLSearchParams(location.search).get("ep"), 10); return Number.isFinite(v) && v >= 10 && v <= 2000 ? v : null; })();
+  /* R40 (street FS-3 — "Erewhon" transcribed 7 ways incl. "Taiwan"): per-session keyterms.
+     The operator types tonight's proper nouns on /control pre-session; they ride every
+     Deepgram (re)connect alongside the builtin news list, persist per room, and are
+     logged into the session record. */
+  let customKeyterms = [];
+  const activeKeyterms = () => DG_KEYTERMS.concat(customKeyterms).slice(0, 100);
   const dgUrl = (sr) => `wss://api.deepgram.com/v1/listen?model=nova-3&language=en&encoding=linear16&sample_rate=${sr}`
     + `&channels=1&punctuate=true&smart_format=true&interim_results=true&`
-    + (DG_EP ? `endpointing=${DG_EP}&` : "") + DG_KEYTERMS.map((t) => "keyterm=" + encodeURIComponent(t)).join("&");
+    + (DG_EP ? `endpointing=${DG_EP}&` : "") + activeKeyterms().map((t) => "keyterm=" + encodeURIComponent(t)).join("&");
   function floatTo16(f32) {
     const out = new Int16Array(f32.length);
     for (let i = 0; i < f32.length; i++) { const s = Math.max(-1, Math.min(1, f32[i])); out[i] = s < 0 ? s * 0x8000 : s * 0x7fff; }
@@ -1023,6 +1061,7 @@
 
   async function startStream() {
     streaming = true; const myGen = ++gen; clearFactChecks();
+    if (applyKeyterms) applyKeyterms();   // R40: keyterms snapshot for this stream
     if (opBridge) opBridge.streamStarted();   // P3-J: start the operator command poll + baseline the queue snapshot
     dgEverWorked = false; dgRetryN = 0; clearTimeout(dgRetryT);
     streamBtn.textContent = "■ End Stream"; streamBtn.classList.add("live");
@@ -1073,6 +1112,7 @@
      Mute state survives Start/End Stream on purpose: a surprise-hot mic is worse than
      surprise silence. ---- */
   let muted = false, muteBtnEl = null;
+  let applyKeyterms = null;   // R40: set by the control bridge; called at Start Stream
   function setMuted(on) {
     muted = !!on;
     if (mixBus) { try { mixBus.gain.value = muted ? 0 : 1; } catch {} }
@@ -1084,6 +1124,7 @@
     else if (streaming) setStatus("● LIVE · listening — talk like an anchor", "live");
     FT.log("mute", { on: muted });
     DBG.event("info", muted ? "mic MUTED (push-to-mute)" : "mic unmuted");
+    if (opBridge && opBridge.pushNow) opBridge.pushNow();   // R43: /op latch reconciles on the next poll
   }
   document.addEventListener("keydown", (e) => {
     if (e.key !== "m" && e.key !== "M") return;
@@ -1421,7 +1462,7 @@
     fcPublish = async (card, durationMs) => {
       if (tabReadOnly) { warnReadOnly(); return null; }   // M6: read-only tab never touches the overlay channel
       const body = { room: s.room, writeKey: s.writeKey, durationMs: durationMs === undefined ? DEFAULT_HOLD_MS : durationMs,
-        card: card ? { verdict: card.verdict, claim: card.claim, correction: card.correction, source: card.source || null,
+        card: card ? { verdict: card.verdict, claim: card.displayClaim || card.claim, canonical: card.claim, correction: card.correction, source: card.source || null,
           kind: card.kind || undefined,                                       // passthrough (e.g. "correction" — overlay/receipts render it)
           test: card.test === true || undefined,                              // field-test watermark (local TESTAIR only — overlay renders it)
           // C2 sourcing display: tier drives the PRIMARY-SOURCE treatment on the card;
@@ -1460,7 +1501,7 @@
     const operatorUrl = location.origin + "/op?room=" + s.room + "&key=" + s.writeKey;
     let opQueueT = 0, opCmdTimer = 0, opLastCmdId = "", opSessionT0 = 0;
     const opApplied = new Set();
-    const opQCard = (c) => ({ id: c.id, state: c.state, verdict: c.verdict || null, claim: c.claim,
+    const opQCard = (c) => ({ id: c.id, state: c.state, verdict: c.verdict || null, claim: c.displayClaim || c.claim,   // D17: /op previews the display framing
       correction: c.correction || null, confidence: c.confidence != null ? c.confidence : null,
       source: c.source || null, harm_class: c.harm_class || null, autoAirEligible: c.autoAirEligible === true,
       polarity_conflict: !!c.polarity_conflict, spokenAt: c.spokenAt || null });
@@ -1470,7 +1511,7 @@
       const cards = clear ? [] : fcCards.filter((c) => c.state === "checking" || c.state === "pending").slice(0, 20).map(opQCard);
       try {
         await fetch("/api/onair", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ room: s.room, writeKey: s.writeKey, op: "queue", cards, onAirId: SESSION.currentOnAir }) });
+          body: JSON.stringify({ room: s.room, writeKey: s.writeKey, op: "queue", cards, onAirId: SESSION.currentOnAir, muted }) });   // R43: /op renders the latch
       } catch {}   // best-effort — next mutation re-pushes; /op's 180s TTL bounds staleness
     }
     function opApplyCmd(cmd) {
@@ -1493,6 +1534,10 @@
         if (!c || c.state !== "pending") return;
         dismissCard(c, cmd.action === "skip" ? "skipped" : "held");
         DBG.event("info", `operator ${cmd.action.toUpperCase()} (second phone)`, { claim: (c.claim || "").slice(0, 60) });
+      } else if (cmd.action === "mute" || cmd.action === "unmute") {
+        // R43: latched mute from the street phone — same semantics as the Mac M-key
+        setMuted(cmd.action === "mute");
+        DBG.event("info", `operator ${cmd.action.toUpperCase()} (second phone)`);
       } else if (cmd.action === "pull") {
         hideOnAir(); SESSION.markPulled();   // server already published card:null — local half only
         DBG.event("info", "operator PULL (second phone)");
@@ -1520,6 +1565,21 @@
       streamEnded() { clearInterval(opCmdTimer); opCmdTimer = 0; clearTimeout(opQueueT); opPushQueue(true); },
     };
 
+    // R40: street keyterms row — proper nouns for tonight, fed to Deepgram on every connect
+    const ktRow = document.createElement("div");
+    ktRow.className = "obs-bar kt-row";
+    const ktSaved = (() => { try { return localStorage.getItem("footnote.keyterms." + s.room) || ""; } catch { return ""; } })();
+    ktRow.innerHTML = `<span class="obs-label">🗣 KEYTERMS</span>
+      <input class="obs-url kt-input" placeholder="tonight's proper nouns, comma-separated — e.g. Erewhon, Silver Lake, Karen Bass" value="${esc(ktSaved)}" aria-label="Session keyterms">
+      <span class="obs-hint">street names the transcriber should expect — applied at Start Stream</span>`;
+    const ktInput = ktRow.querySelector(".kt-input");
+    ktInput.addEventListener("change", () => { try { localStorage.setItem("footnote.keyterms." + s.room, ktInput.value); } catch {} });
+    applyKeyterms = () => {
+      customKeyterms = ktInput.value.split(",").map((t) => t.trim()).filter((t) => t.length >= 2 && t.length <= 50).slice(0, 30);
+      SESSION.keyterms = customKeyterms.slice();
+      if (customKeyterms.length) { DBG.event("info", "session keyterms active", { terms: customKeyterms }); FT.log("keyterms", { terms: customKeyterms }); }
+    };
+
     // OPERATOR row: the capability URL for the second-phone /op page (solo street mode)
     const opRow = document.createElement("div");
     opRow.className = "obs-bar op-row";
@@ -1528,9 +1588,28 @@
       <button class="obs-copy op-copy" type="button">Copy URL</button>
       <span class="obs-hint">second-phone queue — URL contains the write key, treat like a password</span>`;
     keysPane.insertAdjacentElement("afterend", opRow);
+    opRow.insertAdjacentElement("afterend", ktRow);
     opRow.querySelector(".op-copy").addEventListener("click", () => {
       try { navigator.clipboard.writeText(operatorUrl); const b = opRow.querySelector(".op-copy"); b.textContent = "Copied ✓"; setTimeout(() => b.textContent = "Copy URL", 1200); } catch {}
     });
+    /* R42 (street FS-5): capability URLs must never be hand-typed — a two-character
+       transcription slip cost a 403 mid-setup. The self-host server exposes its
+       non-loopback addresses (/__addrs, absent on Vercel → this whole block no-ops);
+       when a tailnet (100.64/10) address exists, offer a ready-made second copy button
+       with that origin for the street phone. */
+    fetch("/__addrs").then((r) => r.ok ? r.json() : null).then((d) => {
+      if (!d || !Array.isArray(d.addrs)) return;
+      const pick = d.addrs.find((a) => a.tailnet) || null;
+      if (!pick) return;
+      const tnUrl = `http://${pick.address}:${d.port}/op?room=${s.room}&key=${s.writeKey}`;
+      const b = document.createElement("button");
+      b.className = "obs-copy op-copy-tailnet"; b.type = "button"; b.textContent = "Copy tailnet URL";
+      b.title = "Operator URL on the tailnet origin — for the street phone (Tailscale on)";
+      b.addEventListener("click", () => {
+        try { navigator.clipboard.writeText(tnUrl); b.textContent = "Copied ✓"; setTimeout(() => b.textContent = "Copy tailnet URL", 1200); } catch {}
+      });
+      opRow.querySelector(".op-copy").insertAdjacentElement("afterend", b);
+    }).catch(() => {});
 
     DBG.event("info", "OBS control bridge ready", { room: s.room, overlayUrl });
   }

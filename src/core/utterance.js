@@ -55,6 +55,28 @@ function shouldMergeFinals(prev, prevAt, next, nowAt) {
   const shortNext = n.split(/\s+/).filter(Boolean).length <= MERGE_SHORT_WORDS;
   return unterminated || shortNext;
 }
+/**
+ * D17 — pick the claim-bearing sentence from a (possibly filler-prefixed) utterance:
+ * best content-word overlap with the canonical claim wins; whole utterance is the
+ * fallback. Used to render the SPEAKER'S framing (denials keep their negation).
+ * @param {string} spoken the utterance that produced the claim
+ * @param {string} claim the canonical (positive-form) claim
+ * @returns {string} the sentence to display
+ */
+function pickSpokenSentence(spoken, claim, preferNegation) {
+  const words = (s) => new Set(String(s).toLowerCase().split(/[^a-z0-9%]+/).filter((w) => w.length >= 3));
+  const NEG = /\b(no|not|never|isn't|wasn't|aren't|doesn't|don't|didn't|hasn't|haven't|won't|can't|cannot)\b|n't\b/i;
+  const cw = words(claim);
+  let best = null, bestScore = 0;
+  for (const sent of String(spoken).split(/(?<=[.!?])\s+/)) {
+    let n = 0; words(sent).forEach((w) => { if (cw.has(w)) n++; });
+    if (n > bestScore) { bestScore = n; best = sent.trim(); }
+  }
+  // A denial whose picked sentence lost its negation (split across sentences — field case:
+  // "it says X. No. That's not") falls back to the whole utterance, which carries it.
+  if (preferNegation && best && !NEG.test(best) && NEG.test(String(spoken))) return String(spoken).trim();
+  return best || String(spoken).trim();
+}
 /* ===== END MIRROR BLOCK ===== */
 
-export { DUP_CLAIM_WINDOW_MS, MERGE_MAX_GAP_MS, MERGE_SHORT_WORDS, normalizeClaim, withinDupWindow, shouldMergeFinals };
+export { DUP_CLAIM_WINDOW_MS, MERGE_MAX_GAP_MS, MERGE_SHORT_WORDS, normalizeClaim, withinDupWindow, shouldMergeFinals , pickSpokenSentence };

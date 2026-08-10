@@ -11,6 +11,7 @@
 // /control → index.html. Rate limiting (api/_ratelimit.js) fails open without Upstash
 // env — correct for localhost.
 import http from "node:http";
+import os from "node:os";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
@@ -106,6 +107,24 @@ function notFound(res) { res.statusCode = 404; res.setHeader("content-type", "te
    their pipeline events here (localhost-gated client-side too); each POST body is one
    JSON event, appended as JSONL with a server receive-timestamp. ---- */
 const FT_LOG = process.env.FOOTNOTE_FIELDTEST_LOG || null;
+
+/* ---- R42: non-loopback addresses (self-host only — Vercel never runs this server).
+   /control uses this to offer a ready-made tailnet-origin OPERATOR URL: hand-assembled
+   capability URLs caused a 403 in the field (two mistranscribed key chars) — capability
+   URLs should never be hand-typed. Tailscale CGNAT range (100.64/10) is tagged so the
+   client can prefer it over plain LAN addresses. */
+function nonLoopbackAddrs() {
+  const out = [];
+  for (const ifaces of Object.values(os.networkInterfaces())) {
+    for (const i of ifaces || []) {
+      if (i.family !== "IPv4" || i.internal) continue;
+      const first = Number(i.address.split(".")[0]), second = Number(i.address.split(".")[1]);
+      const tailnet = first === 100 && second >= 64 && second <= 127;
+      out.push({ address: i.address, tailnet });
+    }
+  }
+  return out;
+}
 async function ftSink(req, res) {
   const chunks = [];
   for await (const c of req) { chunks.push(c); if (chunks.reduce((n, b) => n + b.length, 0) > 65536) break; }
@@ -127,7 +146,11 @@ const server = http.createServer(async (req, res) => {
   try { url = new URL(req.url, "http://" + (req.headers.host || "localhost")); } catch { return notFound(res); }
   const route = routes.get(url.pathname);
   try {
-    if (FT_LOG && url.pathname === "/__fieldtest/log" && req.method === "POST") await ftSink(req, res);
+    if (url.pathname === "/__addrs" && req.method === "GET") {   // R42 — self-host only
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ addrs: nonLoopbackAddrs(), port: PORT }));
+    }
+    else if (FT_LOG && url.pathname === "/__fieldtest/log" && req.method === "POST") await ftSink(req, res);
     else if (route) await route(req, res, url);
     else if (req.method === "GET" || req.method === "HEAD") await serveStatic(url.pathname, res);
     else notFound(res);

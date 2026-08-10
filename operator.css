@@ -77,6 +77,15 @@ body{background:var(--bg);color:var(--txt);font-family:var(--disp);min-height:10
   border:1px solid rgba(245,166,35,.35);border-radius:4px;padding:2px 6px;white-space:nowrap}
 .conf{margin-left:auto;font:700 12px var(--mono);color:var(--dim)}
 .sent-tag{margin-left:auto;font:800 10px var(--mono);letter-spacing:.08em;color:var(--fn)}
+/* P7-B render-ack states: AIRED ✓ (default green text) → ON AIR ✓✓ (rendered, solid green
+   chip) | STALL (amber pulsing — the one state that must cut through a dimmed .sent card) */
+.sent-tag.ok{color:#04150e;background:var(--up);border-radius:4px;padding:3px 7px}
+.sent-tag.stall{color:#1a1204;background:var(--warn);border-radius:4px;padding:3px 7px;
+  animation:stall-pulse 1.1s ease-in-out infinite}
+@keyframes stall-pulse{0%,100%{opacity:1}50%{opacity:.45}}
+/* a stalled card overrides the optimistic .sent dimming — the warning must be legible
+   (.sent's button lockout still applies; only the opacity is restored) */
+.card.sent.stalled{opacity:1}
 
 .claim{font:700 17px/1.35 var(--disp);color:var(--txt)}
 .correction{font:500 14px/1.4 var(--disp);color:var(--dim)}
@@ -93,6 +102,25 @@ body{background:var(--bg);color:var(--txt);font-family:var(--disp);min-height:10
 .b-hold:active{background:#3a3115}
 .b-skip{flex:1;color:#c9d1dc;background:#1a1e26;border:1px solid #2a2f3a}
 .b-skip:active{background:#252a35}
+
+/* R41: Unverifiable de-emphasis — the card recedes (dimmed past the v-gray treatment) and
+   AIR drops to an outline peer of HOLD/SKIP (NOT disabled — operator discretion retained;
+   the ruling is a norm, not a lockout). */
+.card.unv{opacity:.55;border-left-color:#4a505c;background:#0e1117}
+.card.unv .claim{color:var(--dim)}
+.unv-hint{font:600 11px var(--mono);color:var(--mut);letter-spacing:.02em}
+.card.unv .b-air{flex:1;color:var(--fn);background:transparent;border:1.5px solid rgba(0,214,143,.45);font-size:14px}
+.card.unv .b-air:active{background:rgba(0,214,143,.12)}
+
+/* P7-C mute toggle (header latch) + passive latched banner. Big enough for a street thumb. */
+.btn-mute{margin-left:auto;flex:none;min-height:44px;min-width:74px;font:800 13px var(--disp);
+  letter-spacing:.04em;color:#c9d1dc;background:#1a1e26;border:1.5px solid #2a2f3a;border-radius:10px;
+  cursor:pointer;touch-action:manipulation}
+.btn-mute:active{background:#252a35}
+.btn-mute.on{color:#1a1204;background:var(--warn);border-color:var(--warn)}
+.btn-mute + .conn-dot{margin-left:0}   /* the button takes over the auto-margin push */
+.mute-banner{position:sticky;top:0;z-index:8;font:800 12px var(--mono);letter-spacing:.12em;
+  text-align:center;color:#1a1204;background:var(--warn);padding:7px 14px}
 
 /* P4-F3 new-card cue: full-screen flash paired with the vibrate/beep — visible even
    with the phone at arm's length in daylight */

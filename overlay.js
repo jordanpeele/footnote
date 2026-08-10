@@ -153,6 +153,22 @@
     let serverActive = false;   // last PARSED response said the queue is warm
     const isLive = (d) => d.card && (d.durationMs == null || (d.serverNow - d.airedAt) < d.durationMs);
     const remaining = (d) => d.durationMs == null ? null : Math.max(0, d.durationMs - (d.serverNow - d.airedAt));
+    /* P7-B render-ack (R39): after a live card actually paints, tell the server — /op
+       turns that into "ON AIR ✓✓" vs a stall warning. Fire-and-forget (an ack can never
+       break the render), throttled to once per aired id (page life), and ONLY for
+       room-driven renders — the ?card=/?demo test drivers never ack. No writeKey: the
+       server gates on the unguessable aired id instead (see api/onair.js trust model). */
+    let ackedId = null;
+    const ackRender = (id) => {
+      if (!id || id === ackedId) return;
+      ackedId = id;
+      try {
+        fetch("/api/onair", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ room, op: "rendered", id }), keepalive: true,
+        }).catch(() => {});
+      } catch {}
+    };
     (async function poll() {
       let ok = false;
       try {
@@ -164,10 +180,10 @@
             && (d.serverNow - d.activeAt) < ACTIVE_WINDOW;
           if (lastSeq === null) {                        // on connect: RESUME an in-flight check (survives OBS restart/refresh)
             lastSeq = d.seq || 0;
-            if (isLive(d)) { lastChange = performance.now(); showOnAir(d.card, remaining(d)); }
+            if (isLive(d)) { lastChange = performance.now(); showOnAir(d.card, remaining(d)); ackRender(d.id); }
           } else if ((d.seq || 0) !== lastSeq) {         // a new air, a pull, or state expiry (seq resets → treat as pull; red-team M4)
             lastSeq = d.seq || 0; lastChange = performance.now();
-            isLive(d) ? showOnAir(d.card, remaining(d)) : hideOnAir();
+            if (isLive(d)) { showOnAir(d.card, remaining(d)); ackRender(d.id); } else hideOnAir();
           }
         }
       } catch {}
