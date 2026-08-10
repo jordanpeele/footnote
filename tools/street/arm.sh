@@ -5,6 +5,8 @@ set -e
 cd "$(dirname "$0")/../.."
 pkill -f "node src/server" 2>/dev/null || true; pkill -f "fn-tailnet-relay" 2>/dev/null || true; pkill -f "srtla_rec" 2>/dev/null || true; sleep 1
 open -a Tailscale 2>/dev/null; sleep 3
+TAILNET_IP=$("/Applications/Tailscale.app/Contents/MacOS/Tailscale" ip -4 2>/dev/null | head -1)
+if [ -z "$TAILNET_IP" ]; then echo "note: no tailnet address (Tailscale off?) — phone paths unavailable"; TAILNET_IP="127.0.0.1"; fi
 DG=$(grep '^DEEPGRAM_API_KEY' .env.local | cut -d= -f2)
 DEEPGRAM_API_KEY="$DG" FOOTNOTE_FIELDTEST_LOG="$PWD/eval/results/fieldtest-2026-08-10-street.jsonl" \
   nohup npm start > /tmp/fn-server.log 2>&1 &
@@ -15,7 +17,7 @@ net.createServer((s) => {
   const c = net.connect(3000, "127.0.0.1");
   s.pipe(c); c.pipe(s);
   s.on("error", () => c.destroy()); c.on("error", () => s.destroy());
-}).listen(3000, "100.111.115.120", () => console.log("relay up"));
+}).listen(3000, "${TAILNET_IP}", () => console.log("relay up"));
 RELAY
 nohup node /tmp/fn-tailnet-relay.js > /tmp/fn-relay.log 2>&1 &
 # P7-D (R45): SRTLA bonded uplink — Moblin sends srtla:// over MULTIPLE network
@@ -33,9 +35,9 @@ if [ -x "$SRTLA_REC" ]; then
   sleep 1
   if pgrep -qf "srtla_rec 5000"; then
     echo "srtla_rec: UP — UDP *:5000 -> SRT 127.0.0.1:9000 (log /tmp/fn-srtla-rec.log)"
-    echo "           Moblin bonded URL: srtla://100.111.115.120:5000"
+    echo "           Moblin bonded URL: srtla://${TAILNET_IP}:5000"
   else
-    echo "srtla_rec: FAILED to start (see /tmp/fn-srtla-rec.log) — use single-path srt://100.111.115.120:9000"
+    echo "srtla_rec: FAILED to start (see /tmp/fn-srtla-rec.log) — use single-path srt://${TAILNET_IP}:9000"
   fi
 else
   echo "srtla_rec: not built — run: bash tools/street/build-srtla.sh (single-path srt:// until then)"
@@ -47,13 +49,13 @@ echo "caffeinate: display sleep disabled for street ops (kill at close-out)"
 sleep 1
 echo "— reachability:"
 curl -s -o /dev/null -w "  loopback: %{http_code}\n" http://127.0.0.1:3000/control
-curl -s -o /dev/null -w "  tailnet:  %{http_code}\n" http://100.111.115.120:3000/op
+curl -s -o /dev/null -w "  tailnet:  %{http_code}\n" http://${TAILNET_IP}:3000/op
 curl -s -o /dev/null -w "  LAN:      %{http_code} (000=REFUSED, correct)\n" --connect-timeout 3 http://192.168.1.62:3000/op || true
 echo
 echo "URLs:  control  http://localhost:3000/control"
 echo "       overlay  (copy from control bar — keep localhost, for OBS)"
-echo "       /op      http://100.111.115.120:3000/op?room=<room>&key=<key>"
-echo "       Moblin   srtla://100.111.115.120:5000  (bonded — preferred)"
-echo "                srt://100.111.115.120:9000     (single-path fallback)"
+echo "       /op      http://${TAILNET_IP}:3000/op?room=<room>&key=<key>"
+echo "       Moblin   srtla://${TAILNET_IP}:5000  (bonded — preferred)"
+echo "                srt://${TAILNET_IP}:9000     (single-path fallback)"
 echo "pre-flight: docs/STREET_CHECKLIST.md"
 echo "dashboard:  node tools/fieldtest/dashboard.js eval/results/fieldtest-2026-08-10-street.jsonl"

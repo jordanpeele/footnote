@@ -35,16 +35,16 @@ fallback if any bonded piece is down.
 ## Phones
 
 - [ ] **Tailscale ON, on BOTH phones.** iPhone A needs it for the stream
-      uplink (`100.111.115.120`); iPhone B needs it for the operator `/op`
-      page. Verify each phone can load `http://100.111.115.120:3000/op` before
+      uplink (`<tailnet-ip>`); iPhone B needs it for the operator `/op`
+      page. Verify each phone can load `http://<tailnet-ip>:3000/op` before
       leaving WiFi.
 - [ ] **Moblin (iPhone A) bonded uplink:**
-  - Stream URL: `srtla://100.111.115.120:5000` (NOT the old `srt://…:9000`)
+  - Stream URL: `srtla://<tailnet-ip>:5000` (NOT the old `srt://…:9000`)
   - Passphrase: same as the OBS listener
   - Bonding legs: **cellular** (leg 1) + **WiFi joined to iPhone B's personal
     hotspot** (leg 2). In Moblin, confirm both interfaces show in the
     stream/bonding status before going live.
-  - Keep `srt://100.111.115.120:9000` saved as a second stream profile — the
+  - Keep `srt://<tailnet-ip>:9000` saved as a second stream profile — the
     single-path fallback if bonding misbehaves.
 - [ ] **CARRIER-DIVERSITY CAVEAT:** same-carrier bonding helps congestion, not
       coverage — a second-carrier eSIM is the real redundancy, operator's call.

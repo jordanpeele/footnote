@@ -34,7 +34,7 @@ const lines = entries
     expected_extraction: (e.claim || "").trim() || null, // live extractor's output = a DRAFT, review it
     category: "UNCATEGORIZED", // human: assign one of the eval/golden/ categories
     ground_truth_verdict: null, // human adjudication required — do NOT copy the model verdict
-    adjudication_note: `DRAFT from ${inPath} — live pipeline said ${e.verdict ?? "?"} @ conf ${e.confidence ?? "?"}. Human: adjudicate verdict, verify/fix the extraction, categorize, cite a source.`,
+    adjudication_note: `DRAFT from ${inPath.split("/").pop()} — live pipeline said ${e.verdict ?? "?"} @ conf ${e.confidence ?? "?"}. Human: adjudicate verdict, verify/fix the extraction, categorize, cite a source.`,
     source_of_truth: "",
   }));
 

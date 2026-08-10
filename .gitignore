@@ -8,3 +8,4 @@ node_modules/
 .playwright-mcp/
 tools/street/test-audio-5min.mp3
 tools/street/scratch-audio/
+docs/STATUS_*
