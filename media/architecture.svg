@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="780" viewBox="0 0 1280 780" role="img" aria-label="Footnote pipeline: audio to STT to extract (with gates) to verify (under the editorial layer) to operator queue to overlay and receipts">
+  <!-- The canonical Footnote pipeline diagram. Hand-authored; labels verified against
+       README / HOW_FOOTNOTE_DECIDES.md / src/core/*. Legible at 800px wide. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#12151c"/>
+      <stop offset="1" stop-color="#0b0d11"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#00d68f"/>
+    </marker>
+    <marker id="arrow-dim" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8b93a0"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#d79321"/>
+    </marker>
+    <clipPath id="frame"><rect x="0" y="0" width="1280" height="780" rx="16"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#frame)" font-family="Archivo,'Helvetica Neue',Helvetica,Arial,sans-serif">
+    <rect width="1280" height="780" fill="url(#bg)"/>
+
+    <!-- ================= EDITORIAL LAYER (sits ABOVE the vendor — D5) ================ -->
+    <rect x="880" y="40" width="356" height="96" rx="10" fill="#0e2a22" stroke="#00d68f" stroke-opacity="0.55" stroke-width="1.5"/>
+    <text x="904" y="72" font-size="19" font-weight="800" letter-spacing="1.5" fill="#00d68f">EDITORIAL LAYER</text>
+    <text x="904" y="98" font-size="16" font-weight="600" fill="#c6ccd4">trust tiers · evidence rules</text>
+    <text x="904" y="122" font-family="'JetBrains Mono',Menlo,monospace" font-size="13" font-weight="600" fill="#8b93a0">D5 — editorial sits above the vendor</text>
+    <!-- editorial governs verify -->
+    <line x1="1058" y1="136" x2="1058" y2="192" stroke="#00d68f" stroke-opacity="0.55" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <!-- ================= ROW 1: audio → STT → extract → verify ================ -->
+    <!-- AUDIO -->
+    <rect x="44" y="200" width="190" height="110" rx="10" fill="#171b23" stroke="#2a3040" stroke-width="1.5"/>
+    <text x="68" y="242" font-size="20" font-weight="800" fill="#ffffff">MIC / STREAM</text>
+    <text x="68" y="268" font-size="20" font-weight="800" fill="#ffffff">AUDIO</text>
+    <text x="68" y="294" font-size="14" font-weight="600" fill="#8b93a0">OBS bus · phone rig</text>
+
+    <!-- AUDIO → STT -->
+    <line x1="234" y1="255" x2="298" y2="255" stroke="#00d68f" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <!-- STT -->
+    <rect x="302" y="200" width="222" height="110" rx="10" fill="#171b23" stroke="#2a3040" stroke-width="1.5"/>
+    <text x="326" y="240" font-size="21" font-weight="800" fill="#ffffff">STT</text>
+    <text x="374" y="240" font-size="16" font-weight="600" fill="#8b93a0">Deepgram</text>
+    <text x="326" y="268" font-size="15" font-weight="600" fill="#c6ccd4">streaming, server-minted tokens</text>
+    <text x="326" y="292" font-size="15" font-weight="600" fill="#c6ccd4">per-session keyterms</text>
+
+    <!-- STT → EXTRACT -->
+    <line x1="524" y1="255" x2="592" y2="255" stroke="#00d68f" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="558" y="238" text-anchor="middle" font-family="'JetBrains Mono',Menlo,monospace" font-size="13" font-weight="600" fill="#8b93a0">final</text>
+
+    <!-- EXTRACT + gate family -->
+    <rect x="596" y="184" width="240" height="240" rx="10" fill="#171b23" stroke="#2a3040" stroke-width="1.5"/>
+    <text x="620" y="224" font-size="21" font-weight="800" fill="#ffffff">EXTRACT</text>
+    <text x="620" y="250" font-size="16" font-weight="600" fill="#8b93a0">Claude Haiku</text>
+    <text x="620" y="276" font-size="15" font-weight="600" fill="#c6ccd4">one atomic claim, or NONE</text>
+    <!-- gate family, boxed -->
+    <rect x="614" y="294" width="204" height="116" rx="8" fill="#0b0d11" stroke="#d79321" stroke-opacity="0.55" stroke-width="1.5"/>
+    <text x="630" y="322" font-size="14" font-weight="800" letter-spacing="1.5" fill="#d79321">GATES · IN CORE</text>
+    <text x="630" y="348" font-size="15" font-weight="600" fill="#c6ccd4">grounding gate</text>
+    <text x="630" y="372" font-size="15" font-weight="600" fill="#c6ccd4">negation tripwire</text>
+    <text x="630" y="396" font-size="15" font-weight="600" fill="#c6ccd4">harm classes</text>
+
+    <!-- EXTRACT → VERIFY -->
+    <line x1="836" y1="255" x2="904" y2="255" stroke="#00d68f" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="870" y="238" text-anchor="middle" font-family="'JetBrains Mono',Menlo,monospace" font-size="13" font-weight="600" fill="#8b93a0">claim</text>
+
+    <!-- VERIFY -->
+    <rect x="908" y="200" width="300" height="110" rx="10" fill="#171b23" stroke="#2a3040" stroke-width="1.5"/>
+    <text x="932" y="240" font-size="21" font-weight="800" fill="#ffffff">VERIFY</text>
+    <text x="1018" y="240" font-size="16" font-weight="600" fill="#8b93a0">Perplexity</text>
+    <text x="932" y="268" font-size="15" font-weight="600" fill="#c6ccd4">sonar-pro web search</text>
+    <text x="932" y="292" font-size="15" font-weight="600" fill="#c6ccd4">verdict · correction · cited source</text>
+
+    <!-- VERIFY → OPERATOR QUEUE (down, then left) -->
+    <path d="M 1058 310 L 1058 434 L 820 434 L 820 448" fill="none" stroke="#00d68f" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="950" y="424" text-anchor="middle" font-family="'JetBrains Mono',Menlo,monospace" font-size="13" font-weight="600" fill="#8b93a0">verdict card</text>
+
+    <!-- ================= ROW 2: operator queue → overlay + receipts ================ -->
+    <!-- OPERATOR QUEUE -->
+    <rect x="404" y="452" width="432" height="150" rx="10" fill="#171b23" stroke="#2a3040" stroke-width="1.5"/>
+    <text x="428" y="492" font-size="21" font-weight="800" fill="#ffffff">OPERATOR QUEUE</text>
+    <text x="650" y="492" font-family="'JetBrains Mono',Menlo,monospace" font-size="16" font-weight="700" fill="#00d68f">/op</text>
+    <text x="428" y="520" font-size="15" font-weight="600" fill="#c6ccd4">a human airs, holds, or kills every card</text>
+    <text x="428" y="544" font-size="15" font-weight="600" fill="#c6ccd4">veto-everything</text>
+    <text x="428" y="578" font-family="'JetBrains Mono',Menlo,monospace" font-size="13" font-weight="600" fill="#d79321">(future) auto-air — calibration-gated OFF</text>
+
+    <!-- OPERATOR → OVERLAY -->
+    <line x1="836" y1="500" x2="928" y2="500" stroke="#00d68f" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="882" y="484" text-anchor="middle" font-family="'JetBrains Mono',Menlo,monospace" font-size="13" font-weight="700" fill="#00d68f">AIR</text>
+
+    <!-- (future) auto-air dashed path — parallel to the human AIR edge -->
+    <path d="M 836 540 L 924 540" fill="none" stroke="#d79321" stroke-width="2" stroke-dasharray="7 6" marker-end="url(#arrow-amber)"/>
+
+    <!-- OVERLAY -->
+    <rect x="932" y="452" width="300" height="104" rx="10" fill="#171b23" stroke="#2a3040" stroke-width="1.5"/>
+    <text x="956" y="490" font-size="20" font-weight="800" fill="#ffffff">OVERLAY</text>
+    <text x="956" y="516" font-size="15" font-weight="600" fill="#c6ccd4">OBS lower-third · 16:9 and 9:16</text>
+    <!-- mini verdict band inside the overlay card -->
+    <g>
+      <rect x="956" y="530" width="50" height="8" fill="#0b8f5f"/>
+      <rect x="1006" y="530" width="50" height="8" fill="#d33143"/>
+      <rect x="1056" y="530" width="50" height="8" fill="#d79321"/>
+      <rect x="1106" y="530" width="50" height="8" fill="#7161d8"/>
+      <rect x="1156" y="530" width="50" height="8" fill="#4a5160"/>
+    </g>
+
+    <!-- OPERATOR → RECEIPTS -->
+    <path d="M 700 602 L 700 690 L 928 690" fill="none" stroke="#8b93a0" stroke-width="2" marker-end="url(#arrow-dim)"/>
+    <text x="800" y="678" text-anchor="middle" font-family="'JetBrains Mono',Menlo,monospace" font-size="13" font-weight="600" fill="#8b93a0">every check, logged</text>
+
+    <!-- RECEIPTS -->
+    <rect x="932" y="640" width="300" height="100" rx="10" fill="#171b23" stroke="#2a3040" stroke-width="1.5"/>
+    <text x="956" y="678" font-size="20" font-weight="800" fill="#ffffff">RECEIPTS</text>
+    <text x="956" y="704" font-size="15" font-weight="600" fill="#c6ccd4">the public record — what aired,</text>
+    <text x="956" y="726" font-size="15" font-weight="600" fill="#c6ccd4">what was refused, on what sourcing</text>
+
+    <!-- brand corner -->
+    <text x="44" y="732" font-size="24" font-weight="800" fill="#ffffff">Footnote</text>
+    <text x="152" y="720" font-family="Georgia,'Times New Roman',serif" font-size="18" font-weight="800" fill="#00d68f">¹</text>
+    <text x="44" y="756" font-family="'JetBrains Mono',Menlo,monospace" font-size="13" font-weight="600" fill="#8b93a0">every stage is swappable — adapters behind interfaces</text>
+  </g>
+
+  <rect x="0.75" y="0.75" width="1278.5" height="778.5" rx="15.5" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.5"/>
+</svg>

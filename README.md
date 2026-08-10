@@ -1,109 +1,93 @@
-# Footnote¹
+<p align="center">
+  <img src="media/banner.svg" alt="Footnote¹ — real-time fact-checking for live streams" width="100%">
+</p>
 
 [![test](https://github.com/jordanpeele/footnote/actions/workflows/test.yml/badge.svg)](https://github.com/jordanpeele/footnote/actions/workflows/test.yml)
 
-**Live fact-checks on your livestream, with sources, while you're still talking.**
+Footnote listens to a live conversation, pulls out the checkable claims, verifies them against trust-tiered sources, and puts a broadcast lower-third verdict on the stream — with a human operator holding the AIR button. It runs as one Node process with zero npm dependencies, works in OBS on a desktop or from two phones on a sidewalk, and writes down everything it airs. Verdicts are **True / False / Misleading / Needs Context / Unverifiable**, each with a one-line correction and a cited source.
 
-Footnote listens to a live conversation, pulls out checkable claims, verifies them against high-trust sources, and puts a broadcast-quality verdict lower-third on the stream — seconds later, with a human holding the AIR button.
+<!-- demo.gif lands from G4 -->
 
-<!-- GIF: clip of live fact-check on stream — the overlay catching a false claim mid-sentence.
-     Suggested: 960×540 (16:9), <8 MB, 10–15s loop, capture from the OBS program feed so the
-     lower-third animates in over real video. Place at assets/demo.gif. -->
-<!-- BADGES: license (MIT) · CI/eval status · good first issues count · link to hosted instance -->
+Just want to see it? `npm run demo`, then open http://localhost:3000/overlay?room=demo.
 
-Built for streamers, IRL broadcasters, debate shows, and anyone who talks about the news on camera. Verdicts are **True / False / Misleading / Needs Context / Unverifiable**, each with a one-line correction and a cited source — and the source is trust-tier ranked server-side, so what airs is always the most credible citation, never a Reddit thread.
+## The record so far
 
-## Architecture
+> **4 sessions · 102 checks · 1 wrong-verdict card aired (found, published, closed in code) · 1 display-incoherent pairing (found, published, closed in code)**
 
-```mermaid
-flowchart LR
-    A["🎙 live audio<br/>(mic / call tab / OBS bus)"] --> B["STT<br/>Deepgram streaming"]
-    B -->|"final sentence"| C["claim extraction<br/>Claude Haiku<br/>/api/extract"]
-    C -->|"atomic claim (or NONE)"| D["verification<br/>Perplexity sonar-pro<br/>trust-tiered sources<br/>/api/verify"]
-    D -->|"verdict + correction + source"| E["operator queue<br/>/control<br/>AIR / SKIP / HOLD<br/>(or auto-air + veto window)"]
-    E -->|"AIR"| F["state channel<br/>/api/onair (Redis)<br/>per-room, write-key gated"]
-    F -->|"adaptive poll"| G["/overlay<br/>transparent lower-third"]
-    G --> H["OBS Browser Source<br/>or Moblin widget"]
-```
+That sentence is the product. A fact-checker you can't audit is just a graphics package, so every session Footnote has run is written up with its failures attached: the [first field test](docs/FIELD_TEST_2026-08-08.md), the [street session](docs/FIELD_TEST_2026-08-10_STREET.md) (where both failures were found), and the calibration runs that decide what the machine is allowed to do on its own ([#1](docs/CALIBRATION_REPORT_2026-08-07.md), [#2](docs/CALIBRATION_REPORT_2_2026-08-07.md), [#3](docs/CALIBRATION_REPORT_3_TWOSTEP_2026-08-09.md) — current answer: nothing; a human airs every card). Both closures ship with regression tests.
 
-`/control` (the producer console) and `/overlay` (the graphic) run in separate browser processes — often separate machines — and are bridged by a per-room state channel. Rooms are capability URLs: the first writer registers the room's write key, the overlay just reads. Every stage is swappable (see [Plugin points](#plugin-points)).
-
-The pipeline is deliberately **human-in-the-loop**: a check lands in the operator queue and only airs when a human airs it — or via confidence-gated auto-air with a veto countdown, where auto only takes definitive, high-confidence, sourced verdicts and a human can still pull anything. Airing a *wrong* fact-check is worse than airing none.
-
-## Quickstart A — self-host (BYOK)
-
-Clone → keys → running control room and overlay, in about two minutes. One Node ≥ 22 process, zero npm dependencies, no external store: locally the control→overlay state channel runs in-memory inside the server.
+## Quickstart — 60 seconds
 
 ```sh
 git clone https://github.com/jordanpeele/footnote && cd footnote
-cp .env.example .env      # paste your three keys (Redis not needed locally)
-npm start                 # → http://localhost:3000/control  +  /overlay?room=…
+cp .env.example .env.local   # paste your three keys
+npm start                    # → http://localhost:3000/control  +  /overlay?room=…
 ```
 
-Or containerized, same thing: `docker compose up` (mounts the repo into `node:22-alpine`, reads `.env`, serves port 3000).
+Node ≥ 22, no `npm install`, no database — locally the control→overlay state channel runs in-memory inside the server. Open `/control`, allow the mic, say something checkable ("the Great Wall is visible from space"), and AIR the card that lands in the queue. The overlay URL goes into OBS as a Browser Source ([OBS_SETUP.md](OBS_SETUP.md)); portrait 1080×1920 canvases get a phone-safe vertical layout automatically.
 
-Bring your own keys:
+## What you need
 
-| Key | For | Where to get it |
+Footnote is **BYOK** — you bring three keys, and every check spends your money at the vendor. There is no shared backend: [footnote-live.vercel.app](https://footnote-live.vercel.app) is the maintainer's own instance of this repo, not a service you sign up for.
+
+| Key | Does | Get it |
 |---|---|---|
-| `DEEPGRAM_API_KEY` | streaming speech-to-text | [deepgram.com](https://deepgram.com) — must be a **grant-capable key** (Member scope) so the server can mint short-lived browser tokens; your key never ships to the client |
+| `DEEPGRAM_API_KEY` | streaming speech-to-text | [deepgram.com](https://deepgram.com) — must be **Member scope** (grant-capable) so the server can mint short-lived browser tokens; your key never ships to the client |
 | `ANTHROPIC_API_KEY` | claim extraction (Claude Haiku) | [console.anthropic.com](https://console.anthropic.com) |
 | `PERPLEXITY_API_KEY` | verification (sonar-pro web search) | [perplexity.ai](https://perplexity.ai) |
-| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | state channel + rate limiting (Upstash Redis) | [upstash.com](https://upstash.com) — **not needed for self-host** (`npm start` defaults to the in-memory state channel, `FOOTNOTE_STATE=memory`); required on serverless deploys, or set `FOOTNOTE_STATE=upstash` locally to use it |
 
-Then: open `/control`, allow the mic, hit **Start Stream**, say something checkable ("the Great Wall is visible from space"), and AIR the card that lands in the queue. Add the overlay URL from the OBS OVERLAY bar as a 1920×1080 Browser Source ([OBS_SETUP.md](./OBS_SETUP.md)).
+Honest cost note: the optimization benches logged ~180 Perplexity verifies at roughly $2–3 all-in ([docs/LATENCY_LEDGER.md](docs/LATENCY_LEDGER.md)), and verify requests dominate spend — so a heavy hour of live checking runs a few dollars across the three APIs. The Haiku gate exists to keep the expensive verify calls down.
 
-### Vertical / portrait streams (TikTok, Reels, Shorts)
+## Deploy to Vercel
 
-The overlay is aspect-aware: give it a portrait-sized viewport and it switches to a stacked vertical card automatically — no separate URL. On a **1080×1920** canvas the card renders as a full-width lower-third in the 60–75% height band, clear of the zones vertical platforms draw UI over (the engagement rail on the right edge, captions in the bottom ~250px), with type sized for phone screens.
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/jordanpeele/footnote&env=ANTHROPIC_API_KEY,PERPLEXITY_API_KEY,DEEPGRAM_API_KEY,KV_REST_API_URL,KV_REST_API_TOKEN&envDescription=Anthropic%20%2B%20Perplexity%20%2B%20grant-capable%20Deepgram%20key%2C%20and%20Upstash%20Redis%20REST%20credentials&envLink=https://github.com/jordanpeele/footnote%23what-you-need)
 
-- **OBS vertical canvas:** Settings → Video → set **Base (Canvas)** and **Output (Scaled)** to `1080x1920`, then add the overlay URL as a Browser Source at **width 1080, height 1920**. (Resizing an *existing* source? Right-click it → Transform → **Reset Transform** afterward, or OBS keeps the old 16:9 bounding box.) The "Download OBS scene" button on `/control` ships both a `Footnote 16:9` and a `Footnote 9:16` scene pre-sized.
-- **Moblin / phone streaming:** add the overlay URL as a Browser widget sized to the full portrait frame — details in [REMOTE_CALL_SETUP.md](./REMOTE_CALL_SETUP.md).
-- Escape hatches: `?layout=portrait|landscape` forces a layout when the embed's aspect lies; `?y=<px>` overrides the card's bottom offset in either layout.
+Serverless needs the two extra env vars for the state channel: `KV_REST_API_URL` / `KV_REST_API_TOKEN` (installing **Upstash** from the Vercel Marketplace sets them automatically). Your deployment serves `/control`, `/op`, `/overlay?room=…`, and `/receipts` — the overlay URL goes straight into an OBS Browser Source or a [phone rig](REMOTE_CALL_SETUP.md).
 
-## Quickstart B — deploy to Vercel (hosted)
+## Architecture
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/jordanpeele/footnote&env=ANTHROPIC_API_KEY,PERPLEXITY_API_KEY,DEEPGRAM_API_KEY,KV_REST_API_URL,KV_REST_API_TOKEN&envDescription=Anthropic%20%2B%20Perplexity%20%2B%20grant-capable%20Deepgram%20key%2C%20and%20Upstash%20Redis%20REST%20credentials&envLink=https://github.com/jordanpeele/footnote%23quickstart-a--self-host-byok)
+<p align="center">
+  <img src="media/architecture.svg" alt="Footnote pipeline: mic/stream audio → Deepgram STT → Haiku claim extraction with core gates → Perplexity verification under the editorial layer → operator queue at /op → OBS overlay and public receipts" width="100%">
+</p>
 
-You'll be prompted for the same five env vars as above. Installing **Upstash** from the Vercel Marketplace sets `KV_REST_API_URL` / `KV_REST_API_TOKEN` automatically. Your deployment serves `/control` and `/overlay?room=…` — the overlay URL goes straight into an OBS Browser Source or a [Moblin Browser widget on a phone](./REMOTE_CALL_SETUP.md).
+The load-bearing decision is **D5: editorial sits above the vendor**. Source-trust ranking and verdict/evidence rules live in [`src/core/editorial.js`](src/core/editorial.js), above the verifier interface — so swapping Perplexity for something else cannot change what Footnote is willing to put on a screen. Same pattern for the extraction gates: the [grounding gate](src/core/grounding.js) (rejects extractions not grounded in what the speaker said), the [negation tripwire](src/core/polarity.js) (holds any card where speaker polarity is ambiguous), and harm-class tagging all sit in core, above the adapter seam.
+
+`/control` (producer console) and `/overlay` (the graphic) run in separate browser processes — often separate machines — bridged by a per-room state channel. Rooms are capability URLs: the first writer registers the room's write key, the overlay just reads.
 
 ## Plugin points
 
-Every vendor-touching stage sits behind a small interface, with the shipping vendor as the reference adapter. <!-- landing in sprint-01: interfaces + adapter layout (packet P0-B); exact file names may shift — the layout below is the contract -->
+Every vendor-touching stage sits behind a small interface, selected by env var ([`src/core/registry.js`](src/core/registry.js)), with the shipping vendor as the reference adapter:
 
-| Stage | Interface | Reference adapter | Build your own |
+| Stage | Interface | Reference adapter | Swap via |
 |---|---|---|---|
-| **Verifier** (claim → verdict) | `src/core/interfaces/verifier.js` | `src/adapters/verifier/perplexity/` — sonar-pro + trust-tier citation ranking | Any search+synthesis stack (Brave/Exa + Claude, a RAG over your own archive…) — [walkthrough in CONTRIBUTING.md](./CONTRIBUTING.md#build-a-verifier-adapter) |
-| **STT** (audio → final sentences) | `src/core/interfaces/stt.js` | `src/adapters/stt/deepgram/` — streaming WS, server-minted tokens | Local Whisper server, another cloud STT — [CONTRIBUTING.md](./CONTRIBUTING.md#other-adapter-domains) |
-| **State channel** (control → overlay) | `src/core/interfaces/state-channel.js` | `src/adapters/state-channel/upstash-redis/` — REST, per-room, TOFU write key | Durable Objects, plain WebSocket relay, anything that can hold `{card, seq}` per room — [CONTRIBUTING.md](./CONTRIBUTING.md#other-adapter-domains) |
-| **Overlay skin** (card → pixels) | `src/core/interfaces/overlay-skin.js` | `src/adapters/overlay/broadcast/` — the news lower-third | A skin is one HTML/CSS/JS bundle that renders a card — [CONTRIBUTING.md](./CONTRIBUTING.md#contribute-an-overlay-skin) |
+| **Verifier** (claim → verdict) | [`src/core/interfaces/verifier.js`](src/core/interfaces/verifier.js) | [`src/adapters/verifier/perplexity/`](src/adapters/verifier/perplexity/) (a two-step variant exists, dark — it [failed its promotion eval](docs/CALIBRATION_REPORT_3_TWOSTEP_2026-08-09.md)) | `FOOTNOTE_VERIFIER` — [walkthrough](CONTRIBUTING.md#build-a-verifier-adapter) |
+| **Claim extractor** (speech → atomic claim) | [`src/core/interfaces/claim-extractor.js`](src/core/interfaces/claim-extractor.js) | [`src/adapters/extractor/anthropic-haiku/`](src/adapters/extractor/anthropic-haiku/) | `FOOTNOTE_EXTRACTOR` |
+| **STT** (audio → final sentences) | [`src/core/interfaces/stt-provider.js`](src/core/interfaces/stt-provider.js) | [`src/adapters/stt/deepgram/`](src/adapters/stt/deepgram/) | `FOOTNOTE_STT` — [notes](CONTRIBUTING.md#other-adapter-domains) |
+| **State channel** (control → overlay) | [`src/core/interfaces/state-channel.js`](src/core/interfaces/state-channel.js) | [`src/adapters/state/upstash/`](src/adapters/state/upstash/) (local default: [`memory-ws`](src/adapters/state/memory-ws/)) | `FOOTNOTE_STATE` |
+| **Overlay skin** (card → pixels) | [`overlay.html`](overlay.html) / [`overlay.js`](overlay.js) / [`overlay.css`](overlay.css) render the card; skin rules in [CONTRIBUTING.md](CONTRIBUTING.md#contribute-an-overlay-skin) | the broadcast lower-third | fork the bundle |
 
-There are drafted [good first issues](./launch/good-first-issues/) for one of each.
+Verifier PRs ship with a golden-set run ([eval/](eval/README.md)) — "seemed right on the three claims I tried" is the failure mode this project exists to prevent.
 
-## The editorial layer
+## How it decides what airs
 
-The interesting part of Footnote isn't the API calls — it's the rules about **what is allowed to reach the screen**. Those rules are written down in [`HOW_FOOTNOTE_DECIDES.md`](./HOW_FOOTNOTE_DECIDES.md): <!-- landing in sprint-01: packet P1-C --> what counts as a checkable claim, why sources are tiered and social/forums are blocklisted, why corrections are phrased *"per [source]"* and never as bare assertion, why auto-air only takes definitive verdicts and everything spicy waits for a human.
+The interesting part isn't the API calls — it's the rules about what is allowed to reach the screen, and they're written down to be audited:
 
-Treat that file as the spec. Accuracy-as-spec is the differentiator here: a fact-checker that's fast but sloppy is worse than no fact-checker, so changes to the editorial policy get a higher review bar than changes to code (see [CONTRIBUTING.md](./CONTRIBUTING.md#editorial-policy-changes)).
+- **[HOW_FOOTNOTE_DECIDES.md](HOW_FOOTNOTE_DECIDES.md)** — the editorial policy. What counts as a checkable claim, the four-tier source hierarchy, verdict–evidence floors, the harm classes that can never auto-air, and the corrections rule (wrong verdicts get corrected on air, not deleted). Every rule is marked as either enforced-in-code or planned; divergence between code and an unmarked rule is a bug.
+- **[docs/STREET_PROTOCOL.md](docs/STREET_PROTOCOL.md)** — the operator's one-page rulebook for live sessions. Rule 1: veto everything. Auto-air exists in the code but is calibration-gated and the current calibration answer is *no categories qualify*, so nothing airs without a human thumb.
 
-## Costs, limits, receipts
+Changes to the editorial policy get a higher review bar than changes to code ([CONTRIBUTING.md](CONTRIBUTING.md#editorial-policy-changes)).
 
-**This is BYOK and every check spends real money.** Deepgram streaming + one Haiku call per candidate sentence + one sonar-pro call per extracted claim works out to roughly **$0.50–1.00 per active streaming hour** across the three APIs, depending on how talkative the stream is. The Haiku gate exists to keep the expensive verify calls down.
+## The street rig
 
-- **Rate limits:** every API route is rate-limited per IP out of the box (`api/_ratelimit.js`); limits fail *open* if Redis is absent, so a keyless local setup runs unlimited. Tune the per-route limits at the call sites.
-- **Receipts:** every aired check is appended to a durable per-room log (verdict, correction, source, timestamp) — the accountability record for anything Footnote ever put on a screen. Public receipts pages render that log per stream. <!-- landing in sprint-01: public receipts pages (packet P1-G); the log endpoint (`GET /api/onair?room=…&log=1`) exists today -->
+Footnote doesn't need a desk: a phone streams the camera over SRT into OBS at home, stream audio feeds the pipeline, and the operator airs cards from `/op` on a second phone in their pocket — the whole rig ran a 90-minute sidewalk session over cell service ([field report](docs/FIELD_TEST_2026-08-10_STREET.md)). Build sheet and setup: [docs/STREET_RIG.md](docs/STREET_RIG.md).
 
-## Docs
+## Community
 
-| Doc | What it covers |
-|---|---|
-| [`OBS_SETUP.md`](./OBS_SETUP.md) | Overlay + control in OBS, audio routing (virtual cables), producer controls |
-| [`REMOTE_CALL_SETUP.md`](./REMOTE_CALL_SETUP.md) | Fact-checking a remote call, phone streaming with Moblin, the street rig |
-| [`HOW_FOOTNOTE_DECIDES.md`](./HOW_FOOTNOTE_DECIDES.md) | The editorial policy — the spec for what airs <!-- landing in sprint-01 --> |
-| [`eval/README.md`](./eval/README.md) | Golden claim set + calibration harness; how adapters prove themselves <!-- landing in sprint-01 --> |
-| [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Running locally, building adapters and skins, review bars |
-| [`BACKLOG.md`](./BACKLOG.md) | Parked work and the triggers that un-park it |
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — running locally, building adapters and skins, what review checks.
+- **[Good first issues](https://github.com/jordanpeele/footnote/issues?q=label%3A%22good+first+issue%22)** — nine pre-drafted with exact file pointers, in [`launch/good-first-issues/`](launch/good-first-issues/): overlay skins, a verifier adapter, local-Whisper STT, i18n, eval sets.
+- **[SECURITY.md](SECURITY.md)** — reporting vulnerabilities.
+- **[docs/README.md](docs/README.md)** — index of everything else: field reports, calibration reports, latency ledger, red-team notes.
 
 ## License
 
-[MIT](./LICENSE)
+[MIT](LICENSE)

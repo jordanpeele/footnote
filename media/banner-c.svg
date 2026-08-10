@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-label="Footnote — real-time fact-checking for live streams">
+  <!-- Variant C — "the product shot": wordmark and tagline on the left, a miniature
+       on-air FALSE card on the right (verdict block, kicker, claim, correction, source,
+       timer bar) — the actual lower-third, rendered as identity.
+       Self-contained opaque broadcast-dark background; safe on both GitHub themes. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#12151c"/>
+      <stop offset="1" stop-color="#0b0d11"/>
+    </linearGradient>
+    <linearGradient id="cardbg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b0d11" stop-opacity="0.94"/>
+      <stop offset="1" stop-color="#08090c" stop-opacity="0.97"/>
+    </linearGradient>
+    <linearGradient id="vfalse" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d33143"/>
+      <stop offset="1" stop-color="#b3212f"/>
+    </linearGradient>
+    <clipPath id="frame"><rect x="0" y="0" width="1280" height="320" rx="16"/></clipPath>
+    <clipPath id="card"><rect x="620" y="76" width="600" height="168" rx="12"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#frame)">
+    <rect width="1280" height="320" fill="url(#bg)"/>
+
+    <!-- left: wordmark + tagline -->
+    <text x="60" y="164" font-family="Archivo,'Helvetica Neue',Helvetica,Arial,sans-serif" font-size="88" font-weight="900" letter-spacing="-1.5" fill="#ffffff">FOOTNOTE</text>
+    <text x="546" y="122" font-family="Georgia,'Times New Roman',serif" font-size="54" font-weight="800" fill="#00d68f">¹</text>
+    <text x="63" y="212" font-family="'JetBrains Mono',SFMono-Regular,Menlo,Consolas,monospace" font-size="20" font-weight="600" fill="#9aa3af">Real-time fact-checking</text>
+    <text x="63" y="242" font-family="'JetBrains Mono',SFMono-Regular,Menlo,Consolas,monospace" font-size="20" font-weight="600" fill="#9aa3af">for live streams</text>
+
+    <!-- right: miniature on-air card (a False verdict, as it renders) -->
+    <g clip-path="url(#card)">
+      <rect x="620" y="76" width="600" height="168" fill="url(#cardbg)"/>
+      <!-- verdict block -->
+      <rect x="620" y="76" width="118" height="168" fill="url(#vfalse)"/>
+      <text x="679" y="170" text-anchor="middle" font-family="Archivo,'Helvetica Neue',Helvetica,Arial,sans-serif" font-size="26" font-weight="900" letter-spacing="0.5" fill="#ffffff">FALSE</text>
+      <!-- kicker -->
+      <rect x="762" y="96" width="106" height="24" rx="4" fill="none" stroke="#00d68f" stroke-opacity="0.4" stroke-width="1.5"/>
+      <text x="815" y="112" text-anchor="middle" font-family="'JetBrains Mono',SFMono-Regular,Menlo,Consolas,monospace" font-size="11" font-weight="800" letter-spacing="2" fill="#00d68f">FACT CHECK</text>
+      <!-- claim (muted) + correction (white, the product) -->
+      <text x="762" y="150" font-family="Archivo,'Helvetica Neue',Helvetica,Arial,sans-serif" font-size="17" font-weight="600" fill="#c6ccd4">“You can see the Great Wall of China from space”</text>
+      <text x="762" y="182" font-family="Archivo,'Helvetica Neue',Helvetica,Arial,sans-serif" font-size="20" font-weight="800" fill="#ffffff">Not visible to the naked eye — per NASA.</text>
+      <!-- source line + brand corner -->
+      <text x="762" y="216" font-family="'JetBrains Mono',SFMono-Regular,Menlo,Consolas,monospace" font-size="13" font-weight="600" fill="#9aa3af">nasa.gov</text>
+      <text x="1196" y="217" text-anchor="end" font-family="Archivo,'Helvetica Neue',Helvetica,Arial,sans-serif" font-size="17" font-weight="800" fill="#ffffff">Footnote</text>
+      <text x="1113" y="209" font-family="Georgia,'Times New Roman',serif" font-size="13" font-weight="800" fill="#00d68f">¹</text>
+      <!-- timer bar -->
+      <rect x="620" y="239" width="600" height="5" fill="#00d68f"/>
+      <rect x="1040" y="239" width="180" height="5" fill="#26f0aa"/>
+    </g>
+    <rect x="620.75" y="76.75" width="598.5" height="166.5" rx="11.5" fill="none" stroke="#ff4d5e" stroke-opacity="0.5" stroke-width="1.5"/>
+
+    <!-- five-verdict accent band -->
+    <rect x="0"    y="308" width="256" height="12" fill="#0b8f5f"/>
+    <rect x="256"  y="308" width="256" height="12" fill="#d33143"/>
+    <rect x="512"  y="308" width="256" height="12" fill="#d79321"/>
+    <rect x="768"  y="308" width="256" height="12" fill="#7161d8"/>
+    <rect x="1024" y="308" width="256" height="12" fill="#4a5160"/>
+  </g>
+
+  <rect x="0.75" y="0.75" width="1278.5" height="318.5" rx="15.5" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.5"/>
+</svg>
