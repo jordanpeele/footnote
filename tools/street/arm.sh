@@ -50,7 +50,8 @@ sleep 1
 echo "— reachability:"
 curl -s -o /dev/null -w "  loopback: %{http_code}\n" http://127.0.0.1:3000/control
 curl -s -o /dev/null -w "  tailnet:  %{http_code}\n" http://${TAILNET_IP}:3000/op
-curl -s -o /dev/null -w "  LAN:      %{http_code} (000=REFUSED, correct)\n" --connect-timeout 3 http://192.168.1.62:3000/op || true
+LAN_IP=$(ipconfig getifaddr en0 2>/dev/null || echo 192.168.0.1)
+curl -s -o /dev/null -w "  LAN:      %{http_code} (000=REFUSED, correct)\n" --connect-timeout 3 "http://$LAN_IP:3000/op" || true
 echo
 echo "URLs:  control  http://localhost:3000/control"
 echo "       overlay  (copy from control bar — keep localhost, for OBS)"

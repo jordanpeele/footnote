@@ -25,6 +25,7 @@ brew list --versions srt epoll-shim | sed 's/^/  /'
 if [ ! -d "$VENDOR_DIR/.git" ]; then
   mkdir -p "$(dirname "$VENDOR_DIR")"
   git clone https://github.com/BELABOX/srtla "$VENDOR_DIR"
+  git -C "$VENDOR_DIR" checkout 37862da3d0c13b46956efd3f88877053293d97d6   # pinned: the commit srtla-macos.patch was built + audited against
 fi
 cd "$VENDOR_DIR"
 
