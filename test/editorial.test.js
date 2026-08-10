@@ -72,6 +72,28 @@ test("L4: finalizeVerification correction is surrogate-safe at the 240 boundary"
   assert.ok(out.correction.isWellFormed());
 });
 
+// ---- P5F-3: curated display-name map + never-all-caps fallback ----
+test("P5F-3: curated map covers the hosts that hit the field logs", () => {
+  assert.equal(prettyName("archives.gov"), "National Archives");   // the "ARCHIVES" field bug
+  assert.equal(prettyName("bea.gov"), "Bureau of Economic Analysis");
+  assert.equal(prettyName("britannica.com"), "Encyclopædia Britannica");
+  assert.equal(prettyName("wikipedia.org"), "Wikipedia");
+  assert.equal(prettyName("federalreserve.gov"), "Federal Reserve");
+});
+test("P5F-3: deep hosts inherit the curated name via parent-suffix walk", () => {
+  assert.equal(prettyName("data.census.gov"), "U.S. Census Bureau");
+  assert.equal(prettyName("en.wikipedia.org"), "Wikipedia");
+  assert.equal(prettyName("apps.bea.gov"), "Bureau of Economic Analysis");
+});
+test("P5F-3: unknown deep host → cleaned host (last ≤3 labels, leading capital, no path junk)", () => {
+  assert.equal(prettyName("webspace.science.uu.nl"), "Science.uu.nl");   // field tier-1 citation
+  assert.equal(prettyName("a.b.example.org"), "B.example.org");
+});
+test("P5F-3: long .gov label is title-cased, NEVER all-caps; short acronym path preserved", () => {
+  assert.equal(prettyName("benefits.gov"), "Benefits");   // was "BENEFITS" — the ARCHIVES class of bug
+  assert.equal(prettyName("hud.gov"), "HUD");
+});
+
 // ---- Regressions: round-2 hotfixes stay fixed ----
 test("regression: reuters.com is tier 3", () => {
   assert.equal(trustTier("reuters.com"), 3);

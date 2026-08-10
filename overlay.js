@@ -5,11 +5,15 @@
 (() => {
   const byId = (id) => document.getElementById(id);
   const onAir = byId("onAir");
+  // SPRINT-02 C1: per-verdict accents (display only — vocabulary + labels unchanged).
+  // NeedsContext gets its own violet family (v-ctx): reads "informational, not alarm" at a
+  // half-second glance, and can't be confused with either the amber warning (Misleading)
+  // or the correction card's sky-blue v-corr.
   const VERDICT_META = {
     True:         { cls: "v-true", icon: "✓", label: "TRUE" },
     False:        { cls: "v-false", icon: "✗", label: "FALSE" },
     Misleading:   { cls: "v-warn", icon: "⚠", label: "MISLEADING" },
-    NeedsContext: { cls: "v-warn", icon: "◐", label: "NEEDS CONTEXT" },
+    NeedsContext: { cls: "v-ctx", icon: "◐", label: "NEEDS CONTEXT" },
     Unverifiable: { cls: "v-gray", icon: "?", label: "UNVERIFIABLE" },
   };
   const vmeta = (v) => VERDICT_META[v] || VERDICT_META.Unverifiable;
@@ -73,7 +77,18 @@
       // LEGACY — remove next release: refClaim-only join for pre-refId correction cards
       sub.textContent = card.refClaim ? "corrects: “" + card.refClaim + "”" : "";
     } else sub.textContent = card.correction || "";
-    byId("oaSrc").textContent = (card.source && card.source.name) ? "Source: " + card.source.name : "";
+    // source line + tier visibility (SPRINT-02 C2): code tier 3 = the wire/official bucket
+    // (HOW_FOOTNOTE_DECIDES.md §2) → subtle PRIMARY SOURCE micro-tag; tier ≤2 or absent
+    // tier = plain publisher name. textContent assignment clears any previous tag node.
+    const srcEl = byId("oaSrc");
+    const srcName = card.source && card.source.name;
+    srcEl.textContent = srcName ? "Source: " + srcName : "";
+    if (srcName && !corr && card.tier === 3) {
+      const tag = document.createElement("span");
+      tag.className = "oa-primary";
+      tag.textContent = "PRIMARY SOURCE";
+      srcEl.appendChild(tag);
+    }
     onAir.hidden = false; onAir.classList.remove("show"); void onAir.offsetWidth; onAir.classList.add("show");
     showing = true;
     const timer = byId("oaTimer");
@@ -84,7 +99,8 @@
       if (p < 1) raf = requestAnimationFrame(tick); else hideOnAir();
     })(start);
   }
-  function hideOnAir() { cancelAnimationFrame(raf); showing = false; onAir.classList.remove("show"); hideT = setTimeout(() => { onAir.hidden = true; }, 450); }
+  // exit is a ~200ms fade-down (overlay.css .onair base transition) — the hidden flip waits just past it
+  function hideOnAir() { cancelAnimationFrame(raf); showing = false; onAir.classList.remove("show"); hideT = setTimeout(() => { onAir.hidden = true; }, 220); }
 
   // programmatic API — P1 bridge (and manual testing) call these
   window.footnoteOverlay = { air: showOnAir, clear: hideOnAir };
@@ -169,9 +185,9 @@
   if (c) { try { showOnAir(JSON.parse(atob(c))); } catch (e) { console.error("bad ?card", e); } }
   if (qs.get("demo")) {                          // ?demo=1 → cycle samples so you can eyeball it in OBS
     const SAMPLES = [
-      { verdict: "False", claim: "The Great Wall of China is visible from space with the naked eye.", correction: "NASA and astronauts confirm it is not visible to the naked eye from low Earth orbit.", source: { name: "Scientific American" } },
+      { verdict: "False", claim: "The Great Wall of China is visible from space with the naked eye.", correction: "NASA and astronauts confirm it is not visible to the naked eye from low Earth orbit.", source: { name: "Scientific American" }, tier: 3 },
       { verdict: "True", claim: "Gold is worth more than silver.", correction: "Gold trades far higher than silver per ounce in modern markets.", source: { name: "CFTC" } },
-      { verdict: "NeedsContext", claim: "The unemployment rate was 4.1 percent in June.", correction: "BLS reported 4.2 percent for June 2026; figures are revised over time.", source: { name: "Bureau of Labor Statistics" } },
+      { verdict: "NeedsContext", claim: "The unemployment rate was 4.1 percent in June.", correction: "BLS reported 4.2 percent for June 2026; figures are revised over time.", source: { name: "Bureau of Labor Statistics" }, tier: 3 },
     ];
     let i = 0;
     const cycle = () => { showOnAir(SAMPLES[i % SAMPLES.length]); i++; };

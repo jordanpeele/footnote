@@ -46,6 +46,25 @@ function slimCard(c) {
   if (c.test === true) slim.test = true;   // field-test watermark flag (local TESTAIR) — boolean only, overlay renders "TEST"
   if (typeof c.refId === "string" && c.refId) slim.refId = cut(strip(c.refId), 32);         // correction → original join key (R9)
   if (typeof c.refClaim === "string" && c.refClaim) slim.refClaim = cut(strip(c.refClaim), 300);   // legacy fallback join — keep one release
+  /* SPRINT-02 C: sourcing passthrough → the aired log, so receipts can render tier + all
+     qualifying citations per aired check.
+     tier — STRICT integer 0–3 or absent: sanitizers bound, they don't repair, so a "3"
+     string (or 2.5, or 7) is dropped, not coerced — the publisher (app.js) owns sending a
+     real number, and an absent tier degrades to the plain-source display everywhere.
+     citations — ≤5 http(s) URL strings, each through the same strip+cut budget as every
+     other card field (parse-checked AFTER the cut so a truncated-into-garbage URL drops
+     out rather than shipping broken); anything else → field absent entirely. */
+  if (Number.isInteger(c.tier) && c.tier >= 0 && c.tier <= 3) slim.tier = c.tier;
+  if (Array.isArray(c.citations)) {
+    const cites = [];
+    for (const u of c.citations) {
+      if (cites.length >= 5) break;
+      if (typeof u !== "string") continue;
+      const s = cut(strip(u), 300);
+      try { const p = new URL(s); if (p.protocol === "http:" || p.protocol === "https:") cites.push(s); } catch {}
+    }
+    if (cites.length) slim.citations = cites;
+  }
   return slim;
 }
 
@@ -87,7 +106,7 @@ function slimQCard(c) {
   const id = Number(c.id);
   if (!Number.isFinite(id)) return null;
   const base = slimCard(c) || {};
-  return {
+  const q = {
     id,
     state: c.state === "checking" ? "checking" : "pending",
     verdict: c.verdict == null ? null : base.verdict,   // checking cards have no verdict yet
@@ -100,6 +119,11 @@ function slimQCard(c) {
     polarity_conflict: !!c.polarity_conflict,
     spokenAt: typeof c.spokenAt === "number" ? c.spokenAt : null,
   };
+  // sourcing passthrough (SPRINT-02 C): keep tier/citations on the queue snapshot so an
+  // operator air — which re-slims the queue card — lands them in the aired log too.
+  if (base.tier !== undefined) q.tier = base.tier;
+  if (base.citations !== undefined) q.citations = base.citations;
+  return q;
 }
 
 export default async function handler(req, res) {

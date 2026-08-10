@@ -107,7 +107,7 @@ test("contract parity: RawVerification shape is identical to the single-shot ada
   // and the shared consumer produces a complete on-air card body from it
   const card = finalizeVerification(two);
   assert.equal(card.verdict, "False");
-  assert.equal(card.source.name, "ARCHIVES");                    // display name derives from the winning domain (archives.gov, tier 3), not the vendor's source_name
+  assert.equal(card.source.name, "National Archives");           // display name derives from the winning domain (archives.gov, tier 3 — curated map, P5F-3), not the vendor's source_name
   assert.equal(card.source.url, "https://www.archives.gov/nixon");
   assert.equal(card.autoAirEligible, true);
   assert.equal(card.confidence, 0.97);

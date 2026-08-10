@@ -5,7 +5,7 @@
   --fn:#00d68f;
   --bg:#0b0d11; --panel:#12151b; --line:rgba(255,255,255,.1);
   --ink:#eef1f4; --mut:#9aa3af;
-  --true:#0b8f5f; --false:#c62b3c; --warn:#d79321; --gray:#4a5160; --corr:#2f7fd6;
+  --true:#0b8f5f; --false:#c62b3c; --warn:#d79321; --ctx:#6455c9; --gray:#4a5160; --corr:#2f7fd6;
   --disp:"Archivo","Helvetica Neue",Arial,sans-serif;
   --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
 }
@@ -37,6 +37,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--disp);min-height:10
 .rc-badge.v-true{background:var(--true)}
 .rc-badge.v-false{background:var(--false)}
 .rc-badge.v-warn{background:var(--warn);color:#0b0b0b}
+.rc-badge.v-ctx{background:var(--ctx)}   /* NeedsContext — violet, matches the overlay's v-ctx */
 .rc-badge.v-gray{background:var(--gray)}
 .rc-time{margin-left:auto;font:500 12px var(--mono);color:var(--mut);white-space:nowrap}
 .rc-claim{font:700 15px/1.4 var(--disp);color:var(--ink)}
@@ -47,6 +48,11 @@ a.rc-src{color:var(--fn);text-decoration:none}
 a.rc-src:hover{text-decoration:underline}
 .rc-tier{font:700 10px var(--mono);color:var(--mut);border:1px solid var(--line);
   border-radius:3px;padding:2px 5px 1px;letter-spacing:.05em;white-space:nowrap}
+/* multi-source (SPRINT-02 C2): the other qualifying citations on the aired card — small
+   named link chips after the surfaced source; wraps cleanly at 390px */
+.rc-cite{font:600 11px var(--mono);color:var(--mut);border:1px solid var(--line);
+  border-radius:3px;padding:2px 6px 1px;text-decoration:none;white-space:nowrap}
+a.rc-cite:hover{color:var(--fn);border-color:rgba(0,214,143,.4)}
 
 /* correction events — visually offset, not a verdict */
 .rc.rc-correction{border-left:4px solid var(--corr);background:rgba(47,127,214,.08)}

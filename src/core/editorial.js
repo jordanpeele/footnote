@@ -51,6 +51,18 @@ export const PRETTY = {
   "cdc.gov": "CDC", "nasa.gov": "NASA", "noaa.gov": "NOAA", "federalreserve.gov": "Federal Reserve",
   "congress.gov": "U.S. Congress", "usa.gov": "USA.gov", "cftc.gov": "CFTC", "sec.gov": "SEC",
   "bea.gov": "Bureau of Economic Analysis", "bjs.ojp.gov": "Bureau of Justice Statistics", "fbi.gov": "FBI",
+  // P5F-3 pass: hosts seen in field logs / goldens whose derived name read as junk
+  // ("archives.gov" → "ARCHIVES") plus the rest of the commonly-cited official set.
+  "archives.gov": "National Archives", "loc.gov": "Library of Congress",
+  "ssa.gov": "Social Security Administration", "cbo.gov": "Congressional Budget Office",
+  "state.gov": "U.S. State Department", "treasury.gov": "U.S. Treasury",
+  "justice.gov": "U.S. Justice Department", "whitehouse.gov": "The White House",
+  "nih.gov": "National Institutes of Health", "weather.gov": "National Weather Service",
+  "eia.gov": "U.S. Energy Information Administration", "supremecourt.gov": "U.S. Supreme Court",
+  "stlouisfed.org": "Federal Reserve Bank of St. Louis", "europa.eu": "European Union",
+  "mayoclinic.org": "Mayo Clinic", "webmd.com": "WebMD", "healthline.com": "Healthline",
+  "businessinsider.com": "Business Insider", "vox.com": "Vox", "thehill.com": "The Hill",
+  "newsweek.com": "Newsweek", "usnews.com": "U.S. News & World Report",
 };
 
 // Verifiers return markdown (**bold**, *italic*, `code`, [links](url)) and [1] citation
@@ -83,17 +95,32 @@ export function truncateOnAir(s, n) {
   return t.replace(/[\uD800-\uDBFF]$/, "");
 }
 export function hostOf(url) { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return null; } }
-// title-case a bare domain label as a last-resort display name (e.g. "brookings.edu" → "Brookings")
+/* Display-name derivation (P5F-3). Order of authority:
+   1. Curated PRETTY map — exact host, then parent suffixes, so deep hosts inherit the
+      curated name (data.census.gov → "U.S. Census Bureau", en.wikipedia.org → "Wikipedia").
+   2. Two-label .gov/.mil with a short (≤4 char) label reads as an agency acronym
+      (va.gov → "VA", hud.gov → "HUD"). Longer labels are NEVER upper-cased — the
+      "ARCHIVES" field bug (archives.gov) was this path shouting a whole word.
+   3. Simple registrable domain → title-cased label ("brookings.edu" → "Brookings").
+   4. UNKNOWN deep host → cleaned host: the last ≤3 labels, leading capital, never
+      all-caps, never path junk ("webspace.science.uu.nl" → "Science.uu.nl"). */
 export function prettyName(host) {
   if (!host) return "source";
-  if (PRETTY[host]) return PRETTY[host];
-  // registrable label (e.g. "cftc" from cftc.gov, "ojp" from bjs.ojp.gov); .gov/.mil read as an acronym
-  const label = host.split(".").slice(-2, -1)[0] || host;
-  if (/\.(gov|mil)$/.test(host)) return label.toUpperCase();   // short acronyms OK here (va.gov → "VA")
-  const name = label.split("-").map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
-  // "Source: T" (t.co) / "Source: Ao" is a credibility bug (red-team L3) — a derived
-  // name under 3 chars carries no meaning, so show the full host instead.
-  return name.length < 3 ? host : name;
+  const labels = host.split(".");
+  for (let i = 0; i < labels.length - 1; i++) {           // exact host first, then parent suffixes
+    const hit = PRETTY[labels.slice(i).join(".")];
+    if (hit) return hit;
+  }
+  const label = labels.length >= 2 ? labels[labels.length - 2] : host;
+  if (labels.length === 2 && /\.(gov|mil)$/.test(host) && label.length <= 4) return label.toUpperCase();
+  if (labels.length <= 2) {
+    const name = label.split("-").map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
+    // "Source: T" (t.co) / "Source: Ao" is a credibility bug (red-team L3) — a derived
+    // name under 3 chars carries no meaning, so show the full host instead.
+    return name.length < 3 ? host : name;
+  }
+  const cleaned = labels.slice(-3).join(".");
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }
 const GOV_CC = ["gov.uk", "gov.au", "gov.ca", "gc.ca", "gov.in", "gov.br", "gov.za", "gov.sg",
   "gov.il", "gov.ie", "gov.nz", "govt.nz", "gov.jp", "go.jp", "gov.kr", "go.kr", "gov.it",

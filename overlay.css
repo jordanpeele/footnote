@@ -9,30 +9,43 @@
 html,body{width:100%;height:100%;background:transparent;overflow:hidden;-webkit-font-smoothing:antialiased}
 .stage{position:fixed;inset:0}
 
+/* Motion (SPRINT-02 C1): enter fast-and-purposeful — 240ms translateY+fade on a decisive
+   ease-out (the destination state's transition governs, so .show carries the enter timing);
+   exit — 200ms clean fade-down back to the base offset (base transition governs when .show
+   is removed; overlay.js flips [hidden] at 220ms). No bounce. */
 .onair{position:absolute;left:60px;right:60px;bottom:72px;display:flex;align-items:stretch;
   min-height:132px;border-radius:12px;overflow:hidden;color:#fff;font-family:var(--disp);
   background:linear-gradient(180deg,rgba(11,13,17,.94),rgba(8,9,12,.97));
   border:1.5px solid rgba(255,255,255,.12);box-shadow:0 22px 60px rgba(0,0,0,.6);
-  opacity:0;transform:translateY(26px);pointer-events:none}
+  opacity:0;transform:translateY(26px);pointer-events:none;
+  transition:opacity .2s ease-in,transform .2s ease-in}
 .onair[hidden]{display:none}
-.onair.show{opacity:1;transform:none;transition:opacity .45s cubic-bezier(.2,.8,.2,1),transform .45s cubic-bezier(.2,.8,.2,1)}
+.onair.show{opacity:1;transform:none;
+  transition:opacity .24s cubic-bezier(.16,1,.3,1),transform .24s cubic-bezier(.16,1,.3,1)}
 
 .onair .oa-verdict{display:flex;flex-direction:column;align-items:center;justify-content:center;
   flex:none;width:210px;padding:16px 14px;gap:3px;font:900 27px var(--disp);letter-spacing:.02em;
   text-align:center;line-height:1.05;color:#fff;background:#333}
+/* Verdict accent system (C1) — one half-second-readable accent per verdict:
+   True=green ✓ · False=red ✗ · Misleading=amber ⚠ (keeps v-warn) · NeedsContext=violet ◐
+   (v-ctx: clearly apart from BOTH the amber warning and the correction card's sky-blue
+   v-corr; violet reads "informational", not "alarm") · Unverifiable=gray ?. Display only. */
 .onair.v-true .oa-verdict{background:linear-gradient(180deg,#0b8f5f,#0a7a52)}
 .onair.v-false .oa-verdict{background:linear-gradient(180deg,#d33143,#b3212f)}
 .onair.v-warn .oa-verdict{background:linear-gradient(180deg,#d79321,#b9791a);color:#0b0b0b}
+.onair.v-ctx .oa-verdict{background:linear-gradient(180deg,#7161d8,#5a4abd)}
 .onair.v-gray .oa-verdict{background:linear-gradient(180deg,#4a5160,#3a404c)}
 .onair.v-corr .oa-verdict{background:linear-gradient(180deg,#2f7fd6,#2565b0)}
 .onair.v-true{border-color:rgba(0,214,143,.5)}
 .onair.v-false{border-color:rgba(255,77,94,.5)}
 .onair.v-warn{border-color:rgba(245,166,35,.5)}
+.onair.v-ctx{border-color:rgba(138,122,240,.5)}
 .onair.v-corr{border-color:rgba(79,155,232,.5)}
 /* correction dress: the mid leads with the correction text (in .oa-claim), the "corrects: …"
    linkage rides small + muted in the .oa-correction slot; the static FACT CHECK kicker would
    misread next to a correction, so it hides */
 .onair.v-corr .oa-kicker{display:none}
+.onair.v-corr .oa-claim{font:800 27px/1.25 var(--disp);color:#fff}   /* correction text rides the claim slot — it IS the product here */
 .onair.v-corr .oa-correction{font:600 18px/1.3 var(--mono);color:#9aa3af}
 .onair.v-corr .oa-timer{background:linear-gradient(90deg,#2f7fd6,#5aa7f0)}
 
@@ -40,15 +53,24 @@ html,body{width:100%;height:100%;background:transparent;overflow:hidden;-webkit-
 .oa-claimline{display:flex;align-items:baseline;gap:16px;min-width:0}
 .oa-kicker{flex:none;font:800 15px var(--mono);letter-spacing:.14em;color:var(--fn);
   border:1.5px solid rgba(0,214,143,.4);border-radius:4px;padding:4px 8px 2px}
-.oa-claim{font:700 27px/1.25 var(--disp);color:#eef1f4;
+/* Typography hierarchy (C1): verdict > claim > correction > source in reading order, but
+   the CORRECTION is the editorial product — after the verdict it gets the readability
+   budget (heavier, larger, full-white) so it reads as "the truth"; the quoted claim steps
+   back to a lighter, slightly muted setting so the eye lands on the correction. */
+.oa-claim{font:600 23px/1.3 var(--disp);color:#c6ccd4;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.oa-correction{font:600 24px/1.3 var(--disp);color:#fff;
+.oa-correction{font:800 27px/1.25 var(--disp);color:#fff;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .oa-right{flex:none;width:250px;display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;
   gap:10px;padding:18px 26px 18px 20px;border-left:1.5px solid rgba(255,255,255,.1);text-align:right}
 .oa-brand{font:800 27px var(--disp);color:#fff;display:inline-flex;align-items:center;gap:3px}
 .oa-brand .oa-sup{font:800 17px Georgia,serif;color:var(--fn);vertical-align:super}
 .oa-src{font:600 18px/1.3 var(--mono);color:#9aa3af;word-break:break-word}
+/* tier-3 (wire/official, HOW_FOOTNOTE_DECIDES §2) micro-tag on the source line (C2) —
+   subtle: small mono chip in the brand green, no logos, no third-party calls */
+.oa-primary{display:inline-block;margin-left:8px;padding:2px 6px 1px;
+  border:1px solid rgba(0,214,143,.45);border-radius:3px;
+  font:700 11px/1.3 var(--mono);letter-spacing:.1em;color:var(--fn);white-space:nowrap}
 .oa-timer{position:absolute;left:0;bottom:0;height:5px;width:100%;
   background:linear-gradient(90deg,var(--fn),#26f0aa)}
 
@@ -66,12 +88,15 @@ body.portrait .onair .oa-verdict{width:100%;flex-direction:row;justify-content:c
 body.portrait .oa-mid{padding:18px 22px;gap:8px}
 body.portrait .oa-claimline{flex-wrap:wrap;gap:8px 10px}
 body.portrait .oa-kicker{font-size:14px;padding:3px 7px 2px}
-body.portrait .oa-claim{font-size:30px;-webkit-line-clamp:3}
-body.portrait .oa-correction{font-size:26px;-webkit-line-clamp:3}
+/* same hierarchy at phone scale: correction carries the size/weight, claim steps back */
+body.portrait .oa-claim{font-size:26px;-webkit-line-clamp:3}
+body.portrait .oa-correction{font-size:30px;-webkit-line-clamp:3}
 body.portrait .oa-right{width:100%;flex-direction:row;align-items:center;justify-content:space-between;
   gap:12px;padding:12px 22px;border-left:0;border-top:1.5px solid rgba(255,255,255,.1);text-align:left}
 body.portrait .oa-brand{font-size:23px}
 body.portrait .oa-src{font-size:16px;text-align:right}
+body.portrait .oa-primary{font-size:12px}
+body.portrait .onair.v-corr .oa-claim{font-size:30px}
 body.portrait .onair.v-corr .oa-correction{font-size:19px}
 
 /* field-test watermark — cards aired by the local TESTAIR flag carry test:true.
