@@ -1,0 +1,106 @@
+{
+  "$comment": "Footnote demo fixture — real cards replayed from the public field record (docs/FIELD_TEST_2026-08-08.md, docs/FIELD_TEST_2026-08-10_STREET.md, eval/golden drafts, eval/ADJUDICATION_QUEUE.md). Verdicts and corrections match those records; no invented facts, no personal content. The four-minute-mile card is FS-1 shown CORRECTLY: the displayed claim keeps the speaker's negation and the verdict is of the claim as spoken.",
+  "room": "demo",
+  "cards": [
+    {
+      "claim": "Donald Trump is the president of the United States.",
+      "canonical": "Donald Trump is the president of the United States",
+      "verdict": "True",
+      "confidence": 0.98,
+      "correction": "Correct as spoken.",
+      "harm_class": "person_public",
+      "source": { "name": "whitehouse.gov", "url": "https://www.whitehouse.gov/administration/", "tier": 3 },
+      "citations": ["https://www.whitehouse.gov/administration/"]
+    },
+    {
+      "claim": "The president of the United States is Peter Thiel.",
+      "canonical": "Peter Thiel is the president of the United States",
+      "verdict": "False",
+      "confidence": 0.99,
+      "correction": "The president of the United States is Donald Trump.",
+      "harm_class": "person_public",
+      "source": { "name": "AP", "url": "https://apnews.com/hub/donald-trump", "tier": 3 },
+      "citations": ["https://apnews.com/hub/donald-trump", "https://www.whitehouse.gov/administration/"]
+    },
+    {
+      "claim": "Muhammad Ali is the president of Kenya.",
+      "canonical": "Muhammad Ali is the president of Kenya",
+      "verdict": "False",
+      "confidence": 0.99,
+      "correction": "Kenya's president is William Ruto.",
+      "harm_class": "person_public",
+      "source": { "name": "State House Kenya", "url": "https://www.president.go.ke/", "tier": 3 },
+      "citations": ["https://www.president.go.ke/"]
+    },
+    {
+      "claim": "GDP growth in the US in 2023 was 4%.",
+      "canonical": "GDP growth in the US in 2023 was 4%",
+      "verdict": "False",
+      "confidence": 0.99,
+      "correction": "U.S. real GDP grew about 2.9% in 2023, not 4% (BEA).",
+      "harm_class": "none",
+      "source": { "name": "Bureau of Economic Analysis", "url": "https://www.bea.gov/data/gdp/gross-domestic-product", "tier": 3 },
+      "citations": ["https://www.bea.gov/data/gdp/gross-domestic-product"]
+    },
+    {
+      "claim": "GDP growth in the United States in 2019 was 4%.",
+      "canonical": "GDP growth in the United States in 2019 was 4%",
+      "verdict": "False",
+      "confidence": 0.99,
+      "correction": "2019 U.S. real GDP growth was about 2.3% (BEA).",
+      "harm_class": "none",
+      "source": { "name": "Bureau of Economic Analysis", "url": "https://www.bea.gov/data/gdp/gross-domestic-product", "tier": 3 },
+      "citations": ["https://www.bea.gov/data/gdp/gross-domestic-product"]
+    },
+    {
+      "claim": "Kinshasa is the capital of Pakistan.",
+      "canonical": "Kinshasa is the capital of Pakistan",
+      "verdict": "False",
+      "confidence": 0.99,
+      "correction": "Kinshasa is the capital of the Democratic Republic of the Congo; Pakistan's capital is Islamabad.",
+      "harm_class": "none",
+      "source": { "name": "CIA World Factbook", "url": "https://www.cia.gov/the-world-factbook/countries/pakistan/", "tier": 3 },
+      "citations": ["https://www.cia.gov/the-world-factbook/countries/pakistan/"]
+    },
+    {
+      "claim": "Gold is worth more than silver.",
+      "canonical": "Gold is worth more than silver.",
+      "verdict": "True",
+      "confidence": 0.98,
+      "correction": "Correct — gold has traded above silver per ounce for centuries.",
+      "harm_class": "none",
+      "source": { "name": "LBMA", "url": "https://www.lbma.org.uk/prices-and-data/precious-metal-prices", "tier": 3 },
+      "citations": ["https://www.lbma.org.uk/prices-and-data/precious-metal-prices"]
+    },
+    {
+      "claim": "Crime is up in every major American city this year.",
+      "canonical": "Crime is up in every major American city this year",
+      "verdict": "NeedsContext",
+      "confidence": null,
+      "correction": "Trends vary by city and offense; the U.S. violent crime rate is roughly half its early-1990s peak (FBI UCR).",
+      "harm_class": "none",
+      "source": { "name": "FBI Crime Data Explorer", "url": "https://cde.ucr.cjis.gov/", "tier": 3 },
+      "citations": ["https://cde.ucr.cjis.gov/"]
+    },
+    {
+      "claim": "No woman has run a mile faster than four minutes.",
+      "canonical": "A woman has run a mile faster than four minutes.",
+      "verdict": "True",
+      "confidence": 0.99,
+      "correction": "Correct as spoken — no woman has yet broken the four-minute mile.",
+      "harm_class": "none",
+      "source": { "name": "World Athletics", "url": "https://worldathletics.org/records/by-category/world-records", "tier": 3 },
+      "citations": ["https://worldathletics.org/records/by-category/world-records"]
+    },
+    {
+      "claim": "AI data centers have already been built in 40 states in America.",
+      "canonical": "AI data centers have been built in 40 states in America",
+      "verdict": "Unverifiable",
+      "confidence": 0.8,
+      "correction": "No authority publishes a canonical per-state count of AI data centers.",
+      "harm_class": "none",
+      "source": null,
+      "citations": []
+    }
+  ]
+}
