@@ -20,9 +20,8 @@ you leave the house. This doc is the editorial rules once you're rolling.
    found yet: if the card misquotes the moment in ANY way, skip it.
 
 4. **Off record = mute.** When someone asks to go off record, or the conversation
-   shouldn't be checked: mute the feed (the /op mute button, once P7-C lands). Until
-   then: stop talking, HOLD everything, let the queue die quietly. Silence in, silence
-   out.
+   shouldn't be checked: tap MUTE on /op (latched — shipped in round 7) or the M key at
+   home base. The latch state shows on both surfaces. Silence in, silence out.
 
 ## Why (FS-1, 2026-08-10)
 

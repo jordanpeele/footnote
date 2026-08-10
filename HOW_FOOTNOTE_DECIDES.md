@@ -29,7 +29,7 @@ Some claims are checkable but carry elevated harm if the machine gets them wrong
 - **`person_private`** — a claim about a named private individual (not a public figure acting in public capacity). These cards **never auto-air**, at any confidence, under any future calibration regime. A human airs them or nobody does. This is a permanent carve-out (Decision D4), not a threshold to be tuned.
 - Accusations of crime, claims about health status, and claims about minors default to `person_private` treatment.
 
-[PLANNED — P1-B: harm-class detection in extraction and structural auto-air exclusion. Today the code has no harm-class field; the only safeguards for such claims are the auto-air verdict/confidence gate and the human operator.]
+[SHIPPED — the extractor classifies every claim (none | person_public | person_private | quote_attribution); person_private and polarity-conflicted checks are hardcoded NEVER-auto-air (D4 — no setting can override), person_public and quote_attribution are manual-only, and /op surfaces the class as a MANUAL tag. Field record: 36/36 person-claims correctly held to manual in the 2026-08-08 session.]
 
 ## 2. Source hierarchy
 
