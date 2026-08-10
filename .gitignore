@@ -6,3 +6,5 @@ node_modules/
 *.log
 .claude/
 .playwright-mcp/
+tools/street/test-audio-5min.mp3
+tools/street/scratch-audio/
