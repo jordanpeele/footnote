@@ -164,3 +164,13 @@ network conditions). Neither sanctioned lever moves it:
   option list): grow-and-cache is backwards; a smaller prompt (fewer instruction tokens
   → less prefill), streaming-with-early-parse (claim JSON is one line — first `}` ends
   it), or a faster/cheaper model tier if one appears below Haiku.
+
+## L2 · endpointing A/B — RESOLVED: keep the default (2026-08-10 live session)
+
+`?ep=200` vs stock, same speaker/mic/room: finals p50 **704ms vs 564ms** (+140ms
+SLOWER) with split/merge rate down ~33% (0.25 vs 0.375 merges/final). Deepgram's
+default is already the fast end of the curve; higher endpointing buys intactness
+at a latency price — and the P5-B merge already recovers splits for free, so the
+default wins on BOTH axes. Decision: no default change, ever, absent new evidence;
+the `?ep=` hatch stays for experiments. Also this session: F2 dedupe FIELD-FIRED
+(duplicate suppressed live), 3/3 verdicts correct, air→render p50 306ms.
