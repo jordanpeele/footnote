@@ -1,0 +1,7 @@
+/* Self-hosted variable fonts (latin subset) — the broadcast surface makes NO third-party
+   calls (L4 first-paint + C2 privacy rule; was a Google Fonts hotlink).
+   Archivo © Omnibus-Type; JetBrains Mono © JetBrains — SIL Open Font License 1.1 (OFL.txt). */
+@font-face{font-family:'Archivo';font-style:normal;font-weight:100 900;font-display:swap;
+  src:url('/assets/fonts/Archivo.woff2') format('woff2')}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:100 800;font-display:swap;
+  src:url('/assets/fonts/JetBrainsMono.woff2') format('woff2')}

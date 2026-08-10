@@ -561,6 +561,11 @@
     const veto = !!c._auto && c.state === "pending";
     if (c._auto) { clearTimeout(c._auto); c._auto = null; }
     c.state = action; renderQueue(); setOps(); SESSION.mark(c.id, action, { veto });
+    /* N4 residual closure (P5-E): a dismissal must reach the server's queue snapshot NOW,
+       not after the 400ms debounce — that window was the last way a second-phone AIR could
+       land on a just-dismissed card. Best-effort immediate push; the debounced path still
+       runs behind it as the retry. */
+    if (opBridge && opBridge.pushNow) opBridge.pushNow();
   }
 
   let onAirRAF = 0, onAirHideT = 0;
@@ -918,8 +923,16 @@
   let dgWs = null, dgProc = null, dgCtx = null, dgSource = null, dgFinalWords = [], dgGotResult = false;
   let prevFinalText = "", prevFinalAt = 0;   // F3 split-final merge: single prev-final buffer (text + arrival ms), reset on stream start/end
   let dgEverWorked = false, dgRetryN = 0, dgRetryT = 0;   // mid-session drop → auto-reconnect (unattended/auto-air safe)
+  /* L2 (sprint-02): STT finalization wait measured ≤~0.55s p50 — endpointing is the lever,
+     but faster finals ⇄ more split-finals is a live-audio tradeoff that can't be benched
+     without a speaker (ledger rule: no unmeasured defaults). ?ep=<ms> exposes Deepgram's
+     endpointing knob for the next live session: lower = faster finals + more splits (the
+     P5-B merge absorbs those), higher = intact finals + more wait. Default: absent (vendor
+     default). Measure final-latency vs split-rate on the dashboard, pick the knee, THEN default. */
+  const DG_EP = (() => { const v = parseInt(new URLSearchParams(location.search).get("ep"), 10); return Number.isFinite(v) && v >= 10 && v <= 2000 ? v : null; })();
   const dgUrl = (sr) => `wss://api.deepgram.com/v1/listen?model=nova-3&language=en&encoding=linear16&sample_rate=${sr}`
-    + `&channels=1&punctuate=true&smart_format=true&interim_results=true&` + DG_KEYTERMS.map((t) => "keyterm=" + encodeURIComponent(t)).join("&");
+    + `&channels=1&punctuate=true&smart_format=true&interim_results=true&`
+    + (DG_EP ? `endpointing=${DG_EP}&` : "") + DG_KEYTERMS.map((t) => "keyterm=" + encodeURIComponent(t)).join("&");
   function floatTo16(f32) {
     const out = new Int16Array(f32.length);
     for (let i = 0; i < f32.length; i++) { const s = Math.max(-1, Math.min(1, f32[i])); out[i] = s < 0 ? s * 0x8000 : s * 0x7fff; }
@@ -1411,6 +1424,10 @@
         card: card ? { verdict: card.verdict, claim: card.claim, correction: card.correction, source: card.source || null,
           kind: card.kind || undefined,                                       // passthrough (e.g. "correction" — overlay/receipts render it)
           test: card.test === true || undefined,                              // field-test watermark (local TESTAIR only — overlay renders it)
+          // C2 sourcing display: tier drives the PRIMARY-SOURCE treatment on the card;
+          // citations (already editorial-ranked) let /receipts show every qualifying source
+          tier: (card.source && typeof card.source.tier === "number") ? card.source.tier : undefined,
+          citations: Array.isArray(card.citations) ? card.citations.slice(0, 5) : undefined,
           refId: card.refId || undefined, refClaim: card.refClaim || undefined } : null };   // correction → original join (refClaim = legacy fallback)
       try {
         const pubT0 = performance.now();
@@ -1494,6 +1511,7 @@
     }
     opBridge = {
       scheduleQueuePush() { if (tabReadOnly || !streaming) return; clearTimeout(opQueueT); opQueueT = setTimeout(opPushQueue, 400); },
+      pushNow() { if (tabReadOnly || !streaming) return; clearTimeout(opQueueT); opPushQueue(); },   // synchronous-intent push (dismissals — N4)
       streamStarted() {
         opSessionT0 = Date.now(); opLastCmdId = "";
         clearTimeout(opQueueT); opPushQueue();               // baseline (empty) snapshot so /op sees the session
