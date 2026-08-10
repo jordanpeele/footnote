@@ -13,6 +13,7 @@ import { spendGate } from "../src/core/spendgate.js";
 import { rateLimit } from "./_ratelimit.js";
 import { getAdapter } from "../src/core/registry.js";
 import { groundedClaim } from "../src/core/grounding.js";
+import { hasNegation } from "../src/core/utterance.js";
 import { UpstreamError } from "../src/core/errors.js";
 
 export default async function handler(req, res) {
@@ -32,6 +33,18 @@ export default async function handler(req, res) {
     if (!g.ok) {
       console.warn("extract ungrounded", g.reason, "claim:", String(claim).slice(0, 80), "utterance:", text.slice(0, 80));
       res.status(200).json({ claim: null, rejected: "ungrounded" });
+      return;
+    }
+    /* R46 negation tripwire (street FS-8: an aired wrong verdict): the extractor said the
+       speaker DENIED the claim, but the utterance carries no negation token — the flip is
+       suspect, and a wrongly-flipped verdict airs the opposite of the truth. Rewrite to a
+       polarity value applyPolarity treats as CONFLICT: verdict stays un-flipped, the card
+       carries polarity_conflict (never auto-airs per D4, ⚠ on /op, spoken framing per D17).
+       Second member of the deterministic-consistency family (R48; grounding gate was first).
+       Replay: catches exactly the FS-8 card, zero false positives across four sessions. */
+    if (polarity === "denies" && !hasNegation(text)) {
+      console.warn("polarity tripwire (R46): denies without negation token", "utterance:", text.slice(0, 80));
+      res.status(200).json({ claim, polarity: "suspect_denies", harm_class, tripwire: "negation" });
       return;
     }
     res.status(200).json({ claim, polarity, harm_class });

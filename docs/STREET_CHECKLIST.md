@@ -8,6 +8,8 @@ fallback if any bonded piece is down.
 
 ## T-30 — at home, before leaving
 
+- [ ] Build includes the R46 negation tripwire (public-street gate): `curl -s -X POST localhost:3000/api/extract -H 'content-type: application/json' -d '{"text":"Women biologically have x y sex chromosomes."}'` must return `"tripwire":"negation"`.
+
 - [ ] `bash tools/street/arm.sh` — all reachability lines green AND
       `srtla_rec: UP` printed. If it prints `not built`, run
       `bash tools/street/build-srtla.sh` first.

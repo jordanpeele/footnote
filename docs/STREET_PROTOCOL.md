@@ -13,10 +13,11 @@ you leave the house. This doc is the editorial rules once you're rolling.
    an Unverifiable card tells viewers nothing and spends the chyron's credibility. If
    you air one anyway, know why you did.
 
-3. **Card text ≠ what was said → SKIP (D17, interim).** If the card's claim text is not
-   the sentence the speaker actually asserted — polarity flipped, wrong entity,
-   anything — skip it. A correct verdict does not save a card that misquotes the
-   moment. This rule retires when P7-A ships spoken-framing display.
+3. **Card text ≠ what was said → SKIP (backstop).** Both known machine failure classes
+   are now closed in code — D17 renders the speaker's framing (FS-1), and the R46
+   negation tripwire routes suspect polarity flips to a ⚠ conflict card that never
+   auto-airs (FS-8). This rule stays as the human backstop for the classes nobody has
+   found yet: if the card misquotes the moment in ANY way, skip it.
 
 4. **Off record = mute.** When someone asks to go off record, or the conversation
    shouldn't be checked: mute the feed (the /op mute button, once P7-C lands). Until

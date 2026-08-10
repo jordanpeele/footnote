@@ -175,10 +175,8 @@ default wins on BOTH axes. Decision: no default change, ever, absent new evidenc
 the `?ep=` hatch stays for experiments. Also this session: F2 dedupe FIELD-FIRED
 (duplicate suppressed live), 3/3 verdicts correct, air→render p50 306ms.
 
-Cumulative field record (R38, AMENDED post-ratification — see FS-8): 4 sessions ·
-102 checks · **1 wrong-verdict card aired** (street 08-10: "Women have XY sex
-chromosomes" ✓ TRUE — extractor emitted polarity=denies on an ASSERTION with no
-negation in the transcript; the flip inverted a correct False into an aired True;
-found by the P7-E adjudication prep, confirmed against the session record) ·
-1 display-incoherent pairing (FS-1, closed by D17 — which does NOT close the FS-8
-class; that closure is polarity-classification quality, orchestrator ruling pending).
+Cumulative field record (R47, superseding R38): **4 sessions · 102 checks ·
+1 wrong-verdict card aired (FS-8, closed by the R46 negation tripwire — shipped,
+live-probed, regression-replayed in test/field-replay.test.js) · 1 display-incoherent
+pairing (FS-1, closed by D17).** This sentence — failures and closures — is the public
+record. Honesty is the product.

@@ -351,9 +351,18 @@
    * @param {string} claim the canonical (positive-form) claim
    * @returns {string} the sentence to display
    */
+  /**
+   * R46 — does the text contain an explicit negation token? Deterministic consistency
+   * check for the polarity tripwire (extractor says "denies" but the speaker's words
+   * carry no negation → the flip is suspect) and the D17 split-negation fallback.
+   * @param {string} text
+   * @returns {boolean}
+   */
+  function hasNegation(text) {
+    return /\b(no|not|never|isn't|wasn't|aren't|doesn't|don't|didn't|hasn't|haven't|won't|can't|cannot)\b|n't\b/i.test(String(text));
+  }
   function pickSpokenSentence(spoken, claim, preferNegation) {
     const words = (s) => new Set(String(s).toLowerCase().split(/[^a-z0-9%]+/).filter((w) => w.length >= 3));
-    const NEG = /\b(no|not|never|isn't|wasn't|aren't|doesn't|don't|didn't|hasn't|haven't|won't|can't|cannot)\b|n't\b/i;
     const cw = words(claim);
     let best = null, bestScore = 0;
     for (const sent of String(spoken).split(/(?<=[.!?])\s+/)) {
@@ -362,7 +371,7 @@
     }
     // A denial whose picked sentence lost its negation (split across sentences — field case:
     // "it says X. No. That's not") falls back to the whole utterance, which carries it.
-    if (preferNegation && best && !NEG.test(best) && NEG.test(String(spoken))) return String(spoken).trim();
+    if (preferNegation && best && !hasNegation(best) && hasNegation(spoken)) return String(spoken).trim();
     return best || String(spoken).trim();
   }
   /* ===== END MIRROR BLOCK ===== */
@@ -442,7 +451,7 @@
        claim IS a faithful restatement; for denials (and, later, polarity conflicts) the
        spoken sentence carries the negation the canonical form strips. pickSpokenSentence
        trims multi-sentence utterances to the claim-bearing sentence by content-word overlap. */
-    const displayClaim = polarity === "denies" ? pickSpokenSentence(t, claim, true) : claim;
+    const displayClaim = (polarity === "denies" || polarity === "suspect_denies") ? pickSpokenSentence(t, claim, true) : claim;   // R46: suspect flips show speaker framing from the start
     const card = { id: ++fcId, _gen: g, _cid: cid, spoken: t, claim, displayClaim, polarity, harm_class: harmClass, state: "checking", spokenAt, extractStartedAt: spokenAt, extractMs: +extractMs.toFixed(0) };   // real claim → checking card now
     recentClaims.set(normClaim, Date.now());   // F2: register at creation (force-created cards too — they still dedupe later voice repeats)
     if (recentClaims.size > 200) { const nowMs = Date.now(); recentClaims.forEach((at, k) => { if (!withinDupWindow(at, nowMs)) recentClaims.delete(k); }); }
