@@ -18,6 +18,10 @@ net.createServer((s) => {
 }).listen(3000, "100.111.115.120", () => console.log("relay up"));
 RELAY
 nohup node /tmp/fn-tailnet-relay.js > /tmp/fn-relay.log 2>&1 &
+# FS-2: keep the DISPLAY awake — a locked screen throttles the OBS browser source's
+# render loop and aired cards miss their on-air window on the broadcast.
+nohup caffeinate -d -u > /dev/null 2>&1 &
+echo "caffeinate: display sleep disabled for street ops (kill at close-out)"
 sleep 1
 echo "— reachability:"
 curl -s -o /dev/null -w "  loopback: %{http_code}\n" http://127.0.0.1:3000/control
