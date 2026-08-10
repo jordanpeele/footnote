@@ -2,6 +2,12 @@
 
 Thanks for being here. Footnote is small on purpose — plain ESM JavaScript, no build step, a handful of serverless functions, and a set of interfaces where the interesting contributions go. This doc covers running it, building adapters, contributing overlay skins, and the (deliberately higher) bar for editorial-policy changes.
 
+**Where to start:**
+
+- `npm run demo` — replays a themed session through the real surfaces, no API keys. Fastest way to understand what the product is before reading any of it.
+- The [`good first issue` list](https://github.com/jordanpeele/footnote/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) — each one has current file pointers and a definition of done. Claim one by commenting.
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — how the pipeline fits together and why the editorial layer sits above the adapters.
+
 ## Run it locally
 
 ```sh
