@@ -9,3 +9,5 @@ node_modules/
 tools/street/test-audio-5min.mp3
 tools/street/scratch-audio/
 docs/STATUS_*
+tools/adjudicate/queue.json
+tools/adjudicate/graduations.json

@@ -69,7 +69,12 @@ for (const f of (await fsp.readdir(path.join(ROOT, "api"))).sort()) {
 
 // ---- static files from repo root, mirroring vercel.json ------------------------------
 const REWRITES = { "/": "/index.html", "/control": "/index.html", "/overlay": "/overlay.html",
-  "/receipts": "/receipts.html", "/op": "/operator.html" };
+  "/receipts": "/receipts.html", "/op": "/operator.html",
+  // Adjudication cockpit (self-host only): a fully client-side page under tools/. It
+  // fetches its own /tools/adjudicate/{lib.js,adjudicate.js,adjudicate.css,queue.json}
+  // by absolute path (served straight from the repo tree) and downloads graduations.json
+  // — no dedicated endpoint, no state channel. Mirrors how /control maps to a static page.
+  "/adjudicate": "/tools/adjudicate/adjudicate.html" };
 // vercel.json marks the app shell no-cache so OBS/browsers pick up deploys immediately.
 const NO_CACHE = new Set(["/app.js", "/app.css", "/index.html", "/overlay.html", "/overlay.js", "/overlay.css",
   "/receipts.html", "/receipts.js", "/receipts.css", "/operator.html", "/operator.js", "/operator.css"]);

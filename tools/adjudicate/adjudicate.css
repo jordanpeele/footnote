@@ -1,0 +1,57 @@
+:root {
+  --bg: #12141a; --panel: #1b1e27; --panel2: #232733; --ink: #e7e9ee;
+  --dim: #8b93a7; --line: #333a49; --accent: #6ea8fe; --good: #3ddc97;
+  --warn: #ffb454; --bad: #ff6b6b; --sel: #2b4a7a;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background: var(--bg); color: var(--ink);
+  display: flex; flex-direction: column; min-height: 100vh;
+}
+header, footer { padding: 10px 18px; background: var(--panel); border-bottom: 1px solid var(--line); }
+footer { border-bottom: none; border-top: 1px solid var(--line); font-size: 12px; }
+header h1 { font-size: 15px; margin: 0 0 6px; letter-spacing: .04em; text-transform: uppercase; color: var(--dim); }
+#progress-wrap { display: flex; align-items: center; gap: 10px; }
+#progress-bar { flex: 1; height: 8px; background: var(--panel2); border-radius: 4px; overflow: hidden; }
+#progress-fill { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+#progress-label { font-size: 12px; color: var(--dim); white-space: nowrap; }
+
+main { flex: 1; display: flex; justify-content: center; padding: 22px 18px; }
+#card, #done { width: 100%; max-width: 760px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; padding: 20px; }
+
+.meta { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.badge { background: var(--sel); color: var(--ink); padding: 2px 9px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+.dim { color: var(--dim); font-size: 12px; }
+
+.claim-label, .t-label { font-size: 11px; letter-spacing: .06em; color: var(--dim); margin: 0 0 5px; text-transform: uppercase; }
+.t-label { margin-top: 16px; }
+#extraction { width: 100%; background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 7px; padding: 10px; font: 16px/1.4 inherit; resize: vertical; }
+blockquote { margin: 0; padding: 10px 12px; background: var(--panel2); border-left: 3px solid var(--line);
+  border-radius: 0 6px 6px 0; color: #cfd4e0; font-size: 14px; }
+
+.controls { display: flex; gap: 22px; margin: 18px 0 4px; flex-wrap: wrap; }
+.control-group { margin-top: 12px; flex: 1; min-width: 240px; }
+.control-group > label { display: block; font-size: 11px; letter-spacing: .06em; color: var(--dim);
+  text-transform: uppercase; margin-bottom: 6px; }
+.btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.pill { background: var(--panel2); color: var(--ink); border: 1px solid var(--line); border-radius: 7px;
+  padding: 7px 11px; font-size: 13px; cursor: pointer; }
+.pill kbd { color: var(--dim); font-size: 11px; }
+.pill.sel { background: var(--sel); border-color: var(--accent); }
+.pill.suggested { border-color: var(--warn); }
+
+input[type=text] { width: 100%; background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 7px; padding: 9px; font: 14px inherit; }
+
+.actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+button { background: var(--panel2); color: var(--ink); border: 1px solid var(--line); border-radius: 7px;
+  padding: 9px 15px; font-size: 14px; cursor: pointer; }
+button.primary { background: var(--accent); color: #0b1220; border-color: var(--accent); font-weight: 600; }
+button:disabled { opacity: .4; cursor: not-allowed; }
+kbd { background: rgba(255,255,255,.08); border: 1px solid var(--line); border-radius: 4px;
+  padding: 0 5px; font-size: 11px; font-family: ui-monospace, Menlo, monospace; }
+b { color: var(--ink); }
+#status { margin-top: 4px; }

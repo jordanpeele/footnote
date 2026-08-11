@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Footnote — Adjudication Cockpit</title>
+<link rel="stylesheet" href="/tools/adjudicate/adjudicate.css" />
+</head>
+<body>
+<header>
+  <h1>Adjudication Cockpit</h1>
+  <div id="progress-wrap">
+    <div id="progress-bar"><span id="progress-fill"></span></div>
+    <span id="progress-label">loading…</span>
+  </div>
+</header>
+
+<main id="app">
+  <section id="card" hidden>
+    <div class="meta">
+      <span id="repeat-badge" class="badge"></span>
+      <span id="source-drafts" class="dim"></span>
+      <span id="pipeline-hint" class="dim"></span>
+    </div>
+
+    <h2 class="claim-label">CLAIM (editable extraction)</h2>
+    <textarea id="extraction" rows="2" spellcheck="false"></textarea>
+
+    <h3 class="t-label">TRANSCRIPT SAMPLE</h3>
+    <blockquote id="transcript"></blockquote>
+
+    <div class="controls">
+      <div class="control-group">
+        <label>VERDICT</label>
+        <div id="verdict-buttons" class="btn-row"></div>
+      </div>
+      <div class="control-group">
+        <label>CATEGORY</label>
+        <div id="category-buttons" class="btn-row"></div>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <label>SOURCE OF TRUTH</label>
+      <input id="source" type="text" placeholder="e.g. whitehouse.gov, BEA, CIA World Factbook" />
+    </div>
+    <div class="control-group">
+      <label>ADJUDICATION NOTE (provenance is appended automatically)</label>
+      <input id="note" type="text" placeholder="one-line ruling rationale" />
+    </div>
+
+    <div class="actions">
+      <button id="btn-decide" class="primary">Accept &amp; next &nbsp;<kbd>Enter</kbd></button>
+      <button id="btn-batch" hidden>Accept all N like this</button>
+      <button id="btn-skip">Skip <kbd>s</kbd></button>
+      <button id="btn-back">Back <kbd>b</kbd></button>
+    </div>
+  </section>
+
+  <section id="done" hidden>
+    <h2>All cards decided</h2>
+    <p id="done-summary"></p>
+    <button id="btn-download" class="primary">Download graduations.json</button>
+  </section>
+</main>
+
+<footer>
+  <div id="keyhelp" class="dim">
+    keys: <b>t</b>=True <b>f</b>=False <b>m</b>=Misleading <b>n</b>=NeedsContext <b>u</b>=Unverifiable
+    · <b>1–9</b>=category · <b>Enter</b>=accept &amp; next · <b>s</b>=skip · <b>b</b>=back · <b>d</b>=download
+  </div>
+  <div id="status" class="dim"></div>
+</footer>
+
+<script type="module" src="/tools/adjudicate/adjudicate.js"></script>
+</body>
+</html>
