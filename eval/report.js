@@ -160,6 +160,29 @@ if (polRows.length) {
   console.log("");
 }
 
+// ── Task 0b · aired-verdict slice — over --aired runs ────────────────────────────────────
+// The polarity slice above scores the extractor's polarity FIELD in isolation. This slice scores
+// the end-to-end AIRED verdict: the verifier's verdict on the canonical claim mapped through the
+// actual polarity (applyPolarity), compared to the DERIVED ground-truth aired verdict. It is the
+// only place the eval sees the FS-8 combination — a CORRECT canonical verdict that nonetheless
+// AIRS WRONG because polarity was misclassified. `aired_wrong_from_polarity` counts exactly that;
+// it is the number that would have caught FS-8 on air.
+const airedRows = rows.filter((r) => r.aired_pass != null && r.aired_verdict != null);
+if (airedRows.length) {
+  const airedCorrect = airedRows.filter((r) => r.aired_pass);
+  const airedWrongFromPolarity = airedRows.filter((r) => r.aired_wrong_from_polarity);
+  const conflicts = airedRows.filter((r) => r.polarity_conflict);
+  // Aired wrong for OTHER reasons (verifier got the canonical verdict wrong too) — not the FS-8 class.
+  const airedWrongOther = airedRows.filter((r) => !r.aired_pass && !r.aired_wrong_from_polarity);
+  console.log("─ aired verdict (Task 0b) ─".padEnd(50, "─"));
+  console.log(`  scored              : ${airedRows.length} (goldens with expected_polarity + ground_truth)`);
+  console.log(`  aired accuracy      : ${pct(airedCorrect.length, airedRows.length)} (${airedCorrect.length}/${airedRows.length})`);
+  console.log(`  AIRED WRONG (polarity): ${airedWrongFromPolarity.length}  ← canonical verdict CORRECT but aired result flipped — the FS-8 number${airedWrongFromPolarity.length ? ": " + airedWrongFromPolarity.map((r) => r.id).join(", ") : ""}`);
+  console.log(`  aired wrong (verifier): ${airedWrongOther.length}  (canonical verdict also wrong — not a polarity fault)`);
+  console.log(`  polarity conflicts  : ${conflicts.length}  (applyPolarity tripwire fired → held, never auto-aired)`);
+  console.log("");
+}
+
 console.log("═".repeat(50));
 console.log(`auto-air eligible : ${eligible.length ? eligible.join(", ") : "(none yet)"}`);
 console.log(`held for operator :`);

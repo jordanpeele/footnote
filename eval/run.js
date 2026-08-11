@@ -2,12 +2,19 @@
 // Footnote eval harness — dependency-free Node ESM (see eval/README.md).
 //
 //   node eval/run.js [--base https://footnote-live.vercel.app] [--category X]
-//                    [--limit N | --all] [--extract-only] [--judge] [--delay MS]
+//                    [--limit N | --all] [--extract-only] [--judge] [--aired] [--delay MS]
 //                    [--out eval/results/<stamp>.jsonl]
 //
 // Stage 1: POST /api/extract with the transcript snippet, score against expected_extraction.
 // Stage 2 (unless --extract-only): POST /api/verify with the EXPECTED extraction — this
 // isolates verifier performance from extractor performance on purpose.
+//
+// --aired (Task 0b, opt-in, default off): additionally scores the AIRED verdict — the stage-2
+// verify verdict mapped through the speaker's polarity via applyPolarity — against the derived
+// ground-truth aired verdict. This is the ONLY slice that measures the FS-8 combination (correct
+// canonical verdict + wrong polarity → wrong aired result). See deriveAired() for the golden
+// ground_truth convention (canonical-claim verdict, NOT aired) and how the expected aired verdict
+// is derived. Requires goldens carrying expected_polarity + ground_truth_verdict; others skip.
 //
 // --judge (harness v2, Decision D11): meaning-level LLM judge (eval/judge.js) runs on
 // every case where token scoring says pass-fuzzy OR fail with both sides non-null.
@@ -25,6 +32,64 @@ import { dirname, join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { judge } from "./judge.js";
 import { hasNegation } from "../src/core/utterance.js";   // Task 0: shipped tripwire predicate, reused for scoring
+import { applyPolarity } from "../src/core/polarity.js";  // Task 0b: aired-verdict derivation (the FS-8 combination)
+
+// ── Task 0b · aired-verdict derivation ──────────────────────────────────────────────────
+// The eval historically scored the verifier's verdict on the CANONICAL claim only (stage 2
+// POSTs the expected_extraction and compares got_verdict to ground_truth_verdict). It never
+// measured the AIRED verdict — verify(claim) mapped through the speaker's polarity — which is
+// exactly the combination that aired the one wrong card (FS-8: correct verifier verdict, wrong
+// polarity classification, flipped result).
+//
+// GOLDEN CONVENTION (determined by reading polarity_traps.jsonl adjudication_notes):
+//   `ground_truth_verdict` is the verdict on the CANONICAL (assertive) claim, NOT the aired
+//   verdict for the speaker. Evidence, verbatim from the goldens:
+//     • pol-006 "Nixon didn't finish his second term" — expected_extraction "Nixon finished his
+//       second term", ground_truth_verdict False, note: "Verdict on canonical claim: False;
+//       final on-air verdict: True."  → False is CANONICAL, aired = applyPolarity(False, denies) = True.
+//     • pol-002 note: "Verdict on canonical claim: False; applyPolarity(False, denies) → final
+//       on-air verdict: True."
+//     • pol-003 note: "Verdict on canonical claim: True; applyPolarity(True, denies) → final
+//       on-air verdict: False."
+//   So to get the EXPECTED aired verdict we must run applyPolarity(ground_truth_verdict,
+//   expected_polarity). Comparing got_aired against the raw ground_truth would be wrong for every
+//   "denies" row.
+//
+// KNOWN GOLDEN DATA QUIRK (out of our lane — goldens owned elsewhere; flagged, not touched):
+//   pol-008/009/010 carry an expected_polarity FIELD of "denies" while their adjudication_note
+//   prose says "asserts (double negative / control case)" and states an on-air verdict that only
+//   matches "asserts". We read the FIELD (the machine contract), so these three will show as an
+//   expected-aired mismatch vs their prose. That surfaces the field/prose disagreement rather than
+//   hiding it; fixing the field is the golden lane's call.
+
+/**
+ * Pure aired-verdict derivation — no I/O, no server. Given a row's ground-truth canonical
+ * verdict + expected polarity (the golden's convention) and the model's actual verify verdict on
+ * the canonical claim + actual polarity, compute the aired verdict both SHOULD and DID produce.
+ *
+ * @param {{ground_truth_verdict:string, expected_polarity:string, got_verdict:string, got_polarity:(string|null|undefined)}} row
+ * @returns {{
+ *   expected_aired_verdict: string,   // applyPolarity(ground_truth, expected_polarity) — what SHOULD air
+ *   aired_verdict: string,            // applyPolarity(got_verdict, got_polarity) — what WOULD air
+ *   aired_pass: boolean,              // aired_verdict === expected_aired_verdict
+ *   polarity_conflict: boolean,       // conflict from applyPolarity on the got side (tripwire/hold)
+ *   aired_wrong_from_polarity: boolean // canonical verdict CORRECT but aired WRONG → the FS-8 signature
+ * }}
+ */
+export function deriveAired({ ground_truth_verdict, expected_polarity, got_verdict, got_polarity }) {
+  // "suspect_denies" is the R46 tripwire firing at extract time; for derivation it behaves as denies.
+  const gp = got_polarity === "suspect_denies" ? "denies" : got_polarity;
+  const expected_aired_verdict = applyPolarity(ground_truth_verdict, expected_polarity).verdict;
+  const airedGot = applyPolarity(got_verdict, gp);
+  const aired_verdict = airedGot.verdict;
+  const aired_pass = aired_verdict === expected_aired_verdict;
+  // The FS-8 number: verifier got the CANONICAL verdict right, but the aired result is wrong —
+  // meaning the error came entirely from polarity, not from the verifier. This is the count the
+  // canonical-only eval could never see.
+  const canonical_correct = got_verdict === ground_truth_verdict;
+  const aired_wrong_from_polarity = canonical_correct && !aired_pass;
+  return { expected_aired_verdict, aired_verdict, aired_pass, polarity_conflict: airedGot.conflict, aired_wrong_from_polarity };
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const GOLDEN_DIR = join(__dirname, "golden");
@@ -37,12 +102,12 @@ const MAX_RETRIES = 3;
 const FUZZY_F1_THRESHOLD = 0.6; // token-overlap F1 needed for a fuzzy extraction pass
 
 function usage(code = 0) {
-  console.log("usage: node eval/run.js [--base URL] [--category X] [--limit N | --all] [--extract-only] [--judge] [--delay MS] [--out FILE]");
+  console.log("usage: node eval/run.js [--base URL] [--category X] [--limit N | --all] [--extract-only] [--judge] [--aired] [--delay MS] [--out FILE]");
   process.exit(code);
 }
 
 function parseArgs(argv) {
-  const args = { base: "https://footnote-live.vercel.app", category: null, limit: 10, extractOnly: false, judge: false, out: null, delay: null };
+  const args = { base: "https://footnote-live.vercel.app", category: null, limit: 10, extractOnly: false, judge: false, aired: false, out: null, delay: null };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--base") args.base = argv[++i];
@@ -51,6 +116,7 @@ function parseArgs(argv) {
     else if (a === "--all") args.limit = Infinity;
     else if (a === "--extract-only") args.extractOnly = true;
     else if (a === "--judge") args.judge = true;
+    else if (a === "--aired") args.aired = true;   // Task 0b: score the AIRED verdict (verify∘polarity)
     else if (a === "--delay") args.delay = Number(argv[++i]);
     else if (a === "--out") args.out = argv[++i];
     else if (a === "--help" || a === "-h") usage();
@@ -158,6 +224,7 @@ async function main() {
 
   let extractPass = 0, verdictPass = 0, verdictScored = 0, judgeInversions = 0, judgeDisagreements = 0;
   let polarityPass = 0, polarityScored = 0;   // Task 0
+  let airedPass = 0, airedScored = 0, airedWrongFromPolarity = 0;   // Task 0b
   for (const [i, c] of cases.entries()) {
     const result = { id: c.id, category: c.category, transcript_snippet: c.transcript_snippet, expected_extraction: c.expected_extraction ?? null, ground_truth_verdict: c.ground_truth_verdict ?? null };
 
@@ -236,6 +303,25 @@ async function main() {
           verdictScored++;
           if (result.verdict_pass) verdictPass++;
         }
+        // Task 0b — AIRED verdict (opt-in --aired). Only when the golden declares BOTH
+        // expected_polarity and ground_truth_verdict AND the model returned a verdict+polarity.
+        // Backward compatible: skipped entirely without --aired, so old result files are unchanged.
+        if (args.aired && c.expected_polarity != null && c.ground_truth_verdict && result.got_verdict != null && result.got_polarity != null) {
+          const d = deriveAired({
+            ground_truth_verdict: c.ground_truth_verdict,
+            expected_polarity: c.expected_polarity,
+            got_verdict: result.got_verdict,
+            got_polarity: result.got_polarity,
+          });
+          result.expected_aired_verdict = d.expected_aired_verdict;
+          result.aired_verdict = d.aired_verdict;
+          result.aired_pass = d.aired_pass;
+          result.polarity_conflict = d.polarity_conflict;
+          result.aired_wrong_from_polarity = d.aired_wrong_from_polarity;
+          airedScored++;
+          if (d.aired_pass) airedPass++;
+          if (d.aired_wrong_from_polarity) airedWrongFromPolarity++;
+        }
       } else {
         result.got_verdict = null;
         result.verdict_pass = false;
@@ -247,14 +333,22 @@ async function main() {
     const tag = result.extract_pass ? "ok " : "FAIL";
     const jtag = result.judge_match ? ` | judge: ${result.judge_match}${result.disagreement ? " ⚠ DISAGREEMENT" : ""}` : "";
     const vtag = result.got_verdict != null ? ` | verify: ${result.got_verdict}${result.verdict_pass === false ? " (WRONG, wanted " + c.ground_truth_verdict + ")" : ""}` : "";
-    console.log(`[${i + 1}/${cases.length}] ${c.id} extract:${tag} (${result.extract_match})${jtag}${vtag}`);
+    const atag = result.aired_verdict != null
+      ? ` | aired: ${result.aired_verdict}${result.aired_pass === false ? " (WRONG, wanted " + result.expected_aired_verdict + (result.aired_wrong_from_polarity ? "; FS-8 polarity flip" : "") + ")" : ""}`
+      : "";
+    console.log(`[${i + 1}/${cases.length}] ${c.id} extract:${tag} (${result.extract_match})${jtag}${vtag}${atag}`);
   }
 
   console.log(`\nextraction: ${extractPass}/${cases.length} pass`);
   if (polarityScored) console.log(`polarity:   ${polarityPass}/${polarityScored} correct (on goldens with expected_polarity)`);
   if (args.judge) console.log(`judge:      ${judgeInversions} polarity inversion(s), ${judgeDisagreements} disagreement(s) flagged for adjudication`);
-  if (verdictScored) console.log(`verdicts:   ${verdictPass}/${verdictScored} correct`);
+  if (verdictScored) console.log(`verdicts:   ${verdictPass}/${verdictScored} correct (on canonical claim)`);
+  if (airedScored) console.log(`aired:      ${airedPass}/${airedScored} correct — ${airedWrongFromPolarity} would AIR WRONG from polarity (FS-8 class)`);
   console.log(`\nfull calibration report:  node eval/report.js ${outPath.startsWith("/") ? outPath : basename(outPath)}`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+// Only run the harness when invoked directly (node eval/run.js ...), never on import — this lets
+// the aired-derivation unit tests import deriveAired() without triggering a live eval / network.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+}
