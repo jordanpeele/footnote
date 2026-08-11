@@ -83,6 +83,7 @@ Footnote doesn't need a desk: a phone streams the camera over SRT into OBS at ho
 
 ## Community
 
+- **[ROADMAP.md](ROADMAP.md)** — where this is going, and the honest order the problems fall in. Argue with the sequencing.
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — running locally, building adapters and skins, what review checks.
 - **[Good first issues](https://github.com/jordanpeele/footnote/issues?q=label%3A%22good+first+issue%22)** — nine pre-drafted with exact file pointers, in [`launch/good-first-issues/`](launch/good-first-issues/): overlay skins, a verifier adapter, local-Whisper STT, i18n, eval sets.
 - **[SECURITY.md](SECURITY.md)** — reporting vulnerabilities.
