@@ -1,0 +1,148 @@
+{
+ "_meta": "Standing human adjudications (see eval/ADJUDICATIONS.md for rationale). report.js merges by id onto fresh runs.",
+ "rulings": {
+  "pol-004": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "pol-005": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "pol-006": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "pol-007": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "pol-011": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "pol-002": {
+   "adjudication": "different_claim",
+   "extract_pass_override": false
+  },
+  "geo-026": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "curr-015": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "adv-007": {
+   "adjudication": "polarity_inverted",
+   "extract_pass_override": false
+  },
+  "geo-029": {
+   "adjudication": "polarity_inverted",
+   "extract_pass_override": false
+  },
+  "adv-027": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true,
+   "note": "RESOLVED 2026-08-11 by calibration #4: got_polarity='denies' recorded \u2014 canonical-positive extraction correct under the contract."
+  },
+  "geo-030": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true,
+   "note": "RESOLVED 2026-08-11 by calibration #4: got_polarity='denies' recorded \u2014 canonical-positive extraction correct under the contract."
+  },
+  "geo-031": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true,
+   "note": "RESOLVED 2026-08-11 by calibration #4: got_polarity='denies' recorded \u2014 canonical-positive extraction correct under the contract."
+  },
+  "stat-005": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "curr-006": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "sci-010": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "adv-012": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "geo-012": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "person-017": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "curr-019": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "curr-023": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "stat-025": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "curr-027": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "stat-027": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "stat-028": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "sci-029": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "stat-029": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "curr-030": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "sci-030": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "hist-032": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "adv-033": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "curr-033": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "geo-033": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "hist-033": {
+   "adjudication": "same_claim",
+   "extract_pass_override": true
+  },
+  "geo-032": {
+   "adjudication": "different_claim",
+   "extract_pass_override": false
+  }
+ }
+}

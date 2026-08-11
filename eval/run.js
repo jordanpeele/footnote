@@ -77,8 +77,12 @@ import { applyPolarity } from "../src/core/polarity.js";  // Task 0b: aired-verd
  * }}
  */
 export function deriveAired({ ground_truth_verdict, expected_polarity, got_verdict, got_polarity }) {
-  // "suspect_denies" is the R46 tripwire firing at extract time; for derivation it behaves as denies.
-  const gp = got_polarity === "suspect_denies" ? "denies" : got_polarity;
+  // "suspect_denies" = the R46 tripwire fired at extract time. PRODUCTION does not flip and
+  // air these — applyPolarity treats the unknown value as a CONFLICT (verdict un-flipped,
+  // polarity_conflict → held, never auto-aired). Calibration #4 proved modeling it as a flip
+  // overstates air-risk 12x (12 flagged vs 1 true). Pass it through UN-normalized so the
+  // derivation matches production: conflict=true, aired counted as HELD, not wrong.
+  const gp = got_polarity;
   const expected_aired_verdict = applyPolarity(ground_truth_verdict, expected_polarity).verdict;
   const airedGot = applyPolarity(got_verdict, gp);
   const aired_verdict = airedGot.verdict;
@@ -87,7 +91,8 @@ export function deriveAired({ ground_truth_verdict, expected_polarity, got_verdi
   // meaning the error came entirely from polarity, not from the verifier. This is the count the
   // canonical-only eval could never see.
   const canonical_correct = got_verdict === ground_truth_verdict;
-  const aired_wrong_from_polarity = canonical_correct && !aired_pass;
+  // held rows never reach air — they cannot "air wrong" (they cost coverage, not correctness)
+  const aired_wrong_from_polarity = canonical_correct && !aired_pass && !airedGot.conflict;
   return { expected_aired_verdict, aired_verdict, aired_pass, polarity_conflict: airedGot.conflict, aired_wrong_from_polarity };
 }
 
@@ -127,7 +132,9 @@ function parseArgs(argv) {
 }
 
 function loadGolden(categoryFilter) {
-  const files = readdirSync(GOLDEN_DIR).filter((f) => f.endsWith(".jsonl")).sort();
+  // drafts-*.jsonl are UNADJUDICATED ingest staging (no ground truth) — they burned ~$2 of
+  // spend in calibration #4 by riding along. Runs score goldens only.
+  const files = readdirSync(GOLDEN_DIR).filter((f) => f.endsWith(".jsonl") && !f.startsWith("drafts-")).sort();
   const byCategory = new Map();
   for (const f of files) {
     const lines = readFileSync(join(GOLDEN_DIR, f), "utf8").split("\n").filter((l) => l.trim());

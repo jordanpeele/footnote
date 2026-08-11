@@ -60,3 +60,33 @@ should consult ADJUDICATIONS.md. Filed. It does not change the outcome — nothi
 3. **Auto-air stays off on evidence (4th time)** — and now we can say precisely why: precision floor +
    saturated confidence. Sprint C (concurrence + calibration) is the only lever with a real chance of
    moving it.
+
+---
+
+## ADDENDUM (same day) — first-ever ELIGIBLE categories, and what that does NOT mean
+
+With the standing-rulings registry applied (eval/adjudications.json — the Sections-1+2 human
+adjudications now persist across runs) and the three `investigated_pol_pending` cases RESOLVED
+by this run's own data (got_polarity='denies' on all three — the extractor was right; the
+pending mechanism worked exactly as designed), the D3 gate computes:
+
+**AUTO-AIR ELIGIBLE (first time in four calibrations): `adversarial`, `science_health` —
+both at 96.9% precision at the floor, n=32, both scorers clean, zero uninvestigated inversions.**
+
+What this means: those two categories have MET the mechanical calibration bar (D3) that no
+category had ever met.
+
+What this does NOT mean: auto-air does not turn on. Per the standing posture (D15,
+HOW_FOOTNOTE_DECIDES): eligibility is the calibration gate; ENABLING is a separate, explicit,
+per-category decision for the orchestrator + operator, with its own D-number. Known caveats
+for that decision: (a) the eligibility emerged after human adjudication corrected the scorers —
+legitimate, but worth one skeptical re-read of the 2 remaining wrong verdicts in each category;
+(b) eval-vs-street distribution mismatch (gap F-6) — goldens are trivia/news-shaped, street
+claims are not; (c) `adversarial` as a category being auto-air-eligible deserves extra thought:
+these are precisely the claims bad actors bring; (d) confidence remains uninformative, so the
+0.85 floor is doing little work — the 96.9% is carried by verdict accuracy alone.
+
+Recommendation carried to the orchestrator: treat this as the trigger to run the Sprint-C
+concurrence eval (two-verifier agreement) on these two categories specifically — if concurrence
+holds ≥95% there too, the enabling decision has real legs. Veto-everything remains the shipped
+posture until that decision is made.

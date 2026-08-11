@@ -52,6 +52,22 @@ function latestResults() {
 const path = process.argv[2] || latestResults();
 const rows = readFileSync(path, "utf8").split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
 
+// Standing human rulings persist ACROSS runs (calibration #4 finding: adjudicated:true lived
+// only on the run-#2 file, so fresh runs re-flagged already-ruled inversions). The registry
+// (eval/adjudications.json, mirrors ADJUDICATIONS.md) is merged onto any row that doesn't
+// carry its own in-file adjudication — in-file edits win, the registry is the fallback.
+try {
+  const reg = JSON.parse(readFileSync(join(__dirname, "adjudications.json"), "utf8")).rulings || {};
+  for (const r of rows) {
+    if (r.adjudicated !== true && reg[r.id]) {
+      r.adjudicated = true;
+      r.adjudication = reg[r.id].adjudication;
+      if (reg[r.id].extract_pass_override === true) r.extract_pass = true;
+      r.adjudication_source = "registry";
+    }
+  }
+} catch {}   // no registry file → nothing to merge
+
 const cats = new Map();
 for (const r of rows) {
   if (!cats.has(r.category)) cats.set(r.category, []);

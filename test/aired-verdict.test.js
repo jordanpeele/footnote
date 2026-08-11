@@ -64,11 +64,12 @@ test("pol-006 convention: expected aired verdict is derived, not the raw ground 
 });
 
 // ── suspect_denies (R46 tripwire) normalizes to denies for derivation ──────────────────────
-test("suspect_denies behaves as denies in derivation", () => {
-  const plain = deriveAired({ ground_truth_verdict: "True", expected_polarity: "denies", got_verdict: "True", got_polarity: "denies" });
+test("suspect_denies is HELD (conflict), never counted as airing wrong — matches production R46", () => {
   const suspect = deriveAired({ ground_truth_verdict: "True", expected_polarity: "denies", got_verdict: "True", got_polarity: "suspect_denies" });
-  assert.equal(suspect.aired_verdict, plain.aired_verdict);
-  assert.equal(suspect.aired_pass, plain.aired_pass);
+  // applyPolarity treats the unknown value as CONFLICT: verdict un-flipped, held, never auto-airs.
+  // Calibration #4: modeling this as a flip overstated air-risk 12x (12 flagged vs 1 true).
+  assert.equal(suspect.polarity_conflict, true);
+  assert.equal(suspect.aired_wrong_from_polarity, false);   // held rows cost coverage, not correctness
 });
 
 // ── Verifier-wrong (not polarity) is NOT counted as an FS-8 polarity fault ──────────────────

@@ -222,3 +222,7 @@ Spot-check artifacts: run live 2026-08-07, adapter invoked directly from repo ro
 **Ratified the LLM judge over the v1 string scorer on all 21 token-fail/judge-same_claim rows** (extract_pass -> true): stat-005, curr-006, sci-010, adv-012, geo-012, person-017, curr-019, curr-023, stat-025, curr-027, stat-027, stat-028, sci-029, stat-029, curr-030, sci-030, hist-032, adv-033, curr-033, geo-033, hist-033. All are faithful paraphrases the crude token scorer missed on wording.
 
 - **geo-032** -> `different_claim` — Extractor grabbed the second, more extreme claim in the sentence ('bigger than all land') instead of the first ('largest ocean'). Judge correct; token scorer passed on overlap. Investigated extractor miss.
+
+## Pending resolutions — 2026-08-11 (calibration #4 data)
+
+adv-027, geo-030, geo-031 were `investigated_pol_pending` (correct IFF polarity=denies, unrecorded by the run-#2 harness). Calibration #4 — the first run recording got_polarity — shows `denies` on ALL THREE: the extractor captured each denial correctly in the polarity field. All three -> `same_claim`. The pending mechanism worked exactly as designed: flag on missing evidence, resolve on real evidence.
