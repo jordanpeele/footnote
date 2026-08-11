@@ -27,7 +27,7 @@ const routes = readdirSync(API_DIR)
 const src = (r) => readFileSync(path.join(API_DIR, r + ".js"), "utf8");
 
 // Files this packet owns get hard asserts; the rest may lag mid-round (see note above).
-const OWNED = new Set(["extract", "transcribe"]);
+const OWNED = new Set(["extract", "transcribe", "verify"]);
 
 test("ROUTE_CLASSES matches the api/ directory exactly (both directions)", () => {
   assert.deepEqual(
