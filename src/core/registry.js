@@ -3,15 +3,21 @@
 // Vercel's bundler traces every adapter; modules are side-effect-light so importing the
 // inactive ones costs nothing.
 //   FOOTNOTE_EXTRACTOR = anthropic-haiku (default) | stub
-//   FOOTNOTE_VERIFIER  = perplexity (default)      | perplexity-twostep | stub
+//   FOOTNOTE_VERIFIER  = perplexity (default)      | perplexity-twostep | brave-claude | concurrence | stub
 //   FOOTNOTE_STT       = deepgram (default)        | stub
 //   FOOTNOTE_STATE     = upstash (default)         | memory | stub
 // perplexity-twostep is P4-C, built DARK: opt-in only, never the default, stays that way
 // until it clears the D15 calibration bar (docs/VERIFY_TWOSTEP.md).
+// brave-claude (issue #5) and concurrence (gap F-3) are also built DARK — the second
+// independent verifier + the two-verifier concurrence gate. Opt-in only, never default,
+// pending a spend-authorized calibration eval (docs/VERIFY_CONCURRENCE.md). concurrence's
+// two engines are the FOOTNOTE_CONCURRENCE_A / _B env pair (default perplexity + brave-claude).
 import * as anthropicHaiku from "../adapters/extractor/anthropic-haiku/index.js";
 import * as extractorStub from "../adapters/extractor/_stub/index.js";
 import * as perplexity from "../adapters/verifier/perplexity/index.js";
 import * as perplexityTwostep from "../adapters/verifier/perplexity-twostep/index.js";
+import * as braveClaude from "../adapters/verifier/brave-claude/index.js";
+import * as concurrence from "../adapters/verifier/concurrence/index.js";
 import * as verifierStub from "../adapters/verifier/_stub/index.js";
 import * as deepgram from "../adapters/stt/deepgram/index.js";
 import * as sttStub from "../adapters/stt/_stub/index.js";
@@ -21,7 +27,7 @@ import * as stateStub from "../adapters/state/_stub/index.js";
 
 const REGISTRY = {
   extractor: { "anthropic-haiku": anthropicHaiku, stub: extractorStub },
-  verifier: { perplexity, "perplexity-twostep": perplexityTwostep, stub: verifierStub },
+  verifier: { perplexity, "perplexity-twostep": perplexityTwostep, "brave-claude": braveClaude, concurrence, stub: verifierStub },
   stt: { deepgram, stub: sttStub },
   state: { upstash, memory: memoryState, stub: stateStub },
 };
@@ -47,4 +53,18 @@ export function getAdapter(domain) {
   const adapter = table[chosen];
   if (!adapter) throw new Error(`unknown ${domain} adapter "${chosen}" (from env ${envVar}; have: ${Object.keys(table).join(", ")})`);
   return adapter;
+}
+
+/**
+ * Resolve a verifier adapter by its registry key, WITHOUT consulting FOOTNOTE_VERIFIER.
+ * Used by the concurrence meta-verifier (src/adapters/verifier/concurrence/) to compose its
+ * two configured sub-verifiers (FOOTNOTE_CONCURRENCE_A / _B) by name. Bypasses the stub
+ * production guard on purpose — concurrence never defaults, and a caller opting into a stub
+ * sub-verifier is an explicit dev/CI choice. Returns undefined for an unknown key so the
+ * caller can throw a domain-specific error.
+ * @param {string} nameKey
+ * @returns {*} the verifier adapter module, or undefined
+ */
+export function getVerifierByName(nameKey) {
+  return REGISTRY.verifier[nameKey];
 }
