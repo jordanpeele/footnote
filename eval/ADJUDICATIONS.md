@@ -193,3 +193,32 @@ to the §4 definitions) rather than harder exhortation inside one prompt.
 
 Spot-check artifacts: run live 2026-08-07, adapter invoked directly from repo root with
 `.env.local` credentials; v1 re-test used the committed adapter (`git show HEAD`).
+
+
+---
+
+## Section 1 adjudication — 2026-08-10 (canonical-positive contract ruled by Coby)
+
+**1A policy call: canonical-positive extraction IS the contract** (claim string in positive form; asserts/denies carried in the separate polarity field, mapped by applyPolarity, displayed by D17). This matches the shipped architecture and the FS-8 lesson: the load-bearing correctness is the POLARITY FIELD, not the string.
+
+**Harness finding (blocks clean 1B adjudication):** the run-#2 results file (`eval/results/2026-08-07T13-45-01.jsonl`) does NOT record the extractor's `polarity` field, so a correct canonical-positive extraction of a denial is indistinguishable from an FS-8 inversion. Three 1B rows (adv-027, geo-030, geo-031) are therefore `investigated_pol_pending` — investigated (gate unblocked) but must be re-verified in calibration #4 once run.js records `got_polarity`. This is Sprint-0 build task #0.
+
+- **pol-004** → `same_claim` — Canonical-positive contract (Coby 8/10): got≈expected positive form; judge compared to transcript without the polarity field.
+- **pol-005** → `same_claim` — Canonical-positive contract: got≈expected; policy case.
+- **pol-006** → `same_claim` — Canonical-positive contract: got≈expected; policy case.
+- **pol-007** → `same_claim` — Canonical-positive contract: got≈expected; policy case.
+- **pol-011** → `same_claim` — Canonical-positive contract: got 0.933 F1 vs expected; clearest policy case.
+- **pol-002** → `different_claim` — 'the insanity quote' is a vague pointer, not the claim; both scorers failed; not a polarity-policy case.
+- **geo-026** → `same_claim` — Judge quibbled that 'fifty percent plus one' isn't a 'simple majority' — a semantic quibble, not an inversion. got≈expected.
+- **curr-015** → `same_claim` — Judge's 'running for' reasoning is shaky; got and expected assert the same false claim.
+- **adv-007** → `polarity_inverted` — REAL bug: 'no evidence humans cause climate change' -> 'Humans are causing climate change'. Dropped the evidence framing AND flipped; verifying this positive would air a card contradicting settled science. Confirmed inversion (FS-8 class).
+- **geo-029** → `polarity_inverted` — REAL bug: compound 'republic, NOT a democracy' collapsed to 'America IS a democracy' — lossy and inverted.
+- **adv-027** → `investigated_pol_pending` — got 'A human has been to the deepest part' IS the canonical-positive of the speaker's denial; correct under policy IFF polarity=denies. Harness didn't record it. Re-verify in calib #4.
+- **geo-030** → `investigated_pol_pending` — got 'Someone has won the White House while losing the popular vote' = canonical-positive of speaker's 'nobody has'; correct IFF polarity=denies. Unrecorded. Re-verify in calib #4.
+- **geo-031** → `investigated_pol_pending` — got 'DC has representation in Congress' = canonical-positive of 'DC has no representation'; correct IFF polarity=denies. Unrecorded. Re-verify in calib #4.
+
+## Section 2 adjudication — 2026-08-10 (batch-ratify)
+
+**Ratified the LLM judge over the v1 string scorer on all 21 token-fail/judge-same_claim rows** (extract_pass -> true): stat-005, curr-006, sci-010, adv-012, geo-012, person-017, curr-019, curr-023, stat-025, curr-027, stat-027, stat-028, sci-029, stat-029, curr-030, sci-030, hist-032, adv-033, curr-033, geo-033, hist-033. All are faithful paraphrases the crude token scorer missed on wording.
+
+- **geo-032** -> `different_claim` — Extractor grabbed the second, more extreme claim in the sentence ('bigger than all land') instead of the first ('largest ocean'). Judge correct; token scorer passed on overlap. Investigated extractor miss.
