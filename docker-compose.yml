@@ -2,6 +2,13 @@
 # runtime deps, so we mount it straight into stock node and `npm start`).
 #   cp .env.example .env   # paste your keys
 #   docker compose up      # → http://localhost:3000/control
+#
+# ⚠ SPENDING SAFETY: this binds HOST=0.0.0.0 (below) so the port map works, and the per-IP
+# rate limiter FAILS OPEN without Upstash Redis (KV_REST_API_* in .env). On your own machine
+# that's fine — only you reach port 3000. But on a VPS or a port-forwarded box this serves
+# UNAUTHENTICATED, UNLIMITED /api/extract + /api/verify to the internet, spending YOUR vendor
+# keys. Before exposing publicly: set KV_REST_API_* (real rate limiting) + ADMIN_TOKEN (kill
+# switch), or put auth in front. See docs/SELF_HOSTING.md § Spending safety.
 services:
   footnote:
     image: node:22-alpine

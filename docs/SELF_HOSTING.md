@@ -82,6 +82,36 @@ The banner lists the active state channel and routes, and warns about any missin
 keys (those stages fail until set — nothing else breaks). `docker compose up` is the same
 thing containerized. `npm test` runs the unit suite if you want a green light first.
 
+## ⚠ Spending safety — read this before you expose the server
+
+Footnote is **bring-your-own-keys**: every `/api/extract` and `/api/verify` call spends
+*your* money at Deepgram / Anthropic / Perplexity. Two defaults matter:
+
+- **Rate limiting fails *open* without Redis.** The per-IP limiter (`api/_ratelimit.js`)
+  needs Upstash (`KV_REST_API_URL` / `KV_REST_API_TOKEN`). Locally you don't have it, so
+  **there is no rate limit** — fine on loopback where only you can reach it.
+- **The default bind is loopback (`127.0.0.1`) — keep it that way unless you mean it.**
+  `docker-compose` sets `HOST=0.0.0.0` so the port map works, and a VPS or a
+  port-forwarded box is reachable by the whole internet.
+
+**The footgun:** bind wide (`0.0.0.0`, a VPS, a forwarded port) *and* run without Redis,
+and you are serving **unauthenticated, unlimited** extract/verify to anyone who finds the
+port — a stranger can drain your API budget. This is not hypothetical for anyone who puts
+the container on a public host.
+
+**Safe postures, pick one:**
+1. **Loopback only (default).** Reach it from the same machine / an SSH tunnel / a private
+   overlay network like Tailscale ([STREET_RIG.md](./STREET_RIG.md) does exactly this). No
+   public exposure, nothing to rate-limit.
+2. **Wide bind *with* Redis.** Set the Upstash env vars so the limiter actually limits, and
+   set `ADMIN_TOKEN` so the [kill switch](../SECURITY.md) works if you need to stop spend
+   fast (`GET /api/admin?token=…&op=kill`).
+3. **Put it behind your own auth.** A reverse proxy with a password / your platform's access
+   control in front of the whole app.
+
+If you only ever open `/control` and the overlay on your own machine, you're already in
+posture 1 and there's nothing to do.
+
 ## Your first fact-check
 
 1. Open `http://localhost:3000/control`. The OBS OVERLAY bar shows your room's overlay URL —
