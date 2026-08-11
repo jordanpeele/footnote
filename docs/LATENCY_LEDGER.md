@@ -178,5 +178,7 @@ the `?ep=` hatch stays for experiments. Also this session: F2 dedupe FIELD-FIRED
 Cumulative field record (R47, superseding R38): **4 sessions · 102 checks ·
 1 wrong-verdict card aired (FS-8, closed by the R46 negation tripwire — shipped,
 live-probed, regression-replayed in test/field-replay.test.js) · 1 display-incoherent
-pairing (FS-1, closed by D17).** This sentence — failures and closures — is the public
+pairing (FS-1, closed by D17).
+
+Calibration #4 (2026-08-11): first run measuring polarity — R46 tripwire holds 11/11 FS-8-class errors; true production air-wrong-from-polarity = 1/193 (the unguarded MIRROR class, pol-001). Auto-air still NONE eligible (4th time; precision floor + saturated confidence). docs/CALIBRATION_REPORT_4_2026-08-11.md.** This sentence — failures and closures — is the public
 record. Honesty is the product.
