@@ -68,6 +68,7 @@ creates. The variables, honestly:
 | `FOOTNOTE_EXTRACTOR` / `FOOTNOTE_VERIFIER` / `FOOTNOTE_STT` | no | adapter selection (see [ARCHITECTURE.md](./ARCHITECTURE.md)); defaults are the shipping vendors |
 | `ADMIN_TOKEN` | no | enables the `/api/admin` global kill switch (kill / restore / status). Without it the route answers 501; it also needs the Upstash store, so it's really a hosted-deployment knob |
 | `BYOK_ENABLED` | no | `1` lets rooms spend against their own stored vendor keys (Decision D13). Off by default; leave it off unless you're running a shared instance |
+| `HOSTED_MODE` | no | Set to `1` only on the hosted deployment. Requires room-scoped verification and makes Redis spend authorization fail closed; self-host defaults remain fail-open |
 | `FOOTNOTE_FIELDTEST_LOG` | no | path for the local field-test event sink (`/__fieldtest/log`); only exists on the self-host server |
 | `ALLOW_STUBS` | no | CI-only escape hatch that permits stub adapters when `NODE_ENV=production`. Never set it on anything real |
 
