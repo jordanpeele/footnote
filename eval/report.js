@@ -138,6 +138,28 @@ for (const [cat, rs] of [...cats.entries()].sort()) {
   else ineligible.push({ cat, cls, verdict, reason });
 }
 
+// ── Task 0 · polarity slice (F-1) — over goldens carrying expected_polarity ─────────────
+// The one wrong card ever aired (FS-8) was a polarity misclassification the verdict eval
+// couldn't see. This measures the extractor's polarity field directly and, critically,
+// separates the two failure directions:
+//   • FS-8 class  — asserts labelled denies (R46 tripwire catches the no-negation subset)
+//   • MIRROR class — denies labelled asserts (UNGUARDED; airs FALSE against someone right)
+const polRows = rows.filter((r) => r.expected_polarity != null && r.got_polarity != null);
+if (polRows.length) {
+  const norm = (p) => (p === "suspect_denies" ? "denies" : p);
+  const correct = polRows.filter((r) => norm(r.got_polarity) === r.expected_polarity);
+  const fs8 = polRows.filter((r) => r.expected_polarity === "asserts" && norm(r.got_polarity) === "denies");
+  const mirror = polRows.filter((r) => r.expected_polarity === "denies" && norm(r.got_polarity) === "asserts");
+  const tripwireCaught = fs8.filter((r) => r.got_polarity === "suspect_denies" || r.got_tripwire === "negation" || r.polarity_no_negation);
+  const tripwireMissed = fs8.filter((r) => !(r.got_polarity === "suspect_denies" || r.got_tripwire === "negation" || r.polarity_no_negation));
+  console.log("─ polarity (F-1) ─".padEnd(50, "─"));
+  console.log(`  scored          : ${polRows.length} (goldens with expected_polarity)`);
+  console.log(`  polarity correct: ${pct(correct.length, polRows.length)}`);
+  console.log(`  FS-8 class      : ${fs8.length} asserts→denies  (R46 tripwire would catch ${tripwireCaught.length}, MISS ${tripwireMissed.length}${tripwireMissed.length ? ": " + tripwireMissed.map((r) => r.id).join(", ") : ""})`);
+  console.log(`  MIRROR class    : ${mirror.length} denies→asserts  (UNGUARDED — no tripwire${mirror.length ? ": " + mirror.map((r) => r.id).join(", ") : ""})`);
+  console.log("");
+}
+
 console.log("═".repeat(50));
 console.log(`auto-air eligible : ${eligible.length ? eligible.join(", ") : "(none yet)"}`);
 console.log(`held for operator :`);

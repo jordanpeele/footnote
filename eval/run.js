@@ -24,6 +24,7 @@ import { readFileSync, readdirSync, mkdirSync, appendFileSync } from "node:fs";
 import { dirname, join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { judge } from "./judge.js";
+import { hasNegation } from "../src/core/utterance.js";   // Task 0: shipped tripwire predicate, reused for scoring
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const GOLDEN_DIR = join(__dirname, "golden");
@@ -156,6 +157,7 @@ async function main() {
   console.log(`results -> ${outPath}\n`);
 
   let extractPass = 0, verdictPass = 0, verdictScored = 0, judgeInversions = 0, judgeDisagreements = 0;
+  let polarityPass = 0, polarityScored = 0;   // Task 0
   for (const [i, c] of cases.entries()) {
     const result = { id: c.id, category: c.category, transcript_snippet: c.transcript_snippet, expected_extraction: c.expected_extraction ?? null, ground_truth_verdict: c.ground_truth_verdict ?? null };
 
@@ -163,6 +165,15 @@ async function main() {
     const ex = await throttledPost(args.base, "extract", { text: c.transcript_snippet }, args.delay);
     result.extract_status = ex.status;
     result.got_extraction = ex.status === 200 ? (ex.json.claim ?? null) : null;
+    // Task 0: record the FULL extract response, not just the claim. The run-#2 harness
+    // dropped these, which is why a correct canonical-positive extraction of a denial was
+    // indistinguishable from an FS-8 inversion. got_polarity is the load-bearing one.
+    if (ex.status === 200) {
+      result.got_polarity = ex.json.polarity ?? null;        // "asserts" | "denies" | "suspect_denies" (R46 tripwire)
+      result.got_harm_class = ex.json.harm_class ?? null;
+      result.got_tripwire = ex.json.tripwire ?? null;        // R46 negation tripwire fired
+      result.got_rejected = ex.json.rejected ?? null;        // grounding gate rejected
+    }
     if (ex.status !== 200) {
       result.extract_pass = false;
       result.extract_match = "http-error";
@@ -173,6 +184,22 @@ async function main() {
       result.extract_match = m.type;
       if (m.f1 != null) result.extract_f1 = m.f1;
       if (m.pass) extractPass++;
+    }
+
+    // Task 0: polarity scoring — only when the golden declares expected_polarity (else skipped,
+    // backward-compatible). "suspect_denies" is the R46 tripwire firing at extract time; it
+    // counts as a denies for the match but is flagged separately so the report can show the
+    // tripwire catching what would otherwise be an FS-8 inversion.
+    if (c.expected_polarity != null && result.got_polarity != null) {
+      const gp = result.got_polarity === "suspect_denies" ? "denies" : result.got_polarity;
+      result.expected_polarity = c.expected_polarity;
+      result.polarity_pass = gp === c.expected_polarity;
+      // The FS-8 signature: extractor says denies but the utterance carries NO negation token.
+      // Whether the shipped R46 tripwire would fire on it (independent of what the API returned).
+      result.polarity_no_negation = result.got_polarity !== "asserts" && result.got_polarity != null
+        && !hasNegation(c.transcript_snippet || "");
+      if (result.polarity_pass) polarityPass++;
+      polarityScored++;
     }
 
     // stage 1b — meaning-level judge (harness v2). Marker `judged: true` on every row of
@@ -224,6 +251,7 @@ async function main() {
   }
 
   console.log(`\nextraction: ${extractPass}/${cases.length} pass`);
+  if (polarityScored) console.log(`polarity:   ${polarityPass}/${polarityScored} correct (on goldens with expected_polarity)`);
   if (args.judge) console.log(`judge:      ${judgeInversions} polarity inversion(s), ${judgeDisagreements} disagreement(s) flagged for adjudication`);
   if (verdictScored) console.log(`verdicts:   ${verdictPass}/${verdictScored} correct`);
   console.log(`\nfull calibration report:  node eval/report.js ${outPath.startsWith("/") ? outPath : basename(outPath)}`);
