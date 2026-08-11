@@ -14,6 +14,19 @@
   const qs = new URLSearchParams(location.search);
   const room = qs.get("room") || "", key = qs.get("key") || "";
 
+  /* A-2 (Sprint-A, FEATURE-FLAGGED OFF): confidence display honesty. Calibration #3 proved
+     the verifier's confidence is saturated (0.97–0.99 on nearly everything, including the
+     one wrong card ever aired) — an uninformative number shown as informative is worse than
+     no number, and "97%" is exactly how a wrong card earns a fast thumb. Interim treatment:
+     bucket the raw % into a coarse label (≥0.9 "likely", else "uncertain"), which stops the
+     surface implying false precision without hiding the signal entirely.
+     DEFAULT IS OFF — raw % is unchanged for the owner until they append ?conf=bucket and
+     see it. Trivially reversible (drop the param). This is the ONLY behavior-changing item
+     in this sprint, and it ships dark. */
+  const CONF_MODE_DEFAULT = "raw";                     // must stay "raw" — nothing changes until flipped
+  const confMode = qs.get("conf") === "bucket" ? "bucket" : CONF_MODE_DEFAULT;
+  const confBucket = (v) => v >= 0.9 ? "likely" : "uncertain";
+
   const VERDICT_META = {
     True:         { cls: "v-true",  label: "✓ TRUE" },
     False:        { cls: "v-false", label: "✗ FALSE" },
@@ -103,22 +116,26 @@
 
   /* ---- commands ---- */
   // resolves to the parsed response body ({} if unparseable) on success/409, null on failure
-  async function postCmd(action, cardId) {
+  async function postCmd(action, cardId, reason) {
     try {
+      // A-4: `reason` rides skip commands only; omitted entirely otherwise so a plain
+      // SKIP is byte-for-byte the old command (the server ignores it on non-skips too).
+      const cmd = { action, cardId };
+      if (action === "skip" && reason) cmd.reason = reason;
       const r = await fetch("/api/onair", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ room, writeKey: key, op: "cmd", cmd: { action, cardId } }),
+        body: JSON.stringify({ room, writeKey: key, op: "cmd", cmd }),
       });
       if (r.status === 403) { forbid(); return null; }
       if (r.ok || r.status === 409) return (await r.json().catch(() => null)) || {};   // 409 = already handled server-side — treat as done
       return null;
     } catch { return null; }
   }
-  function act(action, cardId) {
+  function act(action, cardId, reason) {
     if (sent.has(cardId)) return;   // double-tap guard (server is idempotent too)
     sent.set(cardId, action);
     renderQueue();
-    postCmd(action, cardId).then((b) => {
+    postCmd(action, cardId, reason).then((b) => {
       if (!b && !stopped) { sent.delete(cardId); renderQueue(); setBanner("send failed — tap again", "info"); setTimeout(() => { if (fails === 0) setBanner(null); }, 2500); return; }
       // arm the render-ack machine only when the server minted an airedId (a plain 409
       // "not airable" never aired — a STALL warning for it would be a false alarm)
@@ -199,7 +216,11 @@
           else if (lbl === "stall") { card.classList.add("stalled"); top.appendChild(el("span", "sent-tag stall", "NOT ON SCREEN — check home base")); }
           else top.appendChild(el("span", "sent-tag", lbl === "aired" ? "AIRED ✓" : "AIRING…"));
         } else if (mark) top.appendChild(el("span", "sent-tag", mark === "hold" ? "HELD" : "SKIPPED"));
-        else if (c.confidence != null) top.appendChild(el("span", "conf", Math.round(c.confidence * 100) + "%"));
+        else if (c.confidence != null) top.appendChild(
+          confMode === "bucket"
+            ? el("span", "conf conf-bucket", confBucket(c.confidence))   // A-2: coarse label (flag on)
+            : el("span", "conf", Math.round(c.confidence * 100) + "%"),  // default: raw %, unchanged
+        );
       }
       card.appendChild(top);
       card.appendChild(el("div", "claim", "“" + (c.claim || "") + "”"));
@@ -214,9 +235,24 @@
         bAir.type = bHold.type = bSkip.type = "button";
         bAir.addEventListener("click", () => act("air", c.id));
         bHold.addEventListener("click", () => act("hold", c.id));
-        bSkip.addEventListener("click", () => act("skip", c.id));
+        /* A-4: SKIP opens an OPTIONAL inline reason chooser (wrong-entity / dull / risky /
+           other) — big thumb targets on their own row. Tapping a reason skips WITH the
+           label; the plain "SKIP" chip skips with no reason (byte-for-byte the old skip),
+           so the thumb is never slowed for the operator who doesn't want to annotate. The
+           reason row is built once per card and toggled — no server round-trip to open it. */
+        const reasonRow = el("div", "skip-reasons");
+        reasonRow.hidden = true;
+        const skipWith = (reason) => { reasonRow.hidden = true; act("skip", c.id, reason); };
+        [["wrong", "wrong-entity"], ["dull", "dull"], ["risky", "risky"], ["other", "other"], ["skip", null]].forEach(([lbl, reason]) => {
+          const b = el("button", "b-reason" + (reason ? "" : " plain"), lbl);
+          b.type = "button";
+          b.addEventListener("click", (e) => { e.stopPropagation(); skipWith(reason); });
+          reasonRow.appendChild(b);
+        });
+        bSkip.addEventListener("click", () => { reasonRow.hidden = !reasonRow.hidden; });
         acts.appendChild(bAir); acts.appendChild(bHold); acts.appendChild(bSkip);
         card.appendChild(acts);
+        card.appendChild(reasonRow);
       }
       queueEl.appendChild(card);
     }

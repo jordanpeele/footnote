@@ -33,6 +33,16 @@
   };
   let refToken = 0;                          // invalidates an in-flight correction join when a newer card renders
 
+  /* A-8 (Sprint-A): render-truncation telemetry. The lower-third clamps claim/correction
+     to a few lines (-webkit-line-clamp); when the text overflows, the reader loses the tail
+     — potentially mid-figure on the most-read line. Detect it purely from geometry
+     (scrollHeight exceeds the clamped clientHeight, past a sub-pixel rounding cushion) so
+     the check is a testable pure function of two numbers, then log ev:"truncated" through
+     the existing hostname-gated ftLog sink (field-test/local only — NO new network on prod).
+     +1 cushion: browsers report scrollHeight a hair over clientHeight even when nothing is
+     actually cut (line-box rounding), and a false "truncated" is worse than a missed one. */
+  const isTruncated = (scrollH, clientH) => scrollH - clientH > 1;
+
   // R12.2: correction cards carry refId — the stable aired-log id of the original claim.
   // Resolve the original by joining the public aired log (GET ?log=1 is CORS-open and
   // cheap), cached per refId so repeat renders don't refetch. Returns the original claim
@@ -91,6 +101,20 @@
     }
     onAir.hidden = false; onAir.classList.remove("show"); void onAir.offsetWidth; onAir.classList.add("show");
     showing = true;
+    /* A-8: after the card is laid out, check whether the clamped text overflowed and log
+       it (field-test/local only via ftLog). Deferred to the next frame so the browser has
+       applied the -webkit-line-clamp box; `tok` guards against a newer card having already
+       taken the chyron. Best-effort — a measurement can never break the render. */
+    requestAnimationFrame(() => {
+      if (tok !== refToken) return;
+      try {
+        [["claim", byId("oaClaim")], ["correction", byId("oaCorrection")]].forEach(([field, node]) => {
+          if (node && !node.hidden && isTruncated(node.scrollHeight, node.clientHeight)) {
+            ftLog("truncated", { field, len: (node.textContent || "").length });
+          }
+        });
+      } catch {}
+    });
     const timer = byId("oaTimer");
     if (remainingMs === null) { timer.style.width = "100%"; return; }   // hold: full bar, no auto-retire
     const start = performance.now();

@@ -76,6 +76,9 @@ body{background:var(--bg);color:var(--txt);font-family:var(--disp);min-height:10
 .tag{font:800 9px var(--mono);letter-spacing:.05em;color:var(--warn);background:rgba(245,166,35,.12);
   border:1px solid rgba(245,166,35,.35);border-radius:4px;padding:2px 6px;white-space:nowrap}
 .conf{margin-left:auto;font:700 12px var(--mono);color:var(--dim)}
+/* A-2 (flag ?conf=bucket, off by default): coarse confidence label replaces the raw % —
+   uppercased, de-emphasised, no false-precision digits. */
+.conf-bucket{text-transform:uppercase;letter-spacing:.06em;font-size:10px;color:var(--mut)}
 .sent-tag{margin-left:auto;font:800 10px var(--mono);letter-spacing:.08em;color:var(--fn)}
 /* P7-B render-ack states: AIRED ✓ (default green text) → ON AIR ✓✓ (rendered, solid green
    chip) | STALL (amber pulsing — the one state that must cut through a dimmed .sent card) */
@@ -102,6 +105,17 @@ body{background:var(--bg);color:var(--txt);font-family:var(--disp);min-height:10
 .b-hold:active{background:#3a3115}
 .b-skip{flex:1;color:#c9d1dc;background:#1a1e26;border:1px solid #2a2f3a}
 .b-skip:active{background:#252a35}
+
+/* A-4: optional one-tap skip-reason row (revealed under SKIP). Big thumb targets, wraps on
+   a narrow phone; the plain "skip" chip (.plain) is the reasonless escape hatch. Log-only —
+   the reason never changes what the card does, only what the cmd log can later learn from. */
+.skip-reasons{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.skip-reasons button{flex:1;min-width:72px;min-height:52px;font:800 14px var(--disp);
+  letter-spacing:.02em;border-radius:11px;cursor:pointer;touch-action:manipulation;
+  color:#c9d1dc;background:#1a1e26;border:1px solid #2a2f3a}
+.skip-reasons button:active{background:#252a35}
+.skip-reasons .plain{color:#8a93a3;background:#12151b;border-style:dashed}
+.card.sent .skip-reasons{display:none}
 
 /* R41: Unverifiable de-emphasis — the card recedes (dimmed past the v-gray treatment) and
    AIR drops to an outline peer of HOLD/SKIP (NOT disabled — operator discretion retained;

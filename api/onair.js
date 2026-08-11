@@ -332,6 +332,17 @@ export default async function handler(req, res) {
         if (action !== "pull" && action !== "mute" && action !== "unmute" && !Number.isFinite(cardId)) { res.status(400).json({ error: "bad cmd" }); return; }
         const t = Date.now();
         const entry = { id: mintId(t), t, action, cardId: Number.isFinite(cardId) ? cardId : null };
+        /* A-4 (Sprint-A): OPTIONAL skip reason — the operator's street skips are the best
+           labeled training data we generate (wrong-entity / dull / risky), and today the
+           record can't say why any skip happened. Capture it LOG-ONLY: it rides the cmd
+           entry, changes NO behavior (a reasonless skip is byte-for-byte the old skip), and
+           is accepted only on skip commands. Bounded allowlist + strip/cut so live-speech-
+           adjacent input can't smuggle anything into the cmd log. Absent/other-shaped → no
+           reason field at all (the plain SKIP path, unchanged). */
+        if (action === "skip" && typeof c.reason === "string") {
+          const reason = cut(strip(c.reason), 16);
+          if (reason === "wrong-entity" || reason === "dull" || reason === "risky" || reason === "other") entry.reason = reason;
+        }
         if (action === "air") {
           const q = await state.get(qRoom(room));
           const qc = q && Array.isArray(q.cards) ? q.cards.find((x) => x && x.id === cardId && x.state === "pending") : null;
