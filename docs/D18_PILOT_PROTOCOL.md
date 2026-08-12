@@ -41,6 +41,30 @@ protocol; deviations end the pilot.
    the only failure.
 5. End Stream → session auto-exports (R20) → field report.
 
+## Post-session-1 addenda (R53–R56, 2026-08-12)
+
+Session 1 was ACCEPTED (10 auto-airs, 0 wrong cards, 0 aborts — see the
+[field report](./D18_PILOT_FIELD_REPORT_2026-08-12.md)). The rulings it
+produced amend this protocol:
+
+- **R53 — denial auto-airs are IN SCOPE.** A polarity-applied verdict may
+  auto-air when the guard set holds: clean two-reader polarity agreement
+  (extractor + R50 signal) + D17 speaker-framed display + concurrence. Watch
+  condition: every session report carries a dedicated denial-watch line until
+  cumulative polarity-applied auto-airs reach **n≥20 with zero misses**.
+- **R54 — attention capture is LIVE-ONLY; post-hoc recall is retired.** Each
+  auto-aired card carries a visible UNTAGGED state until the operator tags it
+  (one keystroke W/T/A on /control, one tap on /op). A missing tag reports as
+  "uncaptured" — never assumed into a state. Objective supplements ride the
+  harness: input-activity sampling per veto window and focus/blur events from
+  both consoles.
+- **R55 — session 2 scope:** FS-2 drill FIRST on the sheet; unlisted
+  broadcast sink ON (real platform ingest, zero audience); live attention
+  capture; denial-watch line. Attribution only with a genuine second voice.
+- **R56 — sheets are literal checklists**, linted against the pipeline's own
+  guards before the session (`node tools/session-lint.js <sheet>`), and End
+  Stream prompts for undone debrief items.
+
 ## Abort criteria (any one ends the session immediately)
 
 A wrong card auto-airs · the veto fails to cancel a countdown · the cap fails ·

@@ -201,6 +201,7 @@ export default async function handler(req, res) {
             cards: (q && Array.isArray(q.cards)) ? q.cards : [], qseq: (q && q.qseq) || 0,
             onAirId: q && q.onAirId != null ? q.onAirId : null,
             muted: !!(q && q.muted),
+            attn: (q && Array.isArray(q.attn)) ? q.attn : [],   // R54: untagged auto-airs for the attention strip
             renderedId: cur && cur.renderedId != null ? cur.renderedId : null,
             renderedAt: cur && typeof cur.renderedAt === "number" ? cur.renderedAt : null,
             serverNow: Date.now(),
@@ -279,7 +280,10 @@ export default async function handler(req, res) {
         const qseq = Date.now();
         const onAirId = typeof req.body.onAirId === "number" ? req.body.onAirId : null;
         const muted = req.body.muted === true;   // P7-C: mic-mute latch — control owns it, /op mirrors it
-        await state.publish(qRoom(room), { cards, qseq, onAirId, muted }, { ttlSec: QUEUE_SNAPSHOT_TTL_SEC });
+        // R54: auto-aired cards awaiting an attention tag — sanitized like cards (strip/cut), capped at 6
+        const attn = (Array.isArray(req.body.attn) ? req.body.attn : []).slice(0, 6)
+          .map((a) => a && Number.isFinite(Number(a.id)) ? { id: Number(a.id), claim: cut(strip(String(a.claim || "")), 80) } : null).filter(Boolean);
+        await state.publish(qRoom(room), { cards, qseq, onAirId, muted, attn }, { ttlSec: QUEUE_SNAPSHOT_TTL_SEC });
         /* P4-F2 (field F5): a non-empty queue means an air is likely soon, but an idle
            overlay is on its 2.5s cadence — the first air after a quiet stretch eats up to
            a full slow poll. Stamp activeAt onto the room's MAIN record so the overlay's
@@ -328,11 +332,19 @@ export default async function handler(req, res) {
         // — /control consumes them from the cmd list and flips its own mic latch; the
         // latched state comes back to /op via the queue snapshot's `muted` boolean.
         if (action !== "air" && action !== "skip" && action !== "hold" && action !== "pull"
-          && action !== "mute" && action !== "unmute") { res.status(400).json({ error: "bad cmd" }); return; }
+          && action !== "mute" && action !== "unmute" && action !== "attention") { res.status(400).json({ error: "bad cmd" }); return; }
         const cardId = Number(c.cardId);
         if (action !== "pull" && action !== "mute" && action !== "unmute" && !Number.isFinite(cardId)) { res.status(400).json({ error: "bad cmd" }); return; }
         const t = Date.now();
         const entry = { id: mintId(t), t, action, cardId: Number.isFinite(cardId) ? cardId : null };
+        /* R54: "attention" is a LOG-ONLY command like mute — no publish, no card checks; /control
+           consumes it and applies the tag locally. State is a closed three-value set; anything
+           else is a bad cmd (never defaulted — "uncaptured" is only ever the ABSENCE of a tag). */
+        if (action === "attention") {
+          const st = c.state;
+          if (st !== "watching" && st !== "talking" && st !== "away") { res.status(400).json({ error: "bad cmd" }); return; }
+          entry.attn = st;
+        }
         /* A-4 (Sprint-A): OPTIONAL skip reason — the operator's street skips are the best
            labeled training data we generate (wrong-entity / dull / risky), and today the
            record can't say why any skip happened. Capture it LOG-ONLY: it rides the cmd

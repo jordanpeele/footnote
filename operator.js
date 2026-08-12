@@ -58,6 +58,51 @@
   let cards = [], lastQseq = null, lastChange = 0, fails = 0, stopped = false;
   let onAirLive = false;
 
+  /* ---- R54: objective attention supplement — /op focus/blur to the field-test sink.
+     The sink route only exists on the self-host server (localhost or the tailnet proxy);
+     first failed POST disables logging for the page life, so a hosted deploy never gets
+     hammered with 404s. Best-effort like everything else on this page. */
+  let ftOk = true;
+  function ftLog(ev, extra) {
+    if (!ftOk) return;
+    const body = JSON.stringify(Object.assign({ ev, t: Date.now(), page: "op" }, extra || {}));
+    try {
+      fetch("/__fieldtest/log", { method: "POST", body, keepalive: true })
+        .then((r) => { if (!r.ok) ftOk = false; }).catch(() => { ftOk = false; });
+    } catch { ftOk = false; }
+  }
+  document.addEventListener("visibilitychange", () => ftLog("op_focus", { state: document.visibilityState }));
+  window.addEventListener("blur", () => ftLog("op_focus", { state: "blur" }));
+  window.addEventListener("focus", () => ftLog("op_focus", { state: "focus" }));
+
+  /* ---- R54: attention strip — auto-aired cards awaiting a W/T/A tag ride the queue
+     snapshot (q.attn). One tap sends the log-only attention cmd; the row greys instantly
+     (optimistic) and disappears when control applies the tag and re-pushes the snapshot. */
+  let attnList = [];
+  const attnSent = new Set();   // ids tagged from this phone (optimistic, per page life)
+  const attnEl = el("section", "attn-strip");
+  attnEl.hidden = true;
+  queueEl.parentNode.insertBefore(attnEl, queueEl);
+  function renderAttn() {
+    attnEl.textContent = "";
+    const open = attnList.filter((a) => !attnSent.has(a.id));
+    attnEl.hidden = open.length === 0;
+    for (const a of open) {
+      const row = el("div", "attn-row");
+      row.appendChild(el("span", "attn-q", "aired — attention?"));
+      row.appendChild(el("span", "attn-claim", "“" + (a.claim || "") + "”"));
+      const acts = el("span", "attn-acts");
+      [["W", "watching"], ["T", "talking"], ["A", "away"]].forEach(([lbl, st]) => {
+        const b = el("button", "b-attn", lbl);
+        b.type = "button"; b.title = st;
+        b.addEventListener("click", () => { attnSent.add(a.id); renderAttn(); postCmd("attention", a.id, null, st); });
+        acts.appendChild(b);
+      });
+      row.appendChild(acts);
+      attnEl.appendChild(row);
+    }
+  }
+
   /* ---- P4-F3: new-card cue. Street operator's eyes are on the conversation, not the
      phone — decide time (p50 2.8s, p95 9.5s in the 08-08 field test) is mostly reaction
      lag. Vibrate + short beep + screen flash when a NEW pending card lands. The beep
@@ -116,12 +161,14 @@
 
   /* ---- commands ---- */
   // resolves to the parsed response body ({} if unparseable) on success/409, null on failure
-  async function postCmd(action, cardId, reason) {
+  async function postCmd(action, cardId, reason, attnState) {
     try {
       // A-4: `reason` rides skip commands only; omitted entirely otherwise so a plain
       // SKIP is byte-for-byte the old command (the server ignores it on non-skips too).
+      // R54: `state` rides attention commands only (closed set, validated server-side).
       const cmd = { action, cardId };
       if (action === "skip" && reason) cmd.reason = reason;
+      if (action === "attention" && attnState) cmd.state = attnState;
       const r = await fetch("/api/onair", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ room, writeKey: key, op: "cmd", cmd }),
@@ -297,8 +344,9 @@
         ok = true;   // only a parsed response is healthy
         if (q.qseq !== lastQseq) {
           lastQseq = q.qseq; cards = Array.isArray(q.cards) ? q.cards : [];
+          attnList = Array.isArray(q.attn) ? q.attn : [];   // R54: untagged auto-airs
           lastChange = performance.now();
-          reconcile(); renderQueue(); cueNewCards(cards);   // P4-F3: buzz/beep/flash for new work
+          reconcile(); renderQueue(); renderAttn(); cueNewCards(cards);   // P4-F3: buzz/beep/flash for new work
         }
         // P7-C: adopt control's mute latch; drop the optimistic wish once control agrees
         // (or the reconcile window lapses — a lost cmd must not pin a phantom MUTED state)

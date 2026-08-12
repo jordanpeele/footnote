@@ -201,6 +201,14 @@
         stale_generation: es.filter((e) => e.action === "stale_generation").length,   // P3-F: dropped across an End/Start Stream boundary
         paused: es.filter((e) => e.action === "paused").length,                       // kill-switch gap — the record shows it honestly
         duplicate: es.filter((e) => e.action === "duplicate").length,                 // F2: same claim carded again inside the dedupe window
+        /* R54: per-card attention rollup over auto-aired cards. "uncaptured" is a first-class
+           value — a missing tag is reported, never assumed into a state. */
+        attention: (() => {
+          const auto = es.filter((e) => e.autoAired); if (!auto.length) return null;
+          const r = { watching: 0, talking: 0, away: 0, uncaptured: 0 };
+          auto.forEach((e) => { r[e.attention || "uncaptured"] = (r[e.attention || "uncaptured"] || 0) + 1; });
+          return r;
+        })(),
         latency: {
           extract: pp(es.map((e) => e.extractMs).filter(num)),
           verify: pp(es.map((e) => e.verifyMs).filter(num)),
@@ -212,7 +220,8 @@
     json() {
       return JSON.stringify({
         session: { startedAt: this.startedAt, generatedAt: new Date().toISOString(), platform, keyterms: this.keyterms || [], counts: this.counts(), summary: this.summary() },
-        entries: this.entries(),
+        // R54: auto-aired entries always carry an attention value in the export — "uncaptured" when untagged
+        entries: this.entries().map((e) => e.autoAired ? Object.assign({}, e, { attention: e.attention || "uncaptured" }) : e),
       }, null, 2);
     },
     _exported: true,   // R20: flips false on any record mutation, true on download
@@ -385,7 +394,11 @@
        fragments can be a real claim under 6 words ("The GDP? Was 4%."). It still respects the
        consecutive-dupe guard here and the F2 claim dedupe below — force (typed/retry) is the
        only full bypass, because those are deliberate operator acts. */
-    if (!opts.force && ((words.length < 6 && !opts.merged) || t === lastUtterance)) return;   // skip fragments / dupes
+    /* R56 (D18 pilot 1): the fragment drop was SILENT — no harness event — and five scripted
+       5-word claims vanishing cost live minutes of confusion. Log-only fix; behavior identical.
+       The consecutive-dupe drop STAYS silent (Deepgram re-finals repeat constantly). */
+    if (!opts.force && words.length < 6 && !opts.merged) { FT.log("gate", { outcome: "fragment", words: words.length, spoken: t.slice(0, 80) }); return; }
+    if (!opts.force && t === lastUtterance) return;   // consecutive-dupe guard (unchanged, unlogged)
     if (tabReadOnly) { warnReadOnly(); return; }                            // M6: a read-only tab runs no checks
     lastUtterance = t;
     /* GENERATION GUARD (P3-F, red-team H2 full closure): capture the stream generation at entry.
@@ -502,6 +515,17 @@
     }
   }
 
+  /* R54: attention affordance on auto-aired cards — visible UNTAGGED state until the operator
+     says what they were doing during the veto window (W/T/A keystroke targets the oldest
+     untagged; these buttons target this card). Tagged state renders as a plain chip. */
+  function attnHtml(c) {
+    if (!c._autoAired || c.state !== "aired") return "";
+    if (c.attention) return `<span class="fc-attn-tag">👁 ${esc(c.attention)}</span>`;
+    return `<span class="fc-attn" title="R54: what were you doing during this card's veto window?">attention?
+      <button class="fc-attn-b" data-id="${c.id}" data-attn="watching">W</button>
+      <button class="fc-attn-b" data-id="${c.id}" data-attn="talking">T</button>
+      <button class="fc-attn-b" data-id="${c.id}" data-attn="away">A</button></span>`;
+  }
   function renderQueue() {
     schedulePersist();
     if (!fcCards.length) { opsQueue.innerHTML = `<div class="ops-empty"><span>go live and make a factual claim — checks land here to <b>AIR</b> or <b>SKIP</b>.</span></div>`; return; }
@@ -533,7 +557,7 @@
       const canCorrect = c.state === "aired" && CONTROL_VIEW() && !c.corrected && !c._composing;
       const acts = c.state === "pending"
         ? `<span class="fc-acts"><button class="fc-air" data-id="${c.id}">AIR</button><button class="fc-hold" data-id="${c.id}">HOLD</button><button class="fc-skip" data-id="${c.id}">SKIP</button></span>`
-        : `<span class="fc-acts"><span class="fc-state-tag">${c.state === "aired" ? "● AIRED" : c.state.toUpperCase()}</span>${c.corrected ? `<span class="fc-corrected-tag">↺ corrected</span>` : ""}${canCorrect ? `<button class="fc-correct" data-id="${c.id}" title="Air an on-record correction for this check">✎ correct</button>` : ""}</span>`;
+        : `<span class="fc-acts"><span class="fc-state-tag">${c.state === "aired" ? "● AIRED" : c.state.toUpperCase()}</span>${c.corrected ? `<span class="fc-corrected-tag">↺ corrected</span>` : ""}${canCorrect ? `<button class="fc-correct" data-id="${c.id}" title="Air an on-record correction for this check">✎ correct</button>` : ""}${attnHtml(c)}</span>`;
       /* correction composer (P3-C): inline, not a modal — original claim + verdict read-only,
          one-line correction text, optional source URL. Drafts live on the card (c._corrDraft /
          c._corrUrl via the delegated input handler) so async queue re-renders don't eat typing. */
@@ -554,7 +578,8 @@
   opsQueue.addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
     const id = +b.dataset.id, c = fcCards.find((x) => x.id === id); if (!c) return;
-    if (b.classList.contains("fc-air")) airCard(c);
+    if (b.classList.contains("fc-attn-b")) applyAttention(c, b.dataset.attn, "control");
+    else if (b.classList.contains("fc-air")) airCard(c);
     else if (b.classList.contains("fc-skip")) dismissCard(c, "skipped");
     else if (b.classList.contains("fc-hold")) dismissCard(c, "held");
     else if (b.classList.contains("fc-retry")) { fcCards = fcCards.filter((x) => x.id !== id); checkUtterance(c.claim, { force: true }); }
@@ -601,6 +626,7 @@
     if (tabReadOnly) return warnReadOnly();   // M6: read-only tab can't mutate the record
     const veto = !!c._auto && c.state === "pending";
     if (c._auto) { clearTimeout(c._auto); c._auto = null; }
+    if (veto) FT.log("veto_window", { id: c.id, cid: c._cid || null, outcome: "vetoed", input_activity: lastInputT >= (c._armT || 0), ms: Date.now() - (c._armT || Date.now()) });   // R54
     c.state = action; renderQueue(); setOps(); SESSION.mark(c.id, action, { veto });
     /* N4 residual closure (P5-E): a dismissal must reach the server's queue snapshot NOW,
        not after the 400ms debounce — that window was the last way a second-phone AIR could
@@ -662,7 +688,14 @@
         return;   // D18: cap reached — no more arming this session
       }
       FT.log("autoair_armed", { id: c.id, cid: c._cid || null });
-      c._auto = setTimeout(() => { if (streaming && c._gen === gen && c.state === "pending" && autoAirCount < AUTO_AIR_CAP) { autoAirCount++; c._autoAired = true; airCard(c); } }, 4000);
+      c._armT = Date.now();   // R54: veto-window open — input-activity sampling measures against this
+      c._auto = setTimeout(() => { if (streaming && c._gen === gen && c.state === "pending" && autoAirCount < AUTO_AIR_CAP) {
+        autoAirCount++; c._autoAired = true; c._airedAtMs = Date.now();
+        /* R54 objective supplement: did the operator's hands move during THIS card's veto
+           window? (input_activity=false + no tag is the "4s was a formality" signature.) */
+        FT.log("veto_window", { id: c.id, cid: c._cid || null, outcome: "fired", input_activity: lastInputT >= c._armT, ms: Date.now() - c._armT });
+        airCard(c);
+      } }, 4000);
     }
   }
   function clearFactChecks() {
@@ -1145,14 +1178,51 @@
     DBG.event("info", muted ? "mic MUTED (push-to-mute)" : "mic unmuted");
     if (opBridge && opBridge.pushNow) opBridge.pushNow();   // R43: /op latch reconciles on the next poll
   }
+  /* ===== R54: live attention capture (post-hoc recall is RETIRED as a method) =====
+     After each auto-air fires the card carries a visible UNTAGGED state until the operator
+     tags what they were doing during its veto window: one keystroke (W/T/A) here or one tap
+     on /op. Missing tags export as "uncaptured" — never assumed. Objective supplements ride
+     alongside: input-activity sampling per veto window (lastInputT vs arm time) and
+     focus/blur events from both consoles. */
+  let lastInputT = 0;
+  ["pointerdown", "pointermove", "keydown", "wheel"].forEach((ev) =>
+    document.addEventListener(ev, () => { lastInputT = Date.now(); }, { passive: true, capture: true }));
+  document.addEventListener("visibilitychange", () => FT.log("focus", { state: document.visibilityState }));
+  window.addEventListener("blur", () => FT.log("focus", { state: "blur" }));
+  window.addEventListener("focus", () => FT.log("focus", { state: "focus" }));
+  const ATTN_STATES = { w: "watching", t: "talking", a: "away" };
+  function applyAttention(c, state, source) {
+    if (!c || !c._autoAired || c.attention) return;   // auto-aired cards only; first tag wins
+    if (state !== "watching" && state !== "talking" && state !== "away") return;
+    c.attention = state;
+    const e = SESSION.byId.get(c.id); if (e) e.attention = state;
+    FT.log("attention", { id: c.id, cid: c._cid || null, state, source, ms_after_air: c._airedAtMs ? Date.now() - c._airedAtMs : null });
+    DBG.event("info", `attention tagged: ${state} (${source})`, { id: c.id });
+    renderQueue(); updateSessionBtn();
+    if (opBridge && opBridge.scheduleQueuePush) opBridge.scheduleQueuePush();   // clears the card from /op's attention strip
+  }
+  // oldest-untagged-first: tags apply in air order, matching how the operator recalls them
+  function nextUntaggedAuto() { const u = fcCards.filter((c) => c._autoAired && !c.attention); return u[u.length - 1] || null; }
   document.addEventListener("keydown", (e) => {
-    if (e.key !== "m" && e.key !== "M") return;
     const t = e.target;
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-    if (streaming) setMuted(!muted);
+    const k = e.key.toLowerCase();
+    if (k === "m") { if (streaming) setMuted(!muted); return; }
+    /* Hotkey precedence: "a" already means AIR-top-pending (street hotkey below). While any
+       card is pending, "a" keeps that meaning and never tags — tag "away" with the card's
+       button instead (or wait). W and T have no conflict. */
+    if (k === "a" && fcCards.some((c) => c.state === "pending")) return;
+    if (ATTN_STATES[k] && !tabReadOnly) applyAttention(nextUntaggedAuto(), ATTN_STATES[k], "control");
   });
 
   function endStream() {
+    /* R56: End Stream prompts for undone debrief items — attention tags can only be applied
+       while the cards still exist (clearFactChecks empties the queue below), so this is the
+       last exit. Proceeding is allowed; the untagged cards export as "uncaptured" (R54). */
+    if (!tabReadOnly) {
+      const untagged = fcCards.filter((c) => c._autoAired && !c.attention);
+      if (untagged.length && !confirm(`${untagged.length} auto-aired card(s) have no attention tag (W/T/A).\n\nEnd Stream anyway? They will export as "uncaptured".`)) return;
+    }
     streaming = false; micOn = false; gen++;
     if (opBridge) opBridge.streamEnded();   // P3-J: stop the command poll; clear the operator queue snapshot
     clearTimeout(dgRetryT);
@@ -1529,9 +1599,12 @@
       if (tabReadOnly) return;                    // M6: read-only tab never writes the shared queue
       if (!streaming && !clear) return;
       const cards = clear ? [] : fcCards.filter((c) => c.state === "checking" || c.state === "pending").slice(0, 20).map(opQCard);
+      // R54: auto-aired cards awaiting an attention tag ride the snapshot so /op can offer one-tap W/T/A
+      const attn = clear ? [] : fcCards.filter((c) => c._autoAired && c.state === "aired" && !c.attention).slice(0, 6)
+        .map((c) => ({ id: c.id, claim: (c.displayClaim || c.claim || "").slice(0, 80) }));
       try {
         await fetch("/api/onair", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ room: s.room, writeKey: s.writeKey, op: "queue", cards, onAirId: SESSION.currentOnAir, muted }) });   // R43: /op renders the latch
+          body: JSON.stringify({ room: s.room, writeKey: s.writeKey, op: "queue", cards, onAirId: SESSION.currentOnAir, muted, attn }) });   // R43: /op renders the latch
       } catch {}   // best-effort — next mutation re-pushes; /op's 180s TTL bounds staleness
     }
     function opApplyCmd(cmd) {
@@ -1561,6 +1634,10 @@
       } else if (cmd.action === "pull") {
         hideOnAir(); SESSION.markPulled();   // server already published card:null — local half only
         DBG.event("info", "operator PULL (second phone)");
+      } else if (cmd.action === "attention") {
+        // R54: one-tap tag from /op — same applyAttention path as the Mac keystroke (first tag wins)
+        const ac = cmd.cardId != null ? fcCards.find((x) => x.id === cmd.cardId) : null;
+        if (ac) applyAttention(ac, cmd.attn, "op");
       }
     }
     async function opPollCmds() {

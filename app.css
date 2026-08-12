@@ -539,3 +539,10 @@ a.fc-src:hover{color:#9db4ee;text-decoration:underline}
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}
 }
+
+/* ===== R54: attention capture (auto-aired cards) ===== */
+.fc-attn{display:inline-flex;align-items:center;gap:4px;font:800 10px var(--mono);letter-spacing:.05em;color:#f5a623}
+.fc-attn .fc-attn-b{font:800 10px var(--mono);color:#f5a623;background:rgba(245,166,35,.10);
+  border:1px solid rgba(245,166,35,.4);border-radius:5px;padding:3px 8px;cursor:pointer}
+.fc-attn .fc-attn-b:hover{background:rgba(245,166,35,.22)}
+.fc-attn-tag{font:800 10px var(--mono);letter-spacing:.05em;color:#8b93a0}
