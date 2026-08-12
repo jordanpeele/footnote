@@ -87,6 +87,10 @@ export default async function handler(req, res) {
       signalOn ? independentPolarity(utterance, credentials) : Promise.resolve(null),
     ]);
     const v = finalizeVerification(raw);
+    // R49 observability (additive): the concurrence meta-verifier reports per-arm verdicts +
+    // the merge outcome; pass it through so eval runs can report concurrence rates and
+    // disagreement cases verbatim. Absent for single-engine verifiers.
+    if (raw && raw.concurrence) v.concurrence = raw.concurrence;
     // D11: the extractor canonicalizes denials into assertive claims and reports polarity;
     // flip definitive verdicts back for "denies", and surface a conflict flag on malformed
     // polarity so the client can force manual review.

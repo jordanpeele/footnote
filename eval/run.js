@@ -305,6 +305,7 @@ async function main() {
         result.source_tier = vr.json.source?.tier ?? null;
         result.source_name = vr.json.source?.name ?? null;
         result.correction = vr.json.correction ?? null;
+        if (vr.json.concurrence) result.concurrence = vr.json.concurrence;   // R49: per-arm verdicts
         if (c.ground_truth_verdict) {
           result.verdict_pass = result.got_verdict === c.ground_truth_verdict;
           verdictScored++;
