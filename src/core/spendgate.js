@@ -29,10 +29,17 @@ export const ROUTE_CLASSES = {
   admin: "free",         // kill/restore/status — gating this would lock the switch shut
 };
 
+/* In-process kill flag — the SELF-HOST fallback (D18 pilot arming found the gap: without
+   Redis the switch was a silent no-op, meaning self-hosters shipped with NO kill switch).
+   Correct only because npm start is one process (D1): a module flag IS global there. On
+   serverless, invocations don't share modules — the store remains the only correct
+   mechanism, which is why this engages ONLY when the store is unconfigured. */
+export const localKill = { engaged: false, at: null };
+
 // Reads kill:global. Swappable via _setFlagReader so tests can exercise the gate without
 // a live store (the static adapter import leaves no other seam).
 async function defaultFlagReader() {
-  if (!isConfigured()) return false;   // no store = switch can't engage (documented fail-open)
+  if (!isConfigured()) return localKill.engaged;   // self-host: in-process flag (was fail-open no-op)
   const out = await pipeline([["GET", "kill:global"]]);   // null on store non-2xx → falsy → open
   return Boolean(out?.[0]?.result);
 }
