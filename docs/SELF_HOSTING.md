@@ -66,7 +66,7 @@ creates. The variables, honestly:
 | `HOST` | no | bind address, default `127.0.0.1` (loopback only — docker-compose sets `0.0.0.0`) |
 | `FOOTNOTE_STATE` | no | state-channel adapter; `npm start` defaults it to `memory`. Set `upstash` to use Redis locally |
 | `FOOTNOTE_EXTRACTOR` / `FOOTNOTE_VERIFIER` / `FOOTNOTE_STT` | no | adapter selection (see [ARCHITECTURE.md](./ARCHITECTURE.md)); defaults are the shipping vendors |
-| `ADMIN_TOKEN` | no | enables the `/api/admin` global kill switch (kill / restore / status). Without it the route answers 501; it also needs the Upstash store, so it's really a hosted-deployment knob |
+| `ADMIN_TOKEN` | no | enables the `/api/admin` global kill switch (kill / restore / status). Without it the route answers 501. Works without Redis since `d3b2a19` via an in-process flag (responses say `mode: "in-process"`); before that, a Redis-less kill switch was silently fail-open — upgrade if you're on an older checkout |
 | `BYOK_ENABLED` | no | `1` lets rooms spend against their own stored vendor keys (Decision D13). Off by default; leave it off unless you're running a shared instance |
 | `FOOTNOTE_FIELDTEST_LOG` | no | path for the local field-test event sink (`/__fieldtest/log`); only exists on the self-host server |
 | `ALLOW_STUBS` | no | CI-only escape hatch that permits stub adapters when `NODE_ENV=production`. Never set it on anything real |

@@ -19,6 +19,10 @@ protocol; deviations end the pilot.
   the public record always distinguishes machine airing from human airing.
 - **Full field harness** — everything logs; the session produces a field report
   with a dedicated auto-air section including per-card veto-window timing.
+- **Operator attention state per auto-aired card** — self-reported at session
+  end (watching / talking / away, per card). The report pairs veto-window
+  timing with attention state: the evidence base for whether 4 seconds is a
+  real veto window or a formality.
 - **Verifier: concurrence** (D16) — two engines must agree; single-verifier
   sessions cannot auto-air under D18.
 

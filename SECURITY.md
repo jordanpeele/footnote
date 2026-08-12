@@ -22,3 +22,7 @@ Out of scope: rate-limit tuning on a self-hosted instance, the documented fail-o
 ## What to expect
 
 Solo maintainer, and a journalist before a security team — I'll acknowledge within a few days, not hours, and fixes land on the same schedule as everything else here: between shoots. Anything in category 1 or 2 jumps the queue. If it's actively being exploited against the hosted instance, say so in the report; the kill switch exists for exactly that.
+
+## Past disclosures
+
+- **2026-08-12 — self-host kill switch was fail-open without a configured store.** Before `d3b2a19`, `/api/admin` on a Redis-less self-host reported kills as successful while the spend gate ignored the flag — a silent no-op (category 2 above; found by our own pre-pilot arming checklist, no report of exploitation). Fixed via an in-process fallback; admin responses now carry `mode` so you can see which regime you're in. If you self-host with `ADMIN_TOKEN` set and no Redis, upgrade. Details in [CHANGELOG.md](./CHANGELOG.md).
