@@ -45,6 +45,13 @@ const BRAVE_RESULT_COUNT = 10;
 // evidence lines or become Unverifiable (the confident-wrong guard).
 export const VERDICT_PROMPT = 'You are the verdict stage of a live TV fact-checking pipeline. You will receive a claim and an evidence block gathered by a separate web-search stage (Brave Search). Judge the claim against ONLY that evidence block: you have no search access and must not introduce facts that are not in it. Weigh the sources an average American would trust — major wire services (AP, Reuters), national newspapers and broadcasters (New York Times, Wall Street Journal, Washington Post, BBC, NPR, PBS, ABC, CBS, NBC, CNN), U.S. government agencies and official statistics (.gov, e.g. Bureau of Labor Statistics, Census Bureau, CDC, Federal Reserve), reputable encyclopedias (Britannica), peer-reviewed science, and established fact-checkers (PolitiFact, FactCheck.org, Snopes) — and disregard social media, forums (Reddit, Quora), personal blogs, and commercial/SEO pages. Decision rules, in order: (1) If the block is NO_EVIDENCE or nothing in it bears on the claim, the verdict is Unverifiable. (2) If every evidence line that bears on the claim points the same way and is specific enough to settle it, you MUST commit to a definitive verdict: True if the lines confirm the claim as stated, False if they contradict it. Softening a settled verdict to NeedsContext or Misleading is a failure. (3) Misleading only when the evidence shows the claim uses true elements to create a false impression (cherry-picked baseline, misattributed cause, technically-true framing). (4) NeedsContext only when the claim is true or partly true but the evidence shows it is materially incomplete, or when evidence lines genuinely conflict with each other. (5) Your verdict must agree with your own correction sentence: if your correction contradicts the claim, the verdict cannot be True; if it supports the claim as stated, the verdict cannot be False. (6) evidence_lines must list the line IDs your verdict rests on; a True or False verdict you cannot support with specific line IDs is invalid — return Unverifiable instead. Respond with ONLY a compact JSON object, no prose, no code fences: {"verdict":"True|False|Misleading|Unverifiable|NeedsContext","correction":"one concise sentence with the accurate figure/fact, drawn from the evidence lines","confidence":0.0-1.0,"source_name":"the most authoritative outlet named in the evidence lines, e.g. Reuters","evidence_lines":["E1","E3"]}';
 
+// R50 polarity fold-in: when the caller provides `ctx.utterance` (the speaker's raw
+// words), the SAME step-2 Claude call also emits its own independent polarity read as one
+// extra JSON field — no additional API call, no latency cost. Appended to VERDICT_PROMPT
+// only when an utterance is present, so the no-context wire payload stays byte-identical.
+// Named export so tests can assert the payload verbatim (R14).
+export const POLARITY_ADDENDUM = ' Additional field: the user message may include a "Speaker said:" line carrying the speaker\'s raw words. When it does, add one more key to your JSON object: "speaker_polarity" — "asserts" if the speaker is stating the referenced factual proposition as true, "denies" if the speaker is stating it as false (an explicit denial like "never said" / "did not" / "that\'s not true", or a plain negative statement whose whole point is that the positive proposition does not hold). Judge speaker_polarity ONLY from the speaker\'s own words — not from the evidence block, and not from whether the claim is actually true.';
+
 // ---- step 1: Brave Web Search ------------------------------------------------------------
 // BYOK (D13/R8): per-call credential, resolved at header-construction time on EVERY call.
 // NEVER via env mutation — that races across concurrent invocations in a warm lambda
@@ -70,7 +77,11 @@ async function braveSearch(claim, credentials) {
 // ---- step 2: Anthropic Messages verdict --------------------------------------------------
 // One claude-opus-4-8 call, adaptive thinking (per the claude-api guidance for anything
 // non-trivial), judging ONLY the evidence block. Per-call credential (R8).
-async function claudeVerdict(claim, evidenceBlock, credentials) {
+async function claudeVerdict(claim, evidenceBlock, credentials, utterance = "") {
+  const system = utterance ? VERDICT_PROMPT + POLARITY_ADDENDUM : VERDICT_PROMPT;
+  const user = utterance
+    ? `Claim: ${claim}\n\nSpeaker said: ${utterance}\n\nEvidence block:\n${evidenceBlock}`
+    : `Claim: ${claim}\n\nEvidence block:\n${evidenceBlock}`;
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -82,8 +93,8 @@ async function claudeVerdict(claim, evidenceBlock, credentials) {
       model: CLAUDE_MODEL,
       max_tokens: 1024,
       thinking: { type: "adaptive" },
-      system: VERDICT_PROMPT,
-      messages: [{ role: "user", content: `Claim: ${claim}\n\nEvidence block:\n${evidenceBlock}` }],
+      system,
+      messages: [{ role: "user", content: user }],
     }),
   });
   if (!r.ok) {
@@ -119,17 +130,29 @@ function anthropicText(j) {
 }
 
 /** @type {import("../../../core/interfaces/verifier.js").Verifier["verify"]} */
-export async function verify(claim, _ctx = {}, credentials = null) {
+export async function verify(claim, ctx = {}, credentials = null) {
+  // R50 additive context: the raw utterance, when the route passes it. Optional — absent
+  // (or an empty ctx) reproduces the pre-R50 behavior byte-for-byte.
+  const utterance = typeof ctx?.utterance === "string" ? ctx.utterance.trim() : "";
+
   // step 1 — evidence gathering (Brave). All citations come from here.
   const brave = await braveSearch(claim, credentials);
   const { evidenceBlock, citations } = buildEvidence(brave);
 
-  // step 2 — verdict commitment (Claude), judging ONLY the gathered evidence.
-  const vd = await claudeVerdict(claim, evidenceBlock, credentials);
+  // step 2 — verdict commitment (Claude), judging ONLY the gathered evidence. With an
+  // utterance present, the same call also emits its independent speaker-polarity read.
+  const vd = await claudeVerdict(claim, evidenceBlock, credentials, utterance);
   const content = anthropicText(vd);
   let parsed = {};
   try { parsed = JSON.parse(content.replace(/```json/gi, "").replace(/```/g, "").trim()); } catch {}
   // raw + unfiltered, IDENTICAL shape to the perplexity adapters: core applies verdict
   // whitelisting, markdown cleanup, trust ranking (D5).
-  return { verdict: parsed.verdict, correction: parsed.correction, confidence: parsed.confidence, sourceName: parsed.source_name, citations, raw: content };
+  const out = { verdict: parsed.verdict, correction: parsed.correction, confidence: parsed.confidence, sourceName: parsed.source_name, citations, raw: content };
+  if (utterance) {
+    // Additive (R50): strict normalization — anything but the two literals is null ("no
+    // read"), mirroring the fail-safe posture of src/core/polarity-signal.js.
+    const sp = typeof parsed.speaker_polarity === "string" ? parsed.speaker_polarity.trim().toLowerCase() : "";
+    out.independent_polarity = sp === "asserts" || sp === "denies" ? sp : null;
+  }
+  return out;
 }

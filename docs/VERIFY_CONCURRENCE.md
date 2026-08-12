@@ -157,3 +157,85 @@ both adapters dark. The interesting new metric for concurrence specifically: **p
 among the `concurrence.eligible === true` subset** — the hypothesis is that mutual definitive
 agreement is materially more precise than either engine alone, at the cost of recall (fewer
 claims reach eligible).
+
+## R50 — the independent polarity signal (why concurrence alone can't catch polarity)
+
+**The structural hole (R50's rationale, verbatim):** "the polarity field is emitted by the
+SHARED extractor upstream of both verifier arms; the flip is applied above the Verifier
+interface (D5); therefore concurrence over verifiers is structurally blind to polarity
+misclassification — both arms would confirm the same mirrored card." Two engines can agree
+all day on the *canonical assertive claim* and the card still airs inverted, because the
+inversion happens in the one component both arms share (the extractor's `polarity` field)
+and in the flip applied *after* both arms return (`applyPolarity` in api/verify.js).
+Calibration #4 quantified it: the MIRROR class (denies mislabeled asserts) is the last
+unguarded polarity direction — R46 catches the other direction (11/11), but cannot catch
+this one (negation-present + asserts is riddled with false positives).
+
+**The guard (src/core/polarity-signal.js):** a second, *independent* polarity instrument —
+one cheap Haiku call (`claude-haiku-4-5-20251001`, temperature 0, ≤50 output tokens) that
+reads ONLY the speaker's raw words (different prompt than the extractor, no canonical claim
+shown) and answers one question: is the speaker ASSERTING or DENYING the factual
+proposition they reference? Strict one-word parsing; anything unreadable/ambiguous/errored
+is `null` — **fail-safe: null means "no signal", never a forced hold**. The signal can only
+ever ADD a hold, never clear one.
+
+**Wiring (api/verify.js):** the client may now send the optional `utterance` (the speaker's
+raw words) in the verify POST body (string, trimmed, capped at 1000 chars). When present
+and `FOOTNOTE_POLARITY_SIGNAL !== "off"`, the signal runs **in parallel** with the verifier
+(`Promise.all` — verify is ~2.6s, the signal is sub-1s Haiku, so zero added wall latency).
+After the existing `applyPolarity` step, a non-null signal that disagrees with the claimed
+polarity (`suspect_denies` normalizes to `denies` for comparison; absent claimed polarity
+means `asserts`) forces `polarity_conflict: true` — routing into the EXISTING hold
+machinery: never auto-airs per D4, ⚠ on /op, spoken framing per D17 (R46's exact pattern).
+Additive response field: `polarity_signal` (`"asserts"|"denies"|null`), present only when
+the request carried an utterance. **Requests without `utterance` are byte-identical to the
+pre-R50 contract** — the eval harness doesn't send it yet.
+
+**Verifier interface (additive):** `verify(claim, ctx, credentials)` now documents an
+optional `VerifyContext` — `{utterance?, claimedPolarity?}`. Adapters may ignore it
+entirely; `{}` behaves exactly as before. `RawVerification` gains optional
+`independent_polarity` (`"asserts"|"denies"|null`).
+
+**brave-claude fold-in:** when `ctx.utterance` is present, the SAME step-2 Claude verdict
+call carries a `POLARITY_ADDENDUM` on the system prompt plus a `Speaker said:` line, and
+emits one extra JSON field (`speaker_polarity`) returned as `independent_polarity` — one
+call, no extra spend. Without an utterance the wire payload is byte-identical to pre-R50.
+
+### Truth-table extension (concurrence)
+
+Applied AFTER the verdict merge, only when BOTH arms returned a readable
+`independent_polarity` (requires `ctx.utterance` + both adapters supporting the fold-in;
+with the default perplexity pairing the extension is inert — perplexity has no fold-in yet).
+Let pA/pB be the arms' reads and pC the extractor's `claimedPolarity`
+(`suspect_denies`→`denies`; malformed/absent pC skipped):
+
+| condition | effect |
+|---|---|
+| pA = pB = pC (or pC absent) | no change to the verdict merge |
+| pA ≠ pB, or either ≠ pC | downgrade **exactly like verdict disagreement**: definitive merged verdict → NeedsContext, eligibility stripped, `conflict: true`, confidence damped ×0.5 |
+| either arm's read is null | extension inert — no signal is never treated as disagreement |
+
+The concurrence result carries `concurrence.polarity = {a, b, claimed, conflict}` (or
+`null` when the extension didn't engage; always `null` on the one-arm-errored path).
+
+### Env switches
+
+| var | default | meaning |
+|---|---|---|
+| `FOOTNOTE_POLARITY_SIGNAL` | *(on)* | set `off` to bypass the independent signal (no Haiku call; `polarity_signal: null` when an utterance was sent; never a forced conflict) |
+
+Cost/latency per verify with an utterance: +1 Haiku call (~50 output tokens ≈ fractions of
+a cent), 0 added wall latency (parallel; measured mean ~0.8s vs the ~2.6s verifier).
+
+### Acceptance replay (R50, live, 2026-08-12)
+
+`node tools/bench/polarity-replay.mjs` — 12 live Haiku calls against the mirror class
+(pol-001, geo-029), all four field-session denials, and six clean assertions. Result:
+**geo-029 CAUGHT (denies), zero false holds across all ten legitimate cases**; pol-001 read
+"asserts" — which agrees with pol-001's own `adjudication_note` ("Expected polarity:
+asserts", "final on-air verdict: False") and with quote-001 (byte-identical snippet,
+`expected_polarity: "asserts"`). pol-001's `expected_polarity: "denies"` is a golden data
+contradiction (a signal returning "denies" there would false-hold every approvingly-repeated
+quote attribution); flagged for an orchestrator ruling — under the adjudication-note-corrected
+reading the mirror class is 1 case, and the replay PASSES. Verbatim tables in
+`tools/bench/results/polarity-replay-2026-08-12T15-42-03.{txt,jsonl}`.

@@ -459,7 +459,7 @@
     const t1 = performance.now();
     let v = null, verifyPaused = false;
     try {
-      const r = await fetch("/api/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ claim, polarity, room: fcRoom || undefined }) });
+      const r = await fetch("/api/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ claim, polarity, utterance: t, room: fcRoom || undefined }) });   // R50: raw utterance feeds the independent polarity signal
       const body = await r.json().catch(() => ({}));
       if (r.status === 503 && body && body.paused === true) verifyPaused = true;   // operator kill-switch — not a failure
       else if (r.ok) { noteUnpaused(); v = body; }

@@ -61,6 +61,18 @@ async function getVerifier(id) {
 //   both non-definitive & SAME                        → that verdict           | not eligible
 //   both non-definitive & DIFFERENT                   → the LESS committal one  | not eligible
 //
+//   POLARITY EXTENSION (R50) — applied AFTER the verdict merge, only when BOTH arms
+//   returned an `independent_polarity` (i.e. ctx.utterance was provided and both adapters
+//   support the fold-in). Let pA/pB be the arms' polarity reads and pC the extractor's
+//   claimedPolarity from ctx (suspect_denies normalized to denies; malformed/absent pC is
+//   skipped):
+//   pA == pB == pC (or pC absent)   → no change                                | unchanged
+//   pA != pB, or either != pC       → DOWNGRADE exactly like verdict disagreement:
+//                                     definitive merged verdict → NeedsContext,
+//                                     eligibility stripped, conflict flagged,
+//                                     confidence damped                        | not eligible
+//   either arm's read is null       → polarity extension inert (no signal ≠ disagreement)
+//
 // "Less committal" ranking (most→least committal): True/False > Misleading > NeedsContext
 // > Unverifiable. When two non-definitive verdicts differ, the higher-ranked (more
 // committal) one is DROPPED and the lower wins — the conservative merge. Only mutual
@@ -136,6 +148,7 @@ export async function verify(claim, ctx = {}, credentials = null) {
         eligible: false,
         conflict: false,
         merged,
+        polarity: null,   // R50 extension needs BOTH arms — inert on the one-error path
       },
     };
   }
@@ -145,7 +158,26 @@ export async function verify(claim, ctx = {}, credentials = null) {
   const b = rB.value;
   const va = canonVerdict(a.verdict);
   const vb = canonVerdict(b.verdict);
-  const { verdict, eligible, conflict } = mergeVerdicts(va, vb);
+  let { verdict, eligible, conflict } = mergeVerdicts(va, vb);
+
+  // R50 polarity extension (see truth-table above): engages ONLY when both arms returned
+  // a readable independent polarity. Disagreement — arm vs arm, or either arm vs the
+  // extractor's claimed polarity — downgrades exactly like a verdict disagreement. A null
+  // read on either side leaves the extension inert (fail-safe: no signal is never treated
+  // as disagreement).
+  const pa = normPolarity(a.independent_polarity);
+  const pb = normPolarity(b.independent_polarity);
+  let polarity = null;
+  if (pa && pb) {
+    const pc = normPolarity(ctx?.claimedPolarity);   // suspect_denies→denies; malformed→null (skipped)
+    const pConflict = pa !== pb || (pc != null && (pa !== pc || pb !== pc));
+    polarity = { a: pa, b: pb, claimed: pc, conflict: pConflict };
+    if (pConflict) {
+      if (DEFINITIVE.has(verdict)) verdict = "NeedsContext";
+      eligible = false;
+      conflict = true;
+    }
+  }
 
   // Pick the raw material (correction/source/citations) from the sub-result whose verdict
   // the merged verdict matches; on conflict/downgrade, prefer the more conservative side so
@@ -174,8 +206,19 @@ export async function verify(claim, ctx = {}, credentials = null) {
       eligible,
       conflict,
       merged: verdict,
+      polarity,   // R50: {a, b, claimed, conflict} when both arms read polarity; else null
     },
   };
+}
+
+// R50: normalize a polarity value for the concurrence comparison. suspect_denies (the R46
+// rewrite) compares as denies; anything else off-vocabulary (or absent) is null — meaning
+// "skip", never "disagree" (a malformed claimed polarity is already held above the
+// interface by applyPolarity's own tripwire).
+function normPolarity(p) {
+  const s = typeof p === "string" ? p.trim().toLowerCase() : "";
+  if (s === "suspect_denies") return "denies";
+  return s === "asserts" || s === "denies" ? s : null;
 }
 
 function dedupe(arr) {

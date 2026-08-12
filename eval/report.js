@@ -36,6 +36,10 @@ const MIN_SCORED_AT_FLOOR = 20;     // minimum scored samples at the floor befor
 const NEVER_ELIGIBLE = new Map([
   ["person_claims", { verdict: "NEVER", cls: "D4", reason: "Decision D4 — person claims never auto-air, regardless of calibration" }],
   ["attributed_quotes", { verdict: "BLOCKED", cls: "D11", reason: "Decision D11 — quotes ineligible until harness-v2-verified calibration clears them" }],
+  // R51 (post-calibration-#4): adversarial met the numeric bar (96.9%) and is PERMANENTLY
+  // manual-only anyway — auto-airing verdicts on adversarial input invites gaming as content.
+  // Its eligibility stands as a calibration FACT; the category policy overrides it.
+  ["adversarial", { verdict: "NEVER", cls: "R51", reason: "Ruling R51 — adversarial claims never auto-air; eligibility is a calibration fact only" }],
 ]);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

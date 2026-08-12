@@ -226,3 +226,7 @@ Spot-check artifacts: run live 2026-08-07, adapter invoked directly from repo ro
 ## Pending resolutions — 2026-08-11 (calibration #4 data)
 
 adv-027, geo-030, geo-031 were `investigated_pol_pending` (correct IFF polarity=denies, unrecorded by the run-#2 harness). Calibration #4 — the first run recording got_polarity — shows `denies` on ALL THREE: the extractor captured each denial correctly in the polarity field. All three -> `same_claim`. The pending mechanism worked exactly as designed: flag on missing evidence, resolve on real evidence.
+
+## Data correction — 2026-08-12 (pol-001, found by the R50 replay)
+
+pol-001 carried `expected_polarity: denies` contradicting (a) its own note ('Expected polarity: asserts ... final on-air verdict: False') and (b) quote-001, the byte-identical transcript labeled asserts. An approving quotation is a net assertion. Field corrected to `asserts` per the note (precedent: pol-008/009/010, 2026-08-11). CONSEQUENCE: calibration #4's MIRROR class was 1 real case (geo-029), not 2 — and the R50 signal catches geo-029 with zero false holds across the acceptance set. R50 bar: PASS.

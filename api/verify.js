@@ -10,6 +10,7 @@ import { getAdapter } from "../src/core/registry.js";
 import { UpstreamError } from "../src/core/errors.js";
 import { finalizeVerification } from "../src/core/editorial.js";
 import { applyPolarity } from "../src/core/polarity.js";
+import { independentPolarity, signalDisagrees } from "../src/core/polarity-signal.js";
 import { HOSTED_VERDICTS_PER_ROOM_PER_DAY } from "../src/core/tunables.js";
 import { isConfigured as storeConfigured, pipeline } from "../src/adapters/state/upstash/index.js";
 
@@ -36,6 +37,12 @@ export default async function handler(req, res) {
   if (!claim) { res.status(400).json({ error: "no claim" }); return; }
   const polarity = req.body?.polarity;                                // optional, from /api/extract
   const room = okRoom(req.body?.room) ? req.body.room : null;         // optional, from /control
+  // R50: optional raw utterance (the speaker's words the claim was extracted from).
+  // Sanitized like the other free-text inputs: string-typed, trimmed, hard length cap.
+  // When present it (a) rides to the verifier as additive context and (b) feeds the
+  // independent polarity signal below. Absent → this request behaves EXACTLY as before
+  // (the eval harness doesn't send it yet — backward compatibility is load-bearing).
+  const utterance = typeof req.body?.utterance === "string" ? req.body.utterance.trim().slice(0, 1000) : "";
 
   // Room accounting (hosted-spend protection). With BYOK_ENABLED, a room whose stored
   // rk:<room> record holds its own Perplexity key pays its own way and skips the cap;
@@ -65,7 +72,20 @@ export default async function handler(req, res) {
   }
 
   try {
-    const raw = await getAdapter("verifier").verify(claim, {}, credentials);
+    // R50 independent polarity signal: when the raw utterance is available (and the
+    // FOOTNOTE_POLARITY_SIGNAL kill switch isn't "off"), one cheap Haiku call reads ONLY
+    // the speaker's words and forms its own asserts/denies opinion — the guard for the
+    // MIRROR class (denies mislabeled asserts, calibration #4) that R46 structurally
+    // cannot catch and verifier concurrence is structurally blind to (shared extractor).
+    // It runs IN PARALLEL with the verifier (Promise.all): verify is ~2.6s, the signal is
+    // sub-1s Haiku, so wall latency is unchanged. Fail-safe: the signal resolves null on
+    // any error — never rejects, never forces a hold on its own failure.
+    const ctx = utterance ? { utterance, claimedPolarity: polarity } : {};
+    const signalOn = Boolean(utterance) && process.env.FOOTNOTE_POLARITY_SIGNAL !== "off";
+    const [raw, signal] = await Promise.all([
+      getAdapter("verifier").verify(claim, ctx, credentials),
+      signalOn ? independentPolarity(utterance, credentials) : Promise.resolve(null),
+    ]);
     const v = finalizeVerification(raw);
     // D11: the extractor canonicalizes denials into assertive claims and reports polarity;
     // flip definitive verdicts back for "denies", and surface a conflict flag on malformed
@@ -73,6 +93,16 @@ export default async function handler(req, res) {
     const p = applyPolarity(v.verdict, polarity);
     v.verdict = p.verdict;
     v.polarity_conflict = Boolean(p.conflict);
+    if (utterance) {
+      // Additive observability: what the independent signal said (null = no signal).
+      // Only present when the request carried an utterance — the no-utterance response
+      // shape is byte-identical to pre-R50.
+      v.polarity_signal = signal;
+      // Disagreement forces the conflict hold — the EXISTING machinery (never auto-airs
+      // per D4, ⚠ on /op, spoken framing per D17; R46's pattern). One-way: the signal can
+      // only ADD a hold, never clear one applyPolarity already raised.
+      if (signalDisagrees(signal, polarity)) v.polarity_conflict = true;
+    }
     res.setHeader("Cache-Control", "no-store");
     res.status(200).json(v);
   } catch (e) {
