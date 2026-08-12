@@ -12,9 +12,9 @@ Just want to see it? `npm run demo`, then open http://localhost:3000/overlay?roo
 
 ## The record so far
 
-> **4 sessions · 102 checks · 1 wrong-verdict card aired (found, published, closed in code) · 1 display-incoherent pairing (found, published, closed in code)**
+> **5 sessions · 122 checks · 1 wrong-verdict card aired (found, published, closed in code) · 1 display-incoherent pairing (found, published, closed in code) · 10 machine-aired under supervised pilot (0 wrong)**
 
-That sentence is the product. A fact-checker you can't audit is just a graphics package, so every session Footnote has run is written up with its failures attached: the [first field test](docs/FIELD_TEST_2026-08-08.md), the [street session](docs/FIELD_TEST_2026-08-10_STREET.md) (where both failures were found), and the calibration runs that decide what the machine is allowed to do on its own ([#1](docs/CALIBRATION_REPORT_2026-08-07.md), [#2](docs/CALIBRATION_REPORT_2_2026-08-07.md), [#3](docs/CALIBRATION_REPORT_3_TWOSTEP_2026-08-09.md) — current answer: nothing; a human airs every card). Both closures ship with regression tests.
+That sentence is the product. A fact-checker you can't audit is just a graphics package, so every session Footnote has run is written up with its failures attached: the [first field test](docs/FIELD_TEST_2026-08-08.md), the [street session](docs/FIELD_TEST_2026-08-10_STREET.md) (where both failures were found), the calibration runs that decide what the machine is allowed to do on its own ([#1](docs/CALIBRATION_REPORT_2026-08-07.md), [#2](docs/CALIBRATION_REPORT_2_2026-08-07.md), [#3](docs/CALIBRATION_REPORT_3_TWOSTEP_2026-08-09.md), [#4](docs/CALIBRATION_REPORT_4_2026-08-11.md)), and the [first supervised auto-air pilot](docs/D18_PILOT_FIELD_REPORT_2026-08-12.md) — one category (science/health), operator present with a live veto, capped at 10 per session, every machine-aired card marked on the public record. En route to that pilot, our own arming checklist caught the self-host kill switch failing open ([disclosed](CHANGELOG.md)). All closures ship with regression tests.
 
 ## Quickstart — 60 seconds
 
@@ -73,7 +73,7 @@ Verifier PRs ship with a golden-set run ([eval/](eval/README.md)) — "seemed ri
 The interesting part isn't the API calls — it's the rules about what is allowed to reach the screen, and they're written down to be audited:
 
 - **[HOW_FOOTNOTE_DECIDES.md](HOW_FOOTNOTE_DECIDES.md)** — the editorial policy. What counts as a checkable claim, the four-tier source hierarchy, verdict–evidence floors, the harm classes that can never auto-air, and the corrections rule (wrong verdicts get corrected on air, not deleted). Every rule is marked as either enforced-in-code or planned; divergence between code and an unmarked rule is a bug.
-- **[docs/STREET_PROTOCOL.md](docs/STREET_PROTOCOL.md)** — the operator's one-page rulebook for live sessions. Rule 1: veto everything. Auto-air exists in the code but is calibration-gated and the current calibration answer is *no categories qualify*, so nothing airs without a human thumb.
+- **[docs/STREET_PROTOCOL.md](docs/STREET_PROTOCOL.md)** — the operator's one-page rulebook for live sessions. Rule 1: veto everything. Auto-air is calibration-gated per category: after four calibrations, two-verifier concurrence, and a polarity guard, exactly one category (science/health) runs under a [supervised pilot protocol](docs/D18_PILOT_PROTOCOL.md) — operator present, 4-second live veto, 10-per-session cap, machine-aired cards permanently marked. Everything else: a human airs every card.
 
 Changes to the editorial policy get a higher review bar than changes to code ([CONTRIBUTING.md](CONTRIBUTING.md#editorial-policy-changes)).
 

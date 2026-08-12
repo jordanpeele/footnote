@@ -105,12 +105,21 @@ merge-recovery path also have measured headroom.
 
 ## The endgame — earned autonomy
 
-Auto-air (the tool airing high-confidence checks without a human thumb) is
-deliberately **off**, and has stayed off through three calibration runs because it
-hasn't earned it on the evidence — [that story is a feature, not a bug](./HOW_FOOTNOTE_DECIDES.md).
-The accuracy engine above is the first work with a real chance of moving that bar.
-When it clears — per category, measured, on a representative eval set — autonomy
-becomes a documented decision, not a default. Until then: a human airs every card.
+Auto-air (the tool airing high-confidence checks without a human thumb) stayed
+**off** through three calibration runs because it hadn't earned it on the evidence —
+[that story is a feature, not a bug](./HOW_FOOTNOTE_DECIDES.md). Then it started
+earning it, the way this section said it would have to: calibration #4 produced the
+first eligible categories, [two-verifier concurrence](./docs/R49_CONCURRENCE_REPORT_2026-08-12.md)
+held at 100% on science/health, an independent polarity guard closed the last known
+wrong-card class, and on 2026-08-12 the [first supervised pilot session](./docs/D18_PILOT_FIELD_REPORT_2026-08-12.md)
+machine-aired 10 cards with zero wrong and every refusal gate firing on cue.
+
+The current state is deliberately narrow: **one category, operator present, live
+4-second veto, 10 per session, machine-aired cards permanently marked** — a
+[written protocol](./docs/D18_PILOT_PROTOCOL.md) with abort criteria, not a switch
+someone flipped. Autonomy stays a documented decision per category, expanded only by
+the same evidence path and revocable the same way (one wrong machine-aired card ends
+the pilot). Everything outside the pilot's scope: a human airs every card.
 
 ---
 

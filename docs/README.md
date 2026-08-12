@@ -38,14 +38,23 @@ either fixed with a pointer to the fix, or still open and says so.
   True. Found in adjudication prep, reported in full, closed by the R46 negation tripwire
   (shipped, live-probed, regression-pinned in `test/field-replay.test.js`).
 
-Cumulative field record, from the [ledger](./LATENCY_LEDGER.md): **4 sessions · 102 checks ·
-1 wrong-verdict card aired (FS-8, closed) · 1 display-incoherent pairing (FS-1, closed).**
+- **[D18_PILOT_FIELD_REPORT_2026-08-12.md](./D18_PILOT_FIELD_REPORT_2026-08-12.md)** — the
+  first machine-aired session: a supervised auto-air pilot on science/health under the
+  [D18 protocol](./D18_PILOT_PROTOCOL.md). **10 auto-airs · 0 wrong · 0 aborts**; both
+  vetoes cancelled in-window, the person-claim never armed, two live polarity-conflict
+  holds, the cap wall proven at exactly 10. Honest gaps carried to session 2: the FS-2
+  screen-lock re-verify and per-card attention capture.
 
-## Calibration — why auto-air is off
+Cumulative field record, from the [ledger](./LATENCY_LEDGER.md): **5 sessions · 122 checks ·
+1 wrong-verdict card aired (FS-8, closed) · 1 display-incoherent pairing (FS-1, closed) ·
+10 machine-aired under supervised pilot (0 wrong).**
 
-Three runs, one story: **auto-air has failed its bar three times and stays off.** The gate
-(Decision D3/D15) requires ≥95% verdict precision at the confidence floor, per category,
-both scorers clean — autonomy is measured into existence or it doesn't exist.
+## Calibration — how auto-air earned a pilot
+
+The gate (Decision D3/D15) requires ≥95% verdict precision at the confidence floor, per
+category, both scorers clean — autonomy is measured into existence or it doesn't exist.
+Auto-air failed that bar three times and stayed off; run #4 plus a concurrence eval moved
+it, narrowly, for one category.
 
 1. **[CALIBRATION_REPORT_2026-08-07.md](./CALIBRATION_REPORT_2026-08-07.md)** — run #1,
    173 cases. Eligible categories: none (insufficient n, and 94–95% against a 95% bar where
@@ -57,6 +66,15 @@ both scorers clean — autonomy is measured into existence or it doesn't exist.
    — the two-step verifier's promotion eval. It fixed the miss class it targeted (hedging on
    definitive evidence) and bought that by over-committing on mid-tier claims — the worse
    failure on air. Not promoted; it stays dark.
+4. **[CALIBRATION_REPORT_4_2026-08-11.md](./CALIBRATION_REPORT_4_2026-08-11.md)** — run #4,
+   the first to measure polarity and the aired verdict as their own dimensions. The R46
+   tripwire validated 11/11; true polarity air-risk quantified at 1-in-193; and the first
+   two categories cleared the D3 bar. Eligibility ≠ enablement — which is why #5 exists.
+5. **[R49_CONCURRENCE_REPORT_2026-08-12.md](./R49_CONCURRENCE_REPORT_2026-08-12.md)** — two
+   independent verifier engines (different index AND model) must agree before anything is
+   air-eligible. 100% concurrence on science/health met the pilot precondition; the sci-033
+   case (both engines confidently wrong, caught by the min-of-arms confidence floor) is the
+   argument for layered gates over any single check.
 
 Supporting material: **[VERIFY_TWOSTEP.md](./VERIFY_TWOSTEP.md)** (the dark adapter, why it
 exists, and the exact promotion bar it failed) and the adjudication trail in
