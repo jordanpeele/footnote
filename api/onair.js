@@ -50,6 +50,7 @@ function slimCard(c) {
   if (typeof c.canonical === "string" && c.canonical) slim.canonical = cut(strip(c.canonical), 300);
   if (typeof c.kind === "string") slim.kind = cut(strip(c.kind), 24);   // passthrough (e.g. "correction" cards — overlay renders)
   if (c.test === true) slim.test = true;   // field-test watermark flag (local TESTAIR) — boolean only, overlay renders "TEST"
+  if (c.autoAired === true) slim.autoAired = true;   // D18: machine airs are distinctly marked on receipts
   if (typeof c.refId === "string" && c.refId) slim.refId = cut(strip(c.refId), 32);         // correction → original join key (R9)
   if (typeof c.refClaim === "string" && c.refClaim) slim.refClaim = cut(strip(c.refClaim), 300);   // legacy fallback join — keep one release
   /* SPRINT-02 C: sourcing passthrough → the aired log, so receipts can render tier + all

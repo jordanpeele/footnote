@@ -134,6 +134,9 @@
     const top = el("div", "rc-top");
     const m = isCorr ? { cls: "", icon: "↺", label: "CORRECTION" } : vmeta(e.verdict);
     top.appendChild(el("span", ("rc-badge " + m.cls).trim(), m.icon + " " + m.label));
+    // D18: machine-aired cards are distinctly marked — the record always tells you whether
+    // a human thumb or the auto-air gate put this on screen
+    if (e.autoAired === true) top.appendChild(el("span", "rc-auto", "AUTO · machine-aired"));
     if (!isCorr && e.id && correctedIds.has(e.id)) top.appendChild(el("span", "rc-corrected", "↺ corrected"));
     if (e.airedAt) top.appendChild(el("time", "rc-time", fmtTime(e.airedAt)));
     card.appendChild(top);

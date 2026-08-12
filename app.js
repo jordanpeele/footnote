@@ -657,8 +657,12 @@
          the 4s veto window makes `streaming` true again for the WRONG stream. The card must
          also belong to the CURRENT generation. Auto-air is autonomous work, so it is gen-guarded
          (operator AIR clicks are not). */
+      if (autoAirCount >= AUTO_AIR_CAP) {
+        if (!autoAirCapNoted) { autoAirCapNoted = true; DBG.event("warn", `auto-air session cap (${AUTO_AIR_CAP}) reached — remaining cards are manual (D18)`); FT.log("autoair_cap", { cap: AUTO_AIR_CAP }); }
+        return;   // D18: cap reached — no more arming this session
+      }
       FT.log("autoair_armed", { id: c.id, cid: c._cid || null });
-      c._auto = setTimeout(() => { if (streaming && c._gen === gen && c.state === "pending") { c._autoAired = true; airCard(c); } }, 4000);
+      c._auto = setTimeout(() => { if (streaming && c._gen === gen && c.state === "pending" && autoAirCount < AUTO_AIR_CAP) { autoAirCount++; c._autoAired = true; airCard(c); } }, 4000);
     }
   }
   function clearFactChecks() {
@@ -1070,6 +1074,7 @@
 
   async function startStream() {
     streaming = true; const myGen = ++gen; clearFactChecks();
+    autoAirCount = 0; autoAirCapNoted = false;   // D18: cap is per-session
     if (applyKeyterms) applyKeyterms();   // R40: keyterms snapshot for this stream
     if (opBridge) opBridge.streamStarted();   // P3-J: start the operator command poll + baseline the queue snapshot
     dgEverWorked = false; dgRetryN = 0; clearTimeout(dgRetryT);
@@ -1121,6 +1126,11 @@
      Mute state survives Start/End Stream on purpose: a surprise-hot mic is worse than
      surprise silence. ---- */
   let muted = false, muteBtnEl = null;
+  /* D18 pilot constraint: hard cap on auto-airs per session. Counted at FIRE time (not
+     arm time — vetoed cards don't consume the cap), reset on Start Stream. At the cap,
+     maybeAutoAir stops arming and the operator is told once. */
+  const AUTO_AIR_CAP = 10;
+  let autoAirCount = 0, autoAirCapNoted = false;
   let applyKeyterms = null;   // R40: set by the control bridge; called at Start Stream
   function setMuted(on) {
     muted = !!on;
@@ -1474,6 +1484,7 @@
         card: card ? { verdict: card.verdict, claim: card.displayClaim || card.claim, canonical: card.claim, correction: card.correction, source: card.source || null,
           kind: card.kind || undefined,                                       // passthrough (e.g. "correction" — overlay/receipts render it)
           test: card.test === true || undefined,                              // field-test watermark (local TESTAIR only — overlay renders it)
+          autoAired: card._autoAired === true || undefined,                   // D18: receipts distinctly mark machine airs
           // C2 sourcing display: tier drives the PRIMARY-SOURCE treatment on the card;
           // citations (already editorial-ranked) let /receipts show every qualifying source
           tier: (card.source && typeof card.source.tier === "number") ? card.source.tier : undefined,
