@@ -94,6 +94,17 @@ and `srtla_rec` on the Mac reassembles them into plain SRT for the existing OBS 
   posture. The SRT stream itself must carry a passphrase — set the same one in the OBS
   listener and in Moblin. srtla relays SRT payloads untouched, so the passphrase and
   encryption survive the bonding hop end-to-end.
+- **The operator's deployment (example — the generic pattern above is what forks copy):**
+  a dedicated `t4g.nano` in the operator's ops account (us-west-2) with an Elastic IP, so
+  the Moblin URL never changes: `srtla://<elastic-ip>:5000`, OBS media source dials OUT
+  to `srt://<elastic-ip>:4001?passphrase=…` in caller mode, health at `:8080`. Provisioned
+  by `tools/relay/setup-relay.sh` verbatim; coupling: none (the box does nothing else).
+  Migration is the same script on any Ubuntu host — ~10 minutes by design.
+- **Architecture note (orchestrator-ratified):** the relay is Phase 1 of a three-phase
+  path — (1) relay + Mac brain (this document), (2) the pipeline moves cloud-side with an
+  ffmpeg audio tap at the relay ingest, retiring the OBS→BlackHole audio chain, (3) full
+  cloud compositor. The relay is built knowing it becomes Phase 2's ingest point — no
+  throwaway choices.
 - The carrier caveat, from the [checklist](./STREET_CHECKLIST.md), verbatim:
   **"same-carrier bonding helps congestion, not coverage — a second-carrier eSIM is the
   real redundancy, operator's call."**

@@ -58,5 +58,9 @@ echo "       overlay  (copy from control bar — keep localhost, for OBS)"
 echo "       /op      http://${TAILNET_IP}:3000/op?room=<room>&key=<key>"
 echo "       Moblin   srtla://${TAILNET_IP}:5000  (bonded — preferred)"
 echo "                srt://${TAILNET_IP}:9000     (single-path fallback)"
+# W2: relay health (walk-test pre-flight) — the media front door must answer before anyone leaves the house
+RELAY_HEALTH=$(curl -s -m 5 http://54.203.255.224:8080/ 2>/dev/null || true)
+if echo "$RELAY_HEALTH" | grep -q '"srtla_rec":"active"'; then echo "relay:    UP — $RELAY_HEALTH"
+else echo "relay:    ⚠ NOT ANSWERING (http://54.203.255.224:8080/) — bonded path unavailable; indoor srt:// fallback only"; fi
 echo "pre-flight: docs/STREET_CHECKLIST.md"
 echo "dashboard:  node tools/fieldtest/dashboard.js eval/results/fieldtest-2026-08-10-street.jsonl"
