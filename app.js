@@ -412,16 +412,16 @@
     FT.log("check_start", { cid, spoken: t, typed: !!opts.force, merged: !!opts.merged });
     fcInflight++; setOps();
     const t0 = performance.now();
-    let claim = null, extractFailed = false, extractPaused = false, ungrounded = false, polarity, harmClass;
+    let claim = null, extractFailed = false, extractPaused = false, ungrounded = false, polarity, harmClass, category;
     try {
       const r = await fetch("/api/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: t }) });
       const j = await r.json().catch(() => ({}));
       if (r.status === 503 && j && j.paused === true) extractPaused = true;   // operator kill-switch — not a failure
       else if (!r.ok) { noteUnpaused(); extractFailed = true; DBG.event("err", `extract failed${j && j.upstream_status ? ` · Anthropic ${j.upstream_status}` : ` · HTTP ${r.status}`}`, { status: r.status, upstream_status: j && j.upstream_status, upstream: j && j.upstream, spoken: t.slice(0, 80) }); }
-      else { noteUnpaused(); claim = j.claim; polarity = j.polarity; harmClass = j.harm_class; ungrounded = j.rejected === "ungrounded"; }   // null claim is a legit "no checkable claim", not a failure
+      else { noteUnpaused(); claim = j.claim; polarity = j.polarity; harmClass = j.harm_class; category = j.category; ungrounded = j.rejected === "ungrounded"; }   // null claim is a legit "no checkable claim", not a failure
     } catch (e) { extractFailed = true; DBG.event("err", "extract network error", { error: String(e && e.message || e), spoken: t.slice(0, 80) }); }
     const extractMs = performance.now() - t0;
-    FT.log("extract_done", { cid, ms: +extractMs.toFixed(0), status: extractPaused ? "paused" : extractFailed ? "failed" : "ok", claim, polarity: polarity || null, harm_class: harmClass || null });
+    FT.log("extract_done", { cid, ms: +extractMs.toFixed(0), status: extractPaused ? "paused" : extractFailed ? "failed" : "ok", claim, polarity: polarity || null, harm_class: harmClass || null, category: category || null });
     if (g !== gen) {   // stale at extract stage — the stream this belongs to is gone: log, never enqueue
       fcInflight--; setOps();
       FT.log("gate", { cid, outcome: "stale_generation", stage: "extract" });
@@ -465,7 +465,7 @@
        spoken sentence carries the negation the canonical form strips. pickSpokenSentence
        trims multi-sentence utterances to the claim-bearing sentence by content-word overlap. */
     const displayClaim = (polarity === "denies" || polarity === "suspect_denies") ? pickSpokenSentence(t, claim, true) : claim;   // R46: suspect flips show speaker framing from the start
-    const card = { id: ++fcId, _gen: g, _cid: cid, spoken: t, claim, displayClaim, polarity, harm_class: harmClass, state: "checking", spokenAt, extractStartedAt: spokenAt, extractMs: +extractMs.toFixed(0) };   // real claim → checking card now
+    const card = { id: ++fcId, _gen: g, _cid: cid, spoken: t, claim, displayClaim, polarity, harm_class: harmClass, category: category || "other", state: "checking", spokenAt, extractStartedAt: spokenAt, extractMs: +extractMs.toFixed(0) };   // real claim → checking card now
     recentClaims.set(normClaim, Date.now());   // F2: register at creation (force-created cards too — they still dedupe later voice repeats)
     if (recentClaims.size > 200) { const nowMs = Date.now(); recentClaims.forEach((at, k) => { if (!withinDupWindow(at, nowMs)) recentClaims.delete(k); }); }
     fcCards.unshift(card); renderQueue(); setOps();
@@ -675,6 +675,12 @@
     // and polarity-conflicted checks NEVER auto-air. A human airs those or nobody does.
     if (c.harm_class === "person_private" || c.polarity_conflict) return;
     if (c.harm_class && c.harm_class !== "none") return;              // person_public / quote_attribution → manual only
+    /* R57 (D18) — pilot category scope is CODE, not protocol: only allowlisted categories
+       may auto-air, same mechanism class as the person-holds above. Session 2's breach
+       ("Silver is worth more than bronze", economics) replays as: never arms. Mirrors
+       PILOT_CATEGORY_ALLOWLIST in src/core/tunables.js (classic script — can't import);
+       change BOTH together. Unknown/missing category = "other" = never arms. */
+    if (c.category !== "science_health") return;
     if (!byId("autoAir").checked) return;
     if (c.autoAirEligible !== true) return;                          // server-side evidence floor (tier gate, D5)
     // 0.85 mirrors AUTO_AIR_CONF_FLOOR in src/core/tunables.js (classic script — can't import); change both together

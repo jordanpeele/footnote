@@ -12,6 +12,9 @@ const HAIKU = "claude-haiku-4-5-20251001";
 
 const POLARITIES = new Set(["asserts", "denies"]);
 const HARM_CLASSES = new Set(["none", "person_public", "person_private", "quote_attribution"]);
+// R57: closed topical set. Unknown/missing parses to "other", which is NOT in the pilot
+// allowlist — a claim the model can't categorize is structurally unable to auto-air.
+const CATEGORIES = new Set(["science_health", "politics_government", "economics_business", "history_geography", "sports_culture", "other"]);
 
 // The system prompt lives in prompts/extractor.md (versioned, human-readable); the inlined
 // copy below is a belt-and-braces fallback so a Vercel bundling miss (fs reads aren't
@@ -20,12 +23,14 @@ const HARM_CLASSES = new Set(["none", "person_public", "person_private", "quote_
 // Exported ONLY so test/prompt-sync.test.js can byte-compare it against the .md (R14).
 export const FALLBACK_PROMPT = `You extract the single checkable factual claim from a live speaker's sentence for a real-time TV fact-checker. A claim is CHECKABLE if it asserts OR denies something about the world that could be confirmed or refuted against authoritative sources. This includes statistics, dates, historical events, attributions/quotes, quantities — AND ALSO qualitative, comparative, or superlative factual assertions (e.g. 'gold is worth more than silver', 'the Nile is the longest river', 'the company laid off thousands of workers', 'crime is up this year'). When in doubt, EXTRACT the claim rather than replying NONE.
 
-If there is a checkable claim, reply with EXACTLY one line of strict JSON in this shape: {"claim": "...", "polarity": "asserts", "harm_class": "none"}
+If there is a checkable claim, reply with EXACTLY one line of strict JSON in this shape: {"claim": "...", "polarity": "asserts", "harm_class": "none", "category": "other"}
 
 Field rules:
 - "claim": the claim rewritten as one short, self-contained ASSERTIVE declarative sentence (drop filler/preamble like 'let's fact-check this'). The claim must always state the positive proposition, even when the speaker is denying it: if the speaker says 'Einstein never said X' or 'unemployment did NOT go up last month', the claim is 'Einstein said X' / 'Unemployment went up last month'. Never put 'not', 'never', 'no', or 'did not' into the claim when the speaker's point IS the denial — the denial is recorded in "polarity" instead. Never pre-judge whether the claim is actually true, and never add a negation the speaker did not say: a speaker asserting 'Einstein said X' yields the claim 'Einstein said X' with polarity "asserts", even if you believe the quote is misattributed.
 - "polarity": "asserts" if the speaker is claiming the proposition is true; "denies" if the speaker is claiming the proposition is false ('never said', 'did not', 'that's not true', 'there's no way that happened'). A plain negative fact stated by the speaker ('Nixon didn't finish his second term') is the positive claim ('Nixon finished his second term') with polarity "denies". Resolve double negatives to their net meaning: 'it's not true that Einstein never won a Nobel Prize' means the speaker is asserting 'Einstein won a Nobel Prize', so polarity is "asserts".
 - "harm_class": exactly one of "quote_attribution", "person_private", "person_public", "none". Use "quote_attribution" when the claim attributes specific words, a quote, or a statement to a named person ('X said/claims/wrote/tweeted ...') — this wins whenever it applies. Use "person_private" when the claim is a factual claim about a named individual who is NOT a public figure (a neighbor, a coworker, a local person). Use "person_public" when the claim's subject is a named public figure (politician, celebrity, executive, historical figure) and no quote is attributed — this covers their biography, actions, achievements, and records ('Nixon finished his second term', 'Einstein won a Nobel Prize' are person_public, not none). Use "none" ONLY when no named individual person is the subject of the claim (statistics, events, geography, science, unnamed people, organizations).
+
+- "category": exactly one of "science_health", "politics_government", "economics_business", "history_geography", "sports_culture", "other" — the claim's topical domain. "science_health": science, medicine, health, nutrition, biology, physics, technology-as-science. "politics_government": politicians, elections, laws, government actions, wars and geopolitics. "economics_business": prices, markets, companies, jobs, trade, money. "history_geography": historical events and figures, places, borders, dates of past events. "sports_culture": sports, entertainment, celebrities-as-performers, art, media. "other": anything that fits none of these. Pick the single best fit; when two apply, pick the one the claim is ABOUT (a law about healthcare funding is politics_government; a study about a drug is science_health).
 
 Reply with exactly the single word NONE (no JSON) only when the sentence is pure personal opinion or preference, a question, a greeting, backchannel, or filler with no factual assertion at all. Output ONLY the one-line JSON object, OR the single word NONE — never add any explanation, reasoning, markdown, or code fences.`;
 
@@ -90,13 +95,14 @@ export function parseExtraction(raw) {
     } catch {
       // lenient rescue: field-by-field regex pluck (handles single quotes, trailing junk)
       const claim = pluckField(cand, "claim");
-      if (claim !== null) fields = { claim, polarity: pluckField(cand, "polarity"), harm_class: pluckField(cand, "harm_class") };
+      if (claim !== null) fields = { claim, polarity: pluckField(cand, "polarity"), harm_class: pluckField(cand, "harm_class"), category: pluckField(cand, "category") };
     }
   }
 
   if (!fields) {
     // no recoverable JSON at all → treat the raw output as a v1-style bare claim
-    return { claim: stripQuotes(out), polarity: "asserts", harm_class: "none" };
+    // (category "other" — an unparseable envelope must never be pilot-eligible, R57)
+    return { claim: stripQuotes(out), polarity: "asserts", harm_class: "none", category: "other" };
   }
 
   const claim = typeof fields.claim === "string" ? stripQuotes(fields.claim) : "";
@@ -114,7 +120,15 @@ export function parseExtraction(raw) {
     harm_class = "none";
   }
 
-  return { claim, polarity, harm_class };
+  // R57 category: strict allowlist parse — anything unexpected collapses to "other"
+  // (fail-safe: "other" is never in the pilot allowlist, so it cannot arm auto-air).
+  let category = typeof fields.category === "string" ? fields.category.trim().toLowerCase() : "";
+  if (!CATEGORIES.has(category)) {
+    if (category) console.error("extract: unexpected category value", category);
+    category = "other";
+  }
+
+  return { claim, polarity, harm_class, category };
 }
 
 export const name = "anthropic-haiku";

@@ -16,3 +16,11 @@ export const MONTHLY_SPEND_CEILING_USD = 200;
 // TUNABLE — minimum model-reported confidence for the auto-air gate. app.js mirrors this
 // value (classic script, can't import); change BOTH together.
 export const AUTO_AIR_CONF_FLOOR = 0.85;
+
+/* R57 (D18 pilot) — categories allowed to AUTO-AIR. Session 2 proved protocol-only scope
+   fails under operator drift (an economics claim machine-aired), so scope is now CODE:
+   maybeAutoAir requires the extractor's category ∈ this list — same mechanism class as
+   the D4 person-holds. Expansion of this list is an orchestrator decision with its own
+   evidence bar, never a quiet edit. app.js mirrors it (classic script); change BOTH
+   together. */
+export const PILOT_CATEGORY_ALLOWLIST = ["science_health"];

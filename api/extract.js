@@ -23,7 +23,7 @@ export default async function handler(req, res) {
   const text = (req.body?.text || "").trim();
   if (text.length < 8) { res.status(200).json({ claim: null }); return; }
   try {
-    const { claim, polarity, harm_class } = await getAdapter("extractor").extract(text);
+    const { claim, polarity, harm_class, category } = await getAdapter("extractor").extract(text);
     res.setHeader("Cache-Control", "no-store");
     if (claim == null) { res.status(200).json({ claim: null }); return; }
     // P4-F1 grounding gate: an LLM extractor can echo its own prompt as a "claim" when
@@ -44,10 +44,10 @@ export default async function handler(req, res) {
        Replay: catches exactly the FS-8 card, zero false positives across four sessions. */
     if (polarity === "denies" && !hasNegation(text)) {
       console.warn("polarity tripwire (R46): denies without negation token", "utterance:", text.slice(0, 80));
-      res.status(200).json({ claim, polarity: "suspect_denies", harm_class, tripwire: "negation" });
+      res.status(200).json({ claim, polarity: "suspect_denies", harm_class, category, tripwire: "negation" });
       return;
     }
-    res.status(200).json({ claim, polarity, harm_class });
+    res.status(200).json({ claim, polarity, harm_class, category });
   } catch (e) {
     if (e instanceof UpstreamError) {   // vendor answered non-2xx; adapter already logged it
       res.status(502).json({ error: "extract failed", claim: null, upstream_status: e.status, upstream: e.detail });
