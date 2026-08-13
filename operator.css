@@ -154,3 +154,9 @@ body.cue{animation:cue-flash .6s ease-out}
 .b-attn{font:800 13px var(--mono,monospace);color:#f5a623;background:rgba(245,166,35,.10);
   border:1.5px solid rgba(245,166,35,.45);border-radius:8px;padding:10px 14px;cursor:pointer}
 .b-attn:active{background:rgba(245,166,35,.28)}
+
+/* ===== W4: auto-air cap chip (street console) ===== */
+.aa-chip{font:800 10px var(--mono,monospace);letter-spacing:.05em;border-radius:6px;padding:4px 8px;white-space:nowrap}
+.aa-chip.on{color:#06c986;background:rgba(0,224,138,.12);border:1px solid rgba(0,224,138,.35)}
+.aa-chip.off{color:#9aa3af;background:rgba(120,130,145,.12);border:1px solid rgba(120,130,145,.3)}
+.aa-chip.cap{color:#f5a623;background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.4)}

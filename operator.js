@@ -200,6 +200,19 @@
      the source of truth here. Optimistic flip on tap, reconciled against the snapshot
      (adopt on agreement, revert if control hasn't confirmed within the window). DOM is
      built here: operator.html is owned by the parent shard this round. */
+  /* W4 (walkable rig): auto-air cap state in the header — on the street /op is the ONLY
+     console, so arm state and the session cap can't live on a screen the operator can't
+     see. Rides the queue snapshot (autoair.on/count/cap); absent → chip hidden. */
+  const aaChip = el("span", "aa-chip");
+  aaChip.hidden = true;
+  connDot.parentNode.insertBefore(aaChip, connDot);
+  function renderAutoair(aa) {
+    if (!aa || typeof aa !== "object") { aaChip.hidden = true; return; }
+    aaChip.hidden = false;
+    if (!aa.on) { aaChip.textContent = "AUTO OFF"; aaChip.className = "aa-chip off"; }
+    else if (aa.count >= aa.cap) { aaChip.textContent = `AUTO CAP ${aa.count}/${aa.cap}`; aaChip.className = "aa-chip cap"; }
+    else { aaChip.textContent = `AUTO ${aa.count}/${aa.cap}`; aaChip.className = "aa-chip on"; }
+  }
   const muteBtn = el("button", "btn-mute", "MUTE");
   muteBtn.type = "button";
   connDot.parentNode.insertBefore(muteBtn, connDot);
@@ -346,7 +359,7 @@
           lastQseq = q.qseq; cards = Array.isArray(q.cards) ? q.cards : [];
           attnList = Array.isArray(q.attn) ? q.attn : [];   // R54: untagged auto-airs
           lastChange = performance.now();
-          reconcile(); renderQueue(); renderAttn(); cueNewCards(cards);   // P4-F3: buzz/beep/flash for new work
+          reconcile(); renderQueue(); renderAttn(); renderAutoair(q.autoair); cueNewCards(cards);   // P4-F3 + W4
         }
         // P7-C: adopt control's mute latch; drop the optimistic wish once control agrees
         // (or the reconcile window lapses — a lost cmd must not pin a phantom MUTED state)

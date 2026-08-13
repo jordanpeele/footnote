@@ -75,9 +75,20 @@ and `srtla_rec` on the Mac reassembles them into plain SRT for the existing OBS 
 - **Build it:** `bash tools/street/build-srtla.sh`. Upstream is Linux-only; the script
   applies `tools/street/srtla-macos.patch` (byte-order shims, `SOCK_NONBLOCK` fallback,
   epoll→kqueue via epoll-shim) and builds into a vendor tree outside the repo.
-- **Wire it:** `arm.sh` starts `srtla_rec 5000 127.0.0.1 9000` when the binary exists.
-  Moblin's bonded URL is `srtla://<tailnet-ip>:5000`; keep `srt://<tailnet-ip>:9000`
-  saved as the single-path fallback profile.
+- **Wire it (R61 — session-2 lessons ratified):** the bond terminates at a **public
+  address**, never a tailnet one: **SRTLA and VPNs don't compose** — bonding binds each
+  physical interface directly, and those sockets bypass the tunnel, delivering zero
+  packets (session-2 finding; plain `srt://` over the tailnet works fine because
+  single-path uses default routing). The production front door is the **cloud relay**
+  (`tools/relay/setup-relay.sh` — stable IP, no home ports, OBS dials OUT as caller);
+  a home router port-forward works in a pinch but is a session-scoped liability
+  (residential IPs also rotate — session 2's rotated mid-setup). Keep `srt://<tailnet-ip>:9000`
+  saved as the single-path indoor fallback profile.
+- **Moblin's implementation setting must be "Moblin"** for `srtla://` URLs — "Official"
+  (libsrt) silently speaks plain SRT only and the bond never forms (session-2 finding).
+- **Start order matters:** OBS SRT listener → `srtla_rec` → Moblin Go Live. `srtla_rec`
+  wedges silently if it starts before something is listening on its SRT hand-off port
+  (session-2 finding: one restart fixed it; the relay's systemd units encode the order).
 - **The passphrase is not optional.** `srtla_rec` can only bind wildcard UDP (upstream
   hardcodes `INADDR_ANY`), so the port is open at the UDP level even inside the tailnet
   posture. The SRT stream itself must carry a passphrase — set the same one in the OBS

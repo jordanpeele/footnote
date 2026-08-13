@@ -1649,7 +1649,8 @@
         .map((c) => ({ id: c.id, claim: (c.displayClaim || c.claim || "").slice(0, 80) }));
       try {
         await fetch("/api/onair", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ room: s.room, writeKey: s.writeKey, op: "queue", cards, onAirId: SESSION.currentOnAir, muted, attn }) });   // R43: /op renders the latch
+          body: JSON.stringify({ room: s.room, writeKey: s.writeKey, op: "queue", cards, onAirId: SESSION.currentOnAir, muted, attn,
+            autoair: { on: !!byId("autoAir").checked, count: autoAirCount, cap: AUTO_AIR_CAP } }) });   // R43 latch + W4: cap state visible from the street
       } catch {}   // best-effort — next mutation re-pushes; /op's 180s TTL bounds staleness
     }
     function opApplyCmd(cmd) {

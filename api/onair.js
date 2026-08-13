@@ -202,6 +202,7 @@ export default async function handler(req, res) {
             onAirId: q && q.onAirId != null ? q.onAirId : null,
             muted: !!(q && q.muted),
             attn: (q && Array.isArray(q.attn)) ? q.attn : [],   // R54: untagged auto-airs for the attention strip
+            autoair: (q && q.autoair && typeof q.autoair === "object") ? q.autoair : null,   // W4: cap state
             renderedId: cur && cur.renderedId != null ? cur.renderedId : null,
             renderedAt: cur && typeof cur.renderedAt === "number" ? cur.renderedAt : null,
             serverNow: Date.now(),
@@ -283,7 +284,11 @@ export default async function handler(req, res) {
         // R54: auto-aired cards awaiting an attention tag — sanitized like cards (strip/cut), capped at 6
         const attn = (Array.isArray(req.body.attn) ? req.body.attn : []).slice(0, 6)
           .map((a) => a && Number.isFinite(Number(a.id)) ? { id: Number(a.id), claim: cut(strip(String(a.claim || "")), 80) } : null).filter(Boolean);
-        await state.publish(qRoom(room), { cards, qseq, onAirId, muted, attn }, { ttlSec: QUEUE_SNAPSHOT_TTL_SEC });
+        // W4 (walkable rig): auto-air arm state + session cap count — /op is the street's
+        // ONLY console, so mid-session state can't require seeing the Mac.
+        const aa = req.body.autoair && typeof req.body.autoair === "object" ? req.body.autoair : null;
+        const autoair = aa ? { on: aa.on === true, count: Number.isFinite(Number(aa.count)) ? Number(aa.count) : 0, cap: Number.isFinite(Number(aa.cap)) ? Number(aa.cap) : 0 } : null;
+        await state.publish(qRoom(room), { cards, qseq, onAirId, muted, attn, autoair }, { ttlSec: QUEUE_SNAPSHOT_TTL_SEC });
         /* P4-F2 (field F5): a non-empty queue means an air is likely soon, but an idle
            overlay is on its 2.5s cadence — the first air after a quiet stretch eats up to
            a full slow poll. Stamp activeAt onto the room's MAIN record so the overlay's
