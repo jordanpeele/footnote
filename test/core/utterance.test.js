@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   DUP_CLAIM_WINDOW_MS, MERGE_MAX_GAP_MS, MERGE_SHORT_WORDS,
+  ASSEMBLE_SILENCE_MS, ASSEMBLE_MAX_FINALS, assemblyShouldFlush,
   normalizeClaim, withinDupWindow, shouldMergeFinals, pickSpokenSentence,
 } from "../../src/core/utterance.js";
 
@@ -164,4 +165,26 @@ test("D17: split-negation denial falls back to the whole utterance (street Taiwa
   const spoken = "it says Taiwan has four locations. No. That's not";
   const claim = "Taiwan has four locations";
   assert.equal(pickSpokenSentence(spoken, claim, true), spoken);
+});
+
+/* ================= assemblyShouldFlush (W1.2 rolling assembler) ================= */
+
+test("assembler: empty buffer never flushes", () => {
+  assert.equal(assemblyShouldFlush(0, 0, 99999), false);
+});
+
+test("assembler: flushes on real silence, holds while finals keep arriving", () => {
+  assert.equal(assemblyShouldFlush(2, 1000, 1000 + ASSEMBLE_SILENCE_MS), true, "silence elapsed → flush");
+  assert.equal(assemblyShouldFlush(2, 1000, 1000 + ASSEMBLE_SILENCE_MS - 1), false, "1ms short → hold");
+});
+
+test("assembler: cap flushes regardless of timing", () => {
+  assert.equal(assemblyShouldFlush(ASSEMBLE_MAX_FINALS, Date.now ? 5 : 5, 6), true);
+});
+
+test("assembler window is wider than the pair-join gap (session replay lesson)", () => {
+  // 1800ms first guess flushed MID-THOUGHT (real intra-claim splits ran up to ~3.5s in
+  // both sessions) and LOST claims the pair-join caught. The silence window must sit
+  // above MERGE_MAX_GAP_MS so the assembler never separates what the pair-join would join.
+  assert.ok(ASSEMBLE_SILENCE_MS > MERGE_MAX_GAP_MS, "silence window covers the merge gap");
 });

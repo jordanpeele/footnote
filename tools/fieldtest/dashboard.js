@@ -66,7 +66,10 @@ function handle(e) {
         line(t, `${C.mag}⛒ GROUND${C.r}`, `[${e.cid}] extraction rejected as ungrounded ${C.dim}"${(s.spoken || "").slice(0, 60)}"${C.r} ${C.mag}✓ P4-F1 gate firing${C.r}`);
         break;
       }
-      line(t, `${C.dim}○ GATE${C.r}`, `[${e.cid}] ${e.outcome}${e.words ? ` (${e.words}w)` : ""} ${C.dim}"${(s.spoken || "").slice(0, 60)}"${C.r}`,
+      /* R56 fragment gates fire BEFORE a cid is assigned and carry their own `spoken`
+         (there is no check to join against) — render them from the event itself. */
+      const spoken = e.spoken || s.spoken || "";
+      line(t, `${C.dim}○ GATE${C.r}`, `${e.cid ? `[${e.cid}] ` : ""}${e.outcome}${e.words ? ` (${e.words}w)` : ""} ${C.dim}"${spoken.slice(0, 60)}"${C.r}`,
         miss ? ` ${C.yel}⚑ ${e.words}-word utterance gated null — checkable?${C.r}` : "");
       break;
     }

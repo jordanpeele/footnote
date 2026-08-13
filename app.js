@@ -310,6 +310,15 @@
   const MERGE_MAX_GAP_MS = 3500;
   // TUNABLE — F3 merge: a final this short (in words) is presumed a continuation fragment.
   const MERGE_SHORT_WORDS = 4;
+  // TUNABLE — W1.2 assembler: silence that ends a spoken thought (flush the joined buffer).
+  // 3600 = just past MERGE_MAX_GAP_MS: replay of BOTH sessions showed real intra-claim
+  // splits arriving up to ~3.5s apart (session-1 vitamin-C denial 2.2s; session-2 bones
+  // fragments 3.5s) — an 1800ms first guess flushed mid-thought and LOST claims the old
+  // pair-join caught. Inter-claim pauses in both sessions were >5s, so 3.6s separates
+  // thoughts safely. Endpointing bench refines; replay tool re-verifies any change.
+  const ASSEMBLE_SILENCE_MS = 3600;
+  // TUNABLE — W1.2 assembler: max finals joined into one utterance (runaway-buffer cap).
+  const ASSEMBLE_MAX_FINALS = 6;
   /**
    * Canonical claim key for dedupe: lowercase, punctuation stripped, whitespace collapsed.
    * @param {string|null|undefined} claim extracted claim text
@@ -351,6 +360,24 @@
     const unterminated = !/[.!?]$/.test(p);
     const shortNext = n.split(/\s+/).filter(Boolean).length <= MERGE_SHORT_WORDS;
     return unterminated || shortNext;
+  }
+  /**
+   * W1.2 (walkable-rig sprint) — rolling final-assembler flush predicate. Session 2's
+   * routed/bonded audio made Deepgram finalize at micro-gaps, shredding one spoken claim
+   * across 2-5 finals; the pair-join (shouldMergeFinals, retained above for reference and
+   * tests but no longer called by the client) couldn't reconstruct them — splits arrived
+   * pre-punctuated, and pairs aren't enough. The assembler buffers consecutive finals and
+   * flushes the JOINED utterance when the thought actually ends.
+   * Flush when: the buffer hit the cap, OR real silence has passed since the last final.
+   * @param {number} count finals currently buffered
+   * @param {number} lastAt epoch ms of the newest buffered final
+   * @param {number} nowAt epoch ms now
+   * @returns {boolean} true → flush (join + check as merged when count >= 2)
+   */
+  function assemblyShouldFlush(count, lastAt, nowAt) {
+    if (count <= 0) return false;
+    if (count >= ASSEMBLE_MAX_FINALS) return true;
+    return nowAt - lastAt >= ASSEMBLE_SILENCE_MS;
   }
   /**
    * D17 — pick the claim-bearing sentence from a (possibly filler-prefixed) utterance:
@@ -1005,7 +1032,17 @@
     "Senate", "Congress", "Ukraine", "Putin", "Zelensky", "Taiwan", "Iran", "Gaza", "NATO", "WHO", "CDC",
     "Bitcoin", "Elon Musk", "GDP", "tariffs", "inflation", "recession", "unemployment", "emissions", "billion"];
   let dgWs = null, dgProc = null, dgCtx = null, dgSource = null, dgFinalWords = [], dgGotResult = false;
-  let prevFinalText = "", prevFinalAt = 0;   // F3 split-final merge: single prev-final buffer (text + arrival ms), reset on stream start/end
+  let prevFinalText = "", prevFinalAt = 0;   // (legacy F3 pair buffer — still reset at boundaries; assembler below is the live path)
+  /* W1.2 assembler state: consecutive finals buffered until the thought ends. asmTimer
+     (started per stream, killed at End Stream) flushes on real silence. */
+  let asmBuf = [], asmTimer = 0;
+  function flushAssembly(reason) {
+    const buf = asmBuf; asmBuf = [];
+    if (buf.length < 2) return;   // a single final was already checked directly
+    const joined = buf.map((f) => f.text).join(" ");
+    FT.log("stt_assemble", { n: buf.length, reason, span_ms: buf[buf.length - 1].at - buf[0].at, joined: joined.slice(0, 200) });
+    checkUtterance(joined, { merged: true });
+  }
   let dgEverWorked = false, dgRetryN = 0, dgRetryT = 0;   // mid-session drop → auto-reconnect (unattended/auto-air safe)
   /* L2 (sprint-02): STT finalization wait measured ≤~0.55s p50 — endpointing is the lever,
      but faster finals ⇄ more split-finals is a live-audio tradeoff that can't be benched
@@ -1044,7 +1081,9 @@
     if (g !== gen) return false;                                       // stream ended while fetching auth
     if (!auth) { DBG.event("err", "no Deepgram auth available"); return false; }
     DBG.event("info", auth[0] === "bearer" ? "Deepgram auth · server token" : "Deepgram auth · inlined key (legacy)");
-    dgFinalWords = []; dgGotResult = false; prevFinalText = ""; prevFinalAt = 0;   // F3: never merge across a (re)connect boundary
+    dgFinalWords = []; dgGotResult = false; prevFinalText = ""; prevFinalAt = 0; asmBuf = [];   // never assemble across a (re)connect boundary
+    clearInterval(asmTimer);
+    asmTimer = setInterval(() => { if (g === gen && assemblyShouldFlush(asmBuf.length, asmBuf.length ? asmBuf[asmBuf.length - 1].at : 0, Date.now())) flushAssembly("silence"); }, 300);
     let ws; try { ws = new WebSocket(dgUrl(dgCtx.sampleRate), auth); } catch (e) { DBG.event("err", "Deepgram WS construct failed", { error: String(e && e.message || e) }); return false; }
     ws.binaryType = "arraybuffer"; dgWs = ws;
     ws.onerror = () => { if (g === gen) DBG.event("err", "Deepgram WS error", { readyState: ws.readyState, gotResult: dgGotResult }); };
@@ -1077,19 +1116,18 @@
       ssTranscript.textContent = tail;
       if (d.is_final) {
         checkUtterance(tr);
-        /* F3 — split-final merge (field test: "GDP growth in the United States in 2025?" /
-           "Was 4%." — neither fragment extracts alone). When this final closely follows the
-           previous one AND the boundary looks like a split thought (shouldMergeFinals), ALSO
-           check the JOINED string. merged (not force): bypasses only the word minimum — the
-           F2 claim dedupe still applies, so fragment + join extracting the same claim yields
-           exactly one card. */
+        /* W1.2 — rolling final-assembler (supersedes the F3 pair-join; session 2: bonded
+           audio shredded claims across 2-5 pre-punctuated finals that pairs can't rebuild).
+           Every final ALSO lands in a buffer; the buffer flushes as ONE joined utterance
+           when the thought actually ends — real silence (asmTimer below), the buffer cap,
+           or a gap wider than MERGE_MAX_GAP_MS (an old thought a coarse timer tick missed).
+           Joined checks enter as merged (word-min bypass only) — the F2 claim dedupe
+           absorbs the overlap with the per-final checks, so fragments + join extracting
+           the same claim still yield exactly one card. */
         const nowAt = Date.now();
-        if (prevFinalText && shouldMergeFinals(prevFinalText, prevFinalAt, tr, nowAt)) {
-          const joined = prevFinalText + " " + tr;
-          FT.log("stt_merge", { gap_ms: nowAt - prevFinalAt, joined: joined.slice(0, 160) });
-          checkUtterance(joined, { merged: true });
-        }
-        prevFinalText = tr; prevFinalAt = nowAt;
+        if (asmBuf.length && nowAt - asmBuf[asmBuf.length - 1].at > MERGE_MAX_GAP_MS) flushAssembly("gap");
+        asmBuf.push({ text: tr, at: nowAt });
+        if (asmBuf.length >= ASSEMBLE_MAX_FINALS) flushAssembly("cap");
       }
     };
     ws.onclose = (ev) => {
@@ -1235,7 +1273,8 @@
     if (strideTimer) { clearInterval(strideTimer); strideTimer = 0; }
     if (dgWs) { try { dgWs.send(JSON.stringify({ type: "CloseStream" })); } catch {} try { dgWs.close(); } catch {} dgWs = null; }
     if (dgProc) { try { dgProc.disconnect(); } catch {} dgProc = null; }
-    dgSource = null; dgCtx = null; dgFinalWords = []; prevFinalText = ""; prevFinalAt = 0;   // F3: merge buffer dies with the stream
+    dgSource = null; dgCtx = null; dgFinalWords = []; prevFinalText = ""; prevFinalAt = 0;
+    clearInterval(asmTimer); asmTimer = 0; asmBuf = [];   // assembler dies with the stream — never flush into a dead broadcast
     callTabSource = null; mixBus = null;   // nodes die with the context; the tab STREAM survives for the next start
     if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
     audioStream = null;

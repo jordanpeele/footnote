@@ -13,6 +13,15 @@ const DUP_CLAIM_WINDOW_MS = 60000;
 const MERGE_MAX_GAP_MS = 3500;
 // TUNABLE — F3 merge: a final this short (in words) is presumed a continuation fragment.
 const MERGE_SHORT_WORDS = 4;
+// TUNABLE — W1.2 assembler: silence that ends a spoken thought (flush the joined buffer).
+// 3600 = just past MERGE_MAX_GAP_MS: replay of BOTH sessions showed real intra-claim
+// splits arriving up to ~3.5s apart (session-1 vitamin-C denial 2.2s; session-2 bones
+// fragments 3.5s) — an 1800ms first guess flushed mid-thought and LOST claims the old
+// pair-join caught. Inter-claim pauses in both sessions were >5s, so 3.6s separates
+// thoughts safely. Endpointing bench refines; replay tool re-verifies any change.
+const ASSEMBLE_SILENCE_MS = 3600;
+// TUNABLE — W1.2 assembler: max finals joined into one utterance (runaway-buffer cap).
+const ASSEMBLE_MAX_FINALS = 6;
 /**
  * Canonical claim key for dedupe: lowercase, punctuation stripped, whitespace collapsed.
  * @param {string|null|undefined} claim extracted claim text
@@ -56,6 +65,24 @@ function shouldMergeFinals(prev, prevAt, next, nowAt) {
   return unterminated || shortNext;
 }
 /**
+ * W1.2 (walkable-rig sprint) — rolling final-assembler flush predicate. Session 2's
+ * routed/bonded audio made Deepgram finalize at micro-gaps, shredding one spoken claim
+ * across 2-5 finals; the pair-join (shouldMergeFinals, retained above for reference and
+ * tests but no longer called by the client) couldn't reconstruct them — splits arrived
+ * pre-punctuated, and pairs aren't enough. The assembler buffers consecutive finals and
+ * flushes the JOINED utterance when the thought actually ends.
+ * Flush when: the buffer hit the cap, OR real silence has passed since the last final.
+ * @param {number} count finals currently buffered
+ * @param {number} lastAt epoch ms of the newest buffered final
+ * @param {number} nowAt epoch ms now
+ * @returns {boolean} true → flush (join + check as merged when count >= 2)
+ */
+function assemblyShouldFlush(count, lastAt, nowAt) {
+  if (count <= 0) return false;
+  if (count >= ASSEMBLE_MAX_FINALS) return true;
+  return nowAt - lastAt >= ASSEMBLE_SILENCE_MS;
+}
+/**
  * D17 — pick the claim-bearing sentence from a (possibly filler-prefixed) utterance:
  * best content-word overlap with the canonical claim wins; whole utterance is the
  * fallback. Used to render the SPEAKER'S framing (denials keep their negation).
@@ -88,4 +115,4 @@ function pickSpokenSentence(spoken, claim, preferNegation) {
 }
 /* ===== END MIRROR BLOCK ===== */
 
-export { DUP_CLAIM_WINDOW_MS, MERGE_MAX_GAP_MS, MERGE_SHORT_WORDS, normalizeClaim, withinDupWindow, shouldMergeFinals , pickSpokenSentence , hasNegation };
+export { DUP_CLAIM_WINDOW_MS, MERGE_MAX_GAP_MS, MERGE_SHORT_WORDS, ASSEMBLE_SILENCE_MS, ASSEMBLE_MAX_FINALS, normalizeClaim, withinDupWindow, shouldMergeFinals, assemblyShouldFlush, pickSpokenSentence, hasNegation };
