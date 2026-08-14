@@ -180,6 +180,7 @@
       e.action = action;
       if (opts && opts.veto) e.vetoed = true;   // auto-air countdown was running when the operator skipped/held
       if (opts && opts.operator) e.operator = true;   // P3-J: actioned from the second-phone /op page (server published)
+      if (opts && opts.test) e.test = true;     // R63/3c gap: TESTAIR airs are marked in the R20 export so autoAired can't be misread as ledger airs
       if (action === "aired") { e.aired = true; e.airedAt = new Date().toISOString(); e.autoAired = !!(opts && opts.auto); this.currentOnAir = id; }
       updateSessionBtn();
     },
@@ -210,6 +211,7 @@
         aired: es.filter((e) => e.aired).length,
         autoAired: es.filter((e) => e.autoAired).length,
         vetoed: es.filter((e) => e.vetoed).length,
+        testAired: es.filter((e) => e.test && e.aired).length,   // TESTAIR airs (watermarked, excluded from the machine-aired ledger per R63)
         skipped: es.filter((e) => e.action === "skipped").length,
         held: es.filter((e) => e.action === "held").length,
         pulled: es.filter((e) => e.pulledAt).length,
