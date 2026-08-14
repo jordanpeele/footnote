@@ -109,6 +109,12 @@
     },
   };
 
+  /* W1.3 hard lesson (run test: the assembler was in the served file and never executed,
+     with NOTHING logged): any uncaught client error now lands in the harness, so silent
+     code-path death becomes a logged fact instead of a post-session mystery. */
+  window.addEventListener("error", (e) => FT.log("client_error", { msg: String(e.message || "").slice(0, 200), src: String(e.filename || "").split("/").pop(), line: e.lineno || null }));
+  window.addEventListener("unhandledrejection", (e) => FT.log("client_error", { msg: ("unhandledrejection: " + String(e.reason && e.reason.message || e.reason)).slice(0, 200) }));
+
   /* ============ SESSION LOG — the broadcast record (checks + operator actions) ============
      One entry per checked claim, updated as the operator acts. Downloadable JSON from the queue
      header; aired checks are also mirrored server-side (durability backstop) via /api/onair.
@@ -319,6 +325,14 @@
   const ASSEMBLE_SILENCE_MS = 3600;
   // TUNABLE — W1.2 assembler: max finals joined into one utterance (runaway-buffer cap).
   const ASSEMBLE_MAX_FINALS = 6;
+  // TUNABLE — W1.3 window: words of rolling transcript context handed to each extract.
+  const WINDOW_WORDS = 30;
+  // TUNABLE — W1.3 window: minimum NEW words since the last extract before another fires.
+  const WINDOW_MIN_NEW_WORDS = 3;
+  // TUNABLE — W1.3 window: cadence ceiling — extract at least this often during speech.
+  const WINDOW_EXTRACT_MS = 3500;
+  // TUNABLE — W1.3 window: trailing silence that flushes the last words of a thought.
+  const WINDOW_TRAIL_SILENCE_MS = 1500;
   /**
    * Canonical claim key for dedupe: lowercase, punctuation stripped, whitespace collapsed.
    * @param {string|null|undefined} claim extracted claim text
@@ -378,6 +392,27 @@
     if (count <= 0) return false;
     if (count >= ASSEMBLE_MAX_FINALS) return true;
     return nowAt - lastAt >= ASSEMBLE_SILENCE_MS;
+  }
+  /**
+   * W1.3 (run-test 2026-08-14) — rolling-WINDOW extraction predicate. The run proved the
+   * final is not a unit of meaning: 244 finals, median ONE word, 73% of spoken words never
+   * reached a check. The window frame: keep a running transcript of the last ~N words and
+   * extract claims from the WINDOW on a cadence, letting F2 dedupe absorb the overlap and
+   * the grounding gate reject anything not actually said. Supersedes the final-assembler
+   * (whose wiring is retired; predicate retained above for reference/tests).
+   * Extract when: enough NEW words arrived since the last extract AND (the newest final
+   * ended a sentence, OR the cadence interval elapsed, OR real silence set in).
+   * @param {number} newWords words arrived since the last window extract
+   * @param {number} msSinceExtract ms since the last window extract
+   * @param {number} msSinceLastWord ms since the newest word arrived
+   * @param {boolean} endsTerminal newest final ended with . ! or ?
+   * @returns {boolean} true → extract the window now
+   */
+  function windowShouldExtract(newWords, msSinceExtract, msSinceLastWord, endsTerminal) {
+    if (newWords < WINDOW_MIN_NEW_WORDS) return false;
+    if (endsTerminal) return true;
+    if (msSinceExtract >= WINDOW_EXTRACT_MS) return true;
+    return msSinceLastWord >= WINDOW_TRAIL_SILENCE_MS;
   }
   /**
    * D17 — pick the claim-bearing sentence from a (possibly filler-prefixed) utterance:
@@ -1033,15 +1068,19 @@
     "Bitcoin", "Elon Musk", "GDP", "tariffs", "inflation", "recession", "unemployment", "emissions", "billion"];
   let dgWs = null, dgProc = null, dgCtx = null, dgSource = null, dgFinalWords = [], dgGotResult = false;
   let prevFinalText = "", prevFinalAt = 0;   // (legacy F3 pair buffer — still reset at boundaries; assembler below is the live path)
-  /* W1.2 assembler state: consecutive finals buffered until the thought ends. asmTimer
-     (started per stream, killed at End Stream) flushes on real silence. */
-  let asmBuf = [], asmTimer = 0;
-  function flushAssembly(reason) {
-    const buf = asmBuf; asmBuf = [];
-    if (buf.length < 2) return;   // a single final was already checked directly
-    const joined = buf.map((f) => f.text).join(" ");
-    FT.log("stt_assemble", { n: buf.length, reason, span_ms: buf[buf.length - 1].at - buf[0].at, joined: joined.slice(0, 200) });
-    checkUtterance(joined, { merged: true });
+  /* W1.3 rolling-window state (supersedes the W1.2 final-assembler wiring): every final's
+     words land in a rolling transcript window; the window is extracted on a cadence
+     (windowShouldExtract) regardless of how Deepgram shredded the finals. winTimer runs
+     per stream (killed at End Stream). Overlapping windows re-extracting the same claim
+     are absorbed by F2 dedupe; hallucination is fenced by the P4-F1 grounding gate. */
+  let winWords = [], winLastAt = 0, winNewWords = 0, winLastExtract = 0, winEndsTerminal = false, winTimer = 0, winLastSent = "";
+  function windowExtract(reason) {
+    const text = winWords.slice(-WINDOW_WORDS).join(" ").trim();
+    winNewWords = 0; winLastExtract = Date.now(); winEndsTerminal = false;
+    if (!text || text === winLastSent) return;
+    winLastSent = text;
+    FT.log("window_extract", { reason, words: text.split(/\s+/).length, text: text.slice(0, 200) });
+    checkUtterance(text, { merged: true });   // merged: word-min bypass only — F2 + grounding still gate
   }
   let dgEverWorked = false, dgRetryN = 0, dgRetryT = 0;   // mid-session drop → auto-reconnect (unattended/auto-air safe)
   /* L2 (sprint-02): STT finalization wait measured ≤~0.55s p50 — endpointing is the lever,
@@ -1081,9 +1120,14 @@
     if (g !== gen) return false;                                       // stream ended while fetching auth
     if (!auth) { DBG.event("err", "no Deepgram auth available"); return false; }
     DBG.event("info", auth[0] === "bearer" ? "Deepgram auth · server token" : "Deepgram auth · inlined key (legacy)");
-    dgFinalWords = []; dgGotResult = false; prevFinalText = ""; prevFinalAt = 0; asmBuf = [];   // never assemble across a (re)connect boundary
-    clearInterval(asmTimer);
-    asmTimer = setInterval(() => { if (g === gen && assemblyShouldFlush(asmBuf.length, asmBuf.length ? asmBuf[asmBuf.length - 1].at : 0, Date.now())) flushAssembly("silence"); }, 300);
+    dgFinalWords = []; dgGotResult = false; prevFinalText = ""; prevFinalAt = 0;
+    winWords = []; winNewWords = 0; winLastAt = 0; winLastExtract = Date.now(); winLastSent = "";   // never window across a (re)connect boundary
+    clearInterval(winTimer);
+    winTimer = setInterval(() => {
+      if (g !== gen || !winNewWords) return;
+      const now = Date.now();
+      if (windowShouldExtract(winNewWords, now - winLastExtract, now - winLastAt, false)) windowExtract(now - winLastAt >= WINDOW_TRAIL_SILENCE_MS ? "silence" : "cadence");
+    }, 400);
     let ws; try { ws = new WebSocket(dgUrl(dgCtx.sampleRate), auth); } catch (e) { DBG.event("err", "Deepgram WS construct failed", { error: String(e && e.message || e) }); return false; }
     ws.binaryType = "arraybuffer"; dgWs = ws;
     ws.onerror = () => { if (g === gen) DBG.event("err", "Deepgram WS error", { readyState: ws.readyState, gotResult: dgGotResult }); };
@@ -1125,9 +1169,10 @@
            absorbs the overlap with the per-final checks, so fragments + join extracting
            the same claim still yield exactly one card. */
         const nowAt = Date.now();
-        if (asmBuf.length && nowAt - asmBuf[asmBuf.length - 1].at > MERGE_MAX_GAP_MS) flushAssembly("gap");
-        asmBuf.push({ text: tr, at: nowAt });
-        if (asmBuf.length >= ASSEMBLE_MAX_FINALS) flushAssembly("cap");
+        const ws_ = tr.split(/\s+/).filter(Boolean);
+        winWords.push(...ws_); if (winWords.length > 60) winWords = winWords.slice(-60);
+        winNewWords += ws_.length; winLastAt = nowAt; winEndsTerminal = /[.!?]$/.test(tr);
+        if (winEndsTerminal && windowShouldExtract(winNewWords, nowAt - winLastExtract, 0, true)) windowExtract("terminal");
       }
     };
     ws.onclose = (ev) => {
@@ -1274,7 +1319,7 @@
     if (dgWs) { try { dgWs.send(JSON.stringify({ type: "CloseStream" })); } catch {} try { dgWs.close(); } catch {} dgWs = null; }
     if (dgProc) { try { dgProc.disconnect(); } catch {} dgProc = null; }
     dgSource = null; dgCtx = null; dgFinalWords = []; prevFinalText = ""; prevFinalAt = 0;
-    clearInterval(asmTimer); asmTimer = 0; asmBuf = [];   // assembler dies with the stream — never flush into a dead broadcast
+    clearInterval(winTimer); winTimer = 0; winWords = []; winNewWords = 0;   // window dies with the stream — never extract into a dead broadcast
     callTabSource = null; mixBus = null;   // nodes die with the context; the tab STREAM survives for the next start
     if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
     audioStream = null;

@@ -22,6 +22,14 @@ const MERGE_SHORT_WORDS = 4;
 const ASSEMBLE_SILENCE_MS = 3600;
 // TUNABLE — W1.2 assembler: max finals joined into one utterance (runaway-buffer cap).
 const ASSEMBLE_MAX_FINALS = 6;
+// TUNABLE — W1.3 window: words of rolling transcript context handed to each extract.
+const WINDOW_WORDS = 30;
+// TUNABLE — W1.3 window: minimum NEW words since the last extract before another fires.
+const WINDOW_MIN_NEW_WORDS = 3;
+// TUNABLE — W1.3 window: cadence ceiling — extract at least this often during speech.
+const WINDOW_EXTRACT_MS = 3500;
+// TUNABLE — W1.3 window: trailing silence that flushes the last words of a thought.
+const WINDOW_TRAIL_SILENCE_MS = 1500;
 /**
  * Canonical claim key for dedupe: lowercase, punctuation stripped, whitespace collapsed.
  * @param {string|null|undefined} claim extracted claim text
@@ -83,6 +91,27 @@ function assemblyShouldFlush(count, lastAt, nowAt) {
   return nowAt - lastAt >= ASSEMBLE_SILENCE_MS;
 }
 /**
+ * W1.3 (run-test 2026-08-14) — rolling-WINDOW extraction predicate. The run proved the
+ * final is not a unit of meaning: 244 finals, median ONE word, 73% of spoken words never
+ * reached a check. The window frame: keep a running transcript of the last ~N words and
+ * extract claims from the WINDOW on a cadence, letting F2 dedupe absorb the overlap and
+ * the grounding gate reject anything not actually said. Supersedes the final-assembler
+ * (whose wiring is retired; predicate retained above for reference/tests).
+ * Extract when: enough NEW words arrived since the last extract AND (the newest final
+ * ended a sentence, OR the cadence interval elapsed, OR real silence set in).
+ * @param {number} newWords words arrived since the last window extract
+ * @param {number} msSinceExtract ms since the last window extract
+ * @param {number} msSinceLastWord ms since the newest word arrived
+ * @param {boolean} endsTerminal newest final ended with . ! or ?
+ * @returns {boolean} true → extract the window now
+ */
+function windowShouldExtract(newWords, msSinceExtract, msSinceLastWord, endsTerminal) {
+  if (newWords < WINDOW_MIN_NEW_WORDS) return false;
+  if (endsTerminal) return true;
+  if (msSinceExtract >= WINDOW_EXTRACT_MS) return true;
+  return msSinceLastWord >= WINDOW_TRAIL_SILENCE_MS;
+}
+/**
  * D17 — pick the claim-bearing sentence from a (possibly filler-prefixed) utterance:
  * best content-word overlap with the canonical claim wins; whole utterance is the
  * fallback. Used to render the SPEAKER'S framing (denials keep their negation).
@@ -115,4 +144,4 @@ function pickSpokenSentence(spoken, claim, preferNegation) {
 }
 /* ===== END MIRROR BLOCK ===== */
 
-export { DUP_CLAIM_WINDOW_MS, MERGE_MAX_GAP_MS, MERGE_SHORT_WORDS, ASSEMBLE_SILENCE_MS, ASSEMBLE_MAX_FINALS, normalizeClaim, withinDupWindow, shouldMergeFinals, assemblyShouldFlush, pickSpokenSentence, hasNegation };
+export { DUP_CLAIM_WINDOW_MS, MERGE_MAX_GAP_MS, MERGE_SHORT_WORDS, ASSEMBLE_SILENCE_MS, ASSEMBLE_MAX_FINALS, WINDOW_WORDS, WINDOW_MIN_NEW_WORDS, WINDOW_EXTRACT_MS, WINDOW_TRAIL_SILENCE_MS, normalizeClaim, withinDupWindow, shouldMergeFinals, assemblyShouldFlush, windowShouldExtract, pickSpokenSentence, hasNegation };

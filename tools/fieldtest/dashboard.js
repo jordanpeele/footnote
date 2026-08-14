@@ -52,6 +52,12 @@ function handle(e) {
       else if (e.claim) line(t, `${C.b}● CLAIM${C.r}`, `[${e.cid}] "${e.claim.slice(0, 80)}" ${C.dim}pol=${e.polarity} harm=${e.harm_class} ${e.ms}ms${C.r}`, flag);
       break;
     }
+    case "window_extract":
+      line(t, `${C.cyn}⧉ WINDOW${C.r}`, `${e.reason} (${e.words}w): "${(e.text || "").slice(0, 80)}"`);
+      break;
+    case "client_error":
+      line(t, `${C.red || ""}✖ CLIENT ERROR${C.r}`, `${e.msg}${e.src ? ` @ ${e.src}:${e.line}` : ""}`);
+      break;
     case "stt_merge":
       line(t, `${C.cyn}⧉ MERGE${C.r}`, `P5-B join fired: "${(e.joined || e.transcript || "").slice(0, 80)}"`);
       break;

@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import {
   DUP_CLAIM_WINDOW_MS, MERGE_MAX_GAP_MS, MERGE_SHORT_WORDS,
   ASSEMBLE_SILENCE_MS, ASSEMBLE_MAX_FINALS, assemblyShouldFlush,
+  WINDOW_WORDS, WINDOW_MIN_NEW_WORDS, WINDOW_EXTRACT_MS, WINDOW_TRAIL_SILENCE_MS, windowShouldExtract,
   normalizeClaim, withinDupWindow, shouldMergeFinals, pickSpokenSentence,
 } from "../../src/core/utterance.js";
 
@@ -187,4 +188,29 @@ test("assembler window is wider than the pair-join gap (session replay lesson)",
   // both sessions) and LOST claims the pair-join caught. The silence window must sit
   // above MERGE_MAX_GAP_MS so the assembler never separates what the pair-join would join.
   assert.ok(ASSEMBLE_SILENCE_MS > MERGE_MAX_GAP_MS, "silence window covers the merge gap");
+});
+
+/* ================= windowShouldExtract (W1.3 rolling window) ================= */
+
+test("window: below the new-words floor never extracts", () => {
+  assert.equal(windowShouldExtract(WINDOW_MIN_NEW_WORDS - 1, 99999, 99999, true), false);
+});
+
+test("window: sentence end extracts immediately once enough new words exist", () => {
+  assert.equal(windowShouldExtract(WINDOW_MIN_NEW_WORDS, 0, 0, true), true);
+});
+
+test("window: cadence ceiling fires during continuous speech", () => {
+  assert.equal(windowShouldExtract(10, WINDOW_EXTRACT_MS, 100, false), true);
+  assert.equal(windowShouldExtract(10, WINDOW_EXTRACT_MS - 1, 100, false), false);
+});
+
+test("window: trailing silence flushes the last words of a thought", () => {
+  assert.equal(windowShouldExtract(4, 1000, WINDOW_TRAIL_SILENCE_MS, false), true);
+});
+
+test("window covers the run-test failure shape: 1-word finals every ~2.3s", () => {
+  // eight 1-word finals into the window: by the 4th (~7s in), the cadence ceiling has
+  // fired at least once — the claim reaches an extract without ANY intact final existing.
+  assert.equal(windowShouldExtract(4, 4600, 2300, false), true);
 });
