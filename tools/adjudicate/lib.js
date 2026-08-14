@@ -256,6 +256,81 @@ export function buildGoldenEntry(decision, queueEntry, id) {
   return out;
 }
 
+// ── Polarity micro-pass (the 31 negation-ambiguous rows Task 0 left UNSET) ─────────────
+//
+// A polarity card RULES ON AN EXISTING golden row (it never appends): the operator picks
+// one of three rulings and apply.js writes the row's expected_polarity field back in
+// place. `ambiguous-drop` writes an EXPLICIT `expected_polarity: null` (+ polarity_note)
+// so a ruled-out row is distinguishable from a never-visited one — run.js skips both
+// identically (its check is `!= null`), so the drop is behavior-preserving by design.
+export const POLARITY_RULINGS = [
+  { key: "1", value: "asserts" },
+  { key: "2", value: "denies" },
+  { key: "3", value: "ambiguous-drop" },
+];
+export function isPolarityRuling(v) {
+  return POLARITY_RULINGS.some((r) => r.value === v);
+}
+
+// Join the transcription-only cards (polarity-cards.json) against the LIVE golden rows
+// (goldenById: id -> parsed golden row) into cockpit queue entries. The utterance and
+// canonical claim always come from the golden file — the cards never duplicate them, so
+// they cannot drift. Cards whose row now HAS the expected_polarity key (even explicit
+// null — i.e. already ruled, including ambiguous-drop) fall out of the queue, which makes
+// prep.js naturally idempotent after an apply. Card order is preserved (it IS the sitting
+// order); families become "polarity · <family>" cluster labels, contiguous by authorship.
+export function buildPolarityEntries(cards, goldenById) {
+  const entries = [];
+  const alreadyRuled = [];
+  const missing = [];
+  for (const card of cards || []) {
+    const row = goldenById.get(card.id);
+    if (!row) { missing.push(card.id); continue; }
+    if (Object.hasOwn(row, "expected_polarity")) { alreadyRuled.push(card.id); continue; }
+    entries.push({
+      key: "pol::" + card.id,
+      mode: "polarity",
+      goldenId: card.id,
+      category: row.category,
+      claim: row.expected_extraction,          // may be null (the null-claim filler family)
+      canonical: row.expected_extraction,
+      groundTruth: row.ground_truth_verdict,
+      sampleTranscript: row.transcript_snippet || "",
+      readings: card.readings || [],
+      ambiguity: card.ambiguity || "",
+      repeatCount: 1,
+      sourceDrafts: [card.id],
+      suggestedCategory: null,                 // NEVER suggested — the queue docs carry no
+      suggestedVerdict: null,                  // answers for these rows (hints are for 3-5)
+      cluster: "polarity · " + (card.family || "micro-pass"),
+    });
+  }
+  return { entries, alreadyRuled, missing };
+}
+
+// Write one polarity ruling into one raw golden JSONL line, surgically: every other byte
+// of the line is preserved (matching the files' hand-spaced style), and the field is
+// appended before the closing brace exactly like the 229 already-labeled rows. Pure —
+// returns { changed, line, reason }. Refuses to clobber: a line that already carries the
+// expected_polarity key comes back unchanged (that's also apply's idempotency).
+export function applyPolarityToLine(line, ruling, note) {
+  const row = JSON.parse(line);
+  if (Object.hasOwn(row, "expected_polarity")) return { changed: false, line, reason: "already ruled" };
+  if (!isPolarityRuling(ruling)) return { changed: false, line, reason: `unknown ruling ${JSON.stringify(ruling)}` };
+  const close = line.lastIndexOf("}");
+  if (close < 0) return { changed: false, line, reason: "malformed line" };
+  let insert;
+  if (ruling === "ambiguous-drop") {
+    const polNote = "negation-ambiguous — excluded from the polarity slice by operator ruling (micro-pass)" +
+      (note && note.trim() ? ": " + note.trim() : "");
+    insert = `, "expected_polarity": null, "polarity_note": ${JSON.stringify(polNote)}`;
+  } else {
+    insert = `, "expected_polarity": ${JSON.stringify(ruling)}`;
+    if (note && note.trim()) insert += `, "polarity_note": ${JSON.stringify(note.trim())}`;
+  }
+  return { changed: true, line: line.slice(0, close) + insert + line.slice(close), reason: null };
+}
+
 // Idempotency guard for apply.js: has this claim already been graduated into the target
 // golden file? Compares normalized claim text (an id can't collide — apply allocates a
 // fresh one — but re-running apply on the same graduations.json must not double-append).

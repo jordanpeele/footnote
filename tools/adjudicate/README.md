@@ -10,6 +10,13 @@ It does **not** touch Sections 1–2 (polarity inversions + scorer disagreements
 edit the *results* file, not the golden set, and follow the manual workflow in the queue
 doc's "After adjudication" section.
 
+It ALSO carries the **polarity micro-pass** — the 31 golden rows whose
+`expected_polarity` Task 0 left UNSET because the negation reading was ambiguous
+(commit 82feaba: "guessing labels would corrupt the eval"). Those cards rule on
+EXISTING golden rows (they never append) and ride at the end of the graduation sitting
+as their own cluster group — or run alone via `prep.js --polarity-only`, a ≤15-minute
+sitting. See "Polarity micro-pass" below.
+
 ## The flow — 4 steps
 
 ```
@@ -107,14 +114,48 @@ same `graduations.json` won't double-append. `--dry-run` prints what it would wr
 After applying, per the queue doc's mechanics: delete each fully-graduated
 `drafts-*.jsonl`, and run a calibration pass to pick up the new golden entries.
 
+## Polarity micro-pass (the 31 UNSET `expected_polarity` rows)
+
+`polarity-cards.json` holds one transcription-only card per unset row: the two candidate
+readings and a NEUTRAL framing of what makes the negation ambiguous. **No card carries a
+suggested ruling** — the queue docs carry none for these rows, so none was invented
+(precedent cites like pol-001's "approving quotation is a net assertion" or geo-029's
+recorded label are marked *not controlling*). Prep joins each card to its LIVE golden row
+by id (utterance/claim come from the golden file, never the card) and drops any card
+whose row already carries the `expected_polarity` key — so the block empties itself after
+an apply, and re-running prep is naturally idempotent.
+
+On a polarity card the cockpit swaps the ruling row: **`1`=asserts `2`=denies
+`3`=ambiguous-drop** (verdict/category/source are hidden; the claim is read-only —
+the ruling edits an existing row, nothing else about it is editable). The blue panel
+shows the ambiguity framing + both readings; the note field flows into the row's
+`polarity_note`. Cards arrive clustered by ambiguity *family* (null-claim filler ·
+negation in supporting clause · negative-proposition claim · hedged/self-corrected), and
+batch (`a`) rules the rest of the current family at once. Sitting cost: ~31 cards, two
+batchable families ≈ **10–13 minutes**.
+
+`apply.js` routes `mode: "polarity"` decisions down a separate path: a **surgical
+in-place line edit** of `eval/golden/<category>.jsonl` — the field is appended before the
+row's closing brace exactly like the 229 already-labeled rows, and every other byte of
+the file is preserved. `asserts`/`denies` write the value; `ambiguous-drop` writes an
+**explicit `expected_polarity: null` + `polarity_note`** so a ruled-out row is
+distinguishable from a never-visited one (run.js skips both identically — its check is
+`!= null`). Safety mirrors graduations: `resolved: false` refused, unknown rulings
+refused, an already-ruled row is never clobbered (which is also the idempotency).
+The golden VALUES are the operator's rulings alone — nothing here decides them.
+
 ## Files
 
 - `lib.js` — pure, testable logic (dedup, hints, sitting order, category gaps, id
   allocation, graduation, idempotency); imported by prep.js, apply.js, **and** the page
   so the picker/graduation math can't drift
-- `prep.js` — drafts → `queue.json` (glob + hints + clustering + golden-gap stats)
+- `prep.js` — drafts → `queue.json` (glob + hints + clustering + golden-gap stats +
+  the polarity block; `--polarity-only` for the standalone micro-pass sitting)
 - `hints.json` — transcribed queue-doc recommendations + run-log annotations
   (suggestions only; the human ratifies everything)
-- `apply.js` — `graduations.json` → `eval/golden/<category>.jsonl`
+- `polarity-cards.json` — transcription-only ambiguity cards for the 31 unset
+  `expected_polarity` rows (two readings + neutral framing; NO suggested rulings)
+- `apply.js` — `graduations.json` → `eval/golden/<category>.jsonl` (append for
+  graduations; surgical in-place `expected_polarity` writes for polarity rulings)
 - `adjudicate.html` / `.js` / `.css` — the cockpit page
 - tests: `test/adjudicate.test.js`

@@ -12,7 +12,10 @@
 // - progress label shows resolved count + a remaining-time estimate from your own pace
 // - only EXPLICITLY resolved cards (Enter / skip / batch) are downloaded — a merely
 //   visited card with a pre-seeded suggestion never lands in graduations.json
-import { CATEGORIES, VERDICTS } from "/tools/adjudicate/lib.js";
+// - POLARITY cards (mode:"polarity" — the 31-row negation micro-pass) swap the ruling row
+//   to asserts/denies/ambiguous-drop (keys 1/2/3), hide category/source (the ruling edits
+//   an EXISTING golden row in place), and batch by cluster family instead of suggestion
+import { CATEGORIES, VERDICTS, POLARITY_RULINGS } from "/tools/adjudicate/lib.js";
 
 const state = {
   queue: null,
@@ -52,6 +55,8 @@ async function boot() {
   render();
 }
 
+function isPolarity(entry) { return entry && entry.mode === "polarity"; }
+
 function buildPickers() {
   const vb = $("verdict-buttons");
   vb.innerHTML = "";
@@ -62,6 +67,16 @@ function buildPickers() {
     b.innerHTML = `${v.value} <kbd>${v.key}</kbd>`;
     b.addEventListener("click", () => setVerdict(v.value));
     vb.appendChild(b);
+  }
+  const pb = $("polarity-buttons");
+  pb.innerHTML = "";
+  for (const r of POLARITY_RULINGS) {
+    const b = document.createElement("button");
+    b.className = "pill";
+    b.dataset.polarity = r.value;
+    b.innerHTML = `${r.value} <kbd>${r.key}</kbd>`;
+    b.addEventListener("click", () => setPolarity(r.value));
+    pb.appendChild(b);
   }
   const cb = $("category-buttons");
   cb.innerHTML = "";
@@ -111,7 +126,14 @@ function resetSitting() {
 function current() { return state.entries[state.idx]; }
 function decisionFor(entry) {
   if (!state.decisions[entry.key]) {
-    state.decisions[entry.key] = {
+    state.decisions[entry.key] = isPolarity(entry) ? {
+      key: entry.key,
+      mode: "polarity",
+      polarity: null,   // asserts | denies | ambiguous-drop — NEVER pre-seeded (no hints exist)
+      note: "",
+      skip: false,
+      resolved: false,
+    } : {
       key: entry.key,
       verdict: entry.suggestedVerdict || null,
       category: entry.suggestedCategory || null,
@@ -128,8 +150,9 @@ function decisionFor(entry) {
 function isResolved(entry) { return !!state.decisions[entry.key]?.resolved; }
 function resolvedDecisions() { return Object.values(state.decisions).filter((d) => d.resolved); }
 
-function setVerdict(v) { const d = decisionFor(current()); d.verdict = d.verdict === v ? null : v; render(); }
-function setCategory(c) { const d = decisionFor(current()); d.category = c; render(); }
+function setVerdict(v) { const d = decisionFor(current()); if (d.mode === "polarity") return; d.verdict = d.verdict === v ? null : v; render(); }
+function setCategory(c) { const d = decisionFor(current()); if (d.mode === "polarity") return; d.category = c; render(); }
+function setPolarity(p) { const d = decisionFor(current()); if (d.mode !== "polarity") return; d.polarity = d.polarity === p ? null : p; render(); }
 
 // Remaining-time estimate from the operator's own pace (gaps > 2 min = a break, ignored).
 function etaLabel(remaining) {
@@ -169,36 +192,80 @@ function render() {
   $("cluster-bar").textContent =
     `cluster ${e.cluster || "—"} · card ${state.idx - i0 + 1}/${i1 - i0 + 1}${gapTxt}`;
 
-  $("repeat-badge").textContent =
-    (e.authored ? "AUTHORED · " : "") + (e.repeatCount > 1 ? `×${e.repeatCount} repeats` : "unique");
+  const pol = isPolarity(e);
+  $("repeat-badge").textContent = pol ? "polarity micro-pass"
+    : (e.authored ? "AUTHORED · " : "") + (e.repeatCount > 1 ? `×${e.repeatCount} repeats` : "unique");
   $("resolved-badge").hidden = !isResolved(e);
   $("resolved-badge").textContent = d.skip ? "skipped" : "resolved";
-  $("source-drafts").textContent = e.sourceDrafts.join(", ");
-  $("pipeline-hint").textContent = e.pipelineVerdict ? `pipeline hint: ${e.pipelineVerdict} (NOT ground truth)` : "";
+  $("source-drafts").textContent = pol ? `golden row ${e.goldenId} · ${e.category}` : e.sourceDrafts.join(", ");
+  $("pipeline-hint").textContent = pol
+    ? `golden verdict: ${e.groundTruth ?? "null"} (on the recorded claim — NOT the ruling)`
+    : (e.pipelineVerdict ? `pipeline hint: ${e.pipelineVerdict} (NOT ground truth)` : "");
 
   const hn = $("hint-note");
   hn.hidden = !e.hintNote;
   hn.textContent = e.hintNote ? `${e.hintRef ? "[" + e.hintRef + "] " : ""}${e.hintNote}` : "";
 
-  $("extraction").value = d.extraction ?? "";
+  // Polarity cards: swap the ruling row, show the two candidate readings, freeze the
+  // claim (the ruling edits an existing golden row — nothing else about it is editable).
+  $("polarity-buttons").hidden = !pol;
+  $("verdict-buttons").hidden = pol;
+  $("category-group").hidden = pol;
+  $("source-group").hidden = pol;
+  $("verdict-label").textContent = pol ? "RULING (writes expected_polarity)" : "VERDICT";
+  $("claim-label").innerHTML = pol
+    ? "CLAIM (read-only — the golden row's recorded extraction)"
+    : 'CLAIM (editable extraction) <kbd>e</kbd>';
+  $("extraction").readOnly = pol;
+  const pr = $("polarity-readings");
+  pr.hidden = !pol;
+  if (pol) {
+    pr.innerHTML = "";
+    const amb = document.createElement("div");
+    amb.className = "pol-ambiguity";
+    amb.textContent = e.ambiguity || "";
+    pr.appendChild(amb);
+    for (const r of e.readings || []) {
+      const div = document.createElement("div");
+      div.className = "pol-reading";
+      const b = document.createElement("b");
+      b.textContent = r.ruling + " — ";
+      div.appendChild(b);
+      div.appendChild(document.createTextNode(r.reading));
+      pr.appendChild(div);
+    }
+  }
+
+  $("extraction").value = pol
+    ? (e.claim ?? "(null — the correct behavior for this row is NO extraction)")
+    : (d.extraction ?? "");
   $("transcript").textContent = e.sampleTranscript || "(no transcript sample)";
   $("source").value = d.source_of_truth || "";
   $("note").value = d.note || "";
 
   for (const b of $("verdict-buttons").children) {
-    b.classList.toggle("sel", b.dataset.verdict === d.verdict);
-    b.classList.toggle("suggested", !d.verdict && b.dataset.verdict === e.suggestedVerdict);
+    b.classList.toggle("sel", !pol && b.dataset.verdict === d.verdict);
+    b.classList.toggle("suggested", !pol && !d.verdict && b.dataset.verdict === e.suggestedVerdict);
   }
   for (const b of $("category-buttons").children) {
-    b.classList.toggle("sel", b.dataset.category === d.category);
-    b.classList.toggle("suggested", !d.category && b.dataset.category === e.suggestedCategory);
+    b.classList.toggle("sel", !pol && b.dataset.category === d.category);
+    b.classList.toggle("suggested", !pol && !d.category && b.dataset.category === e.suggestedCategory);
+  }
+  for (const b of $("polarity-buttons").children) {
+    b.classList.toggle("sel", pol && b.dataset.polarity === d.polarity);
   }
 
-  // Batch button: how many later cards share this exact (verdict, category)?
+  // Batch button: graduation cards batch over identical suggestions; polarity cards batch
+  // over the rest of their cluster family (same ambiguity shape, one ruling).
   const like = batchGroup(d).length;
   const bb = $("btn-batch");
-  bb.hidden = !(d.verdict && d.category && like > 1);
-  if (!bb.hidden) bb.textContent = `Accept all ${like} like this (${d.verdict} · ${d.category})  [a]`;
+  if (pol) {
+    bb.hidden = !(d.polarity && like > 1);
+    if (!bb.hidden) bb.textContent = `Rule all ${like} in this family (${d.polarity})  [a]`;
+  } else {
+    bb.hidden = !(d.verdict && d.category && like > 1);
+    if (!bb.hidden) bb.textContent = `Accept all ${like} like this (${d.verdict} · ${d.category})  [a]`;
+  }
 
   $("btn-back").disabled = state.idx === 0;
   setStatus("");
@@ -206,21 +273,29 @@ function render() {
 
 // Cards from the current index onward whose SUGGESTED verdict+category match the current
 // decision — the "accept all N like this" group (batch mode over identical suggestions).
+// Polarity cards have no suggestions; they batch over their own cluster FAMILY instead
+// (same ambiguity shape by construction — the operator explicitly rules the family).
 function batchGroup(d) {
+  const cur = current();
   const out = [];
   for (let i = state.idx; i < state.entries.length; i++) {
     const e = state.entries[i];
     if (state.decisions[e.key]?.resolved) continue; // don't clobber resolved
-    if (e.suggestedVerdict === d.verdict && e.suggestedCategory === d.category) out.push(e);
+    if (d.mode === "polarity") {
+      if (isPolarity(e) && e.cluster === cur.cluster) out.push(e);
+    } else {
+      if (!isPolarity(e) && e.suggestedVerdict === d.verdict && e.suggestedCategory === d.category) out.push(e);
+    }
   }
   return out;
 }
 
 function pullFields() {
   const d = decisionFor(current());
+  d.note = $("note").value.trim();
+  if (d.mode === "polarity") return; // claim/source are read-only context on polarity cards
   d.extraction = $("extraction").value.trim() || null;
   d.source_of_truth = $("source").value.trim();
-  d.note = $("note").value.trim();
 }
 
 function mark() { state.marks.push(Date.now()); }
@@ -228,10 +303,14 @@ function mark() { state.marks.push(Date.now()); }
 function decideAndNext() {
   pullFields();
   const d = decisionFor(current());
-  if (!d.category) { setStatus("pick a category first (number keys or click)"); return; }
-  if (!d.verdict && d.extraction !== null) {
-    setStatus("pick a verdict, or clear the extraction to graduate as a null-verdict echo/opinion card");
-    return;
+  if (d.mode === "polarity") {
+    if (!d.polarity) { setStatus("pick a ruling: 1=asserts 2=denies 3=ambiguous-drop (or skip)"); return; }
+  } else {
+    if (!d.category) { setStatus("pick a category first (number keys or click)"); return; }
+    if (!d.verdict && d.extraction !== null) {
+      setStatus("pick a verdict, or clear the extraction to graduate as a null-verdict echo/opinion card");
+      return;
+    }
   }
   d.skip = false;
   d.resolved = true;
@@ -266,15 +345,21 @@ function jumpNextUnresolved() {
 function batchAccept() {
   pullFields();
   const d = decisionFor(current());
-  if (!d.verdict || !d.category) { setStatus("need verdict + category to batch"); return; }
+  if (d.mode === "polarity") {
+    if (!d.polarity) { setStatus("pick a ruling to batch the family"); return; }
+  } else if (!d.verdict || !d.category) { setStatus("need verdict + category to batch"); return; }
   const group = batchGroup(d);
   for (const e of group) {
     const gd = decisionFor(e);
-    gd.verdict = d.verdict; gd.category = d.category; gd.skip = false; gd.resolved = true;
-    // keep each card's own extraction/transcript; batch only ratifies verdict+category
+    if (d.mode === "polarity") { gd.polarity = d.polarity; }
+    else { gd.verdict = d.verdict; gd.category = d.category; }
+    gd.skip = false; gd.resolved = true;
+    // keep each card's own extraction/transcript; batch only ratifies the shared ruling
   }
   mark(); // one pace-mark for the whole batch, so the ETA doesn't lie fast
-  setStatus(`accepted ${group.length} cards as ${d.verdict} · ${d.category}`);
+  setStatus(d.mode === "polarity"
+    ? `ruled ${group.length} cards in this family as ${d.polarity}`
+    : `accepted ${group.length} cards as ${d.verdict} · ${d.category}`);
   // jump to the next still-unresolved card
   while (state.idx < state.entries.length && isResolved(state.entries[state.idx])) state.idx++;
   render();
@@ -283,10 +368,12 @@ function batchAccept() {
 function showDone() {
   $("card").hidden = true; $("done").hidden = false;
   const vals = resolvedDecisions();
-  const graduating = vals.filter((d) => !d.skip).length;
+  const graduating = vals.filter((d) => !d.skip && d.mode !== "polarity").length;
+  const polRuled = vals.filter((d) => !d.skip && d.mode === "polarity").length;
   const skipped = vals.filter((d) => d.skip).length;
   $("done-summary").textContent =
-    `${graduating} card(s) to graduate, ${skipped} skipped, ${state.entries.length - vals.length} unresolved (won't download). ` +
+    `${graduating} card(s) to graduate, ${polRuled} polarity ruling(s), ${skipped} skipped, ` +
+    `${state.entries.length - vals.length} unresolved (won't download). ` +
     `Download graduations.json, then: node tools/adjudicate/apply.js ~/Downloads/graduations.json`;
   $("progress-fill").style.width = "100%";
 }
@@ -325,18 +412,25 @@ function bindKeys() {
       if (ev.key === "b") { ev.preventDefault(); back(); }
       return;
     }
-    const v = VERDICTS.find((x) => x.key === ev.key);
-    if (v) { ev.preventDefault(); setVerdict(v.value); return; }
-    if (/^[1-9]$/.test(ev.key)) {
-      const c = CATEGORIES[Number(ev.key) - 1];
-      if (c) { ev.preventDefault(); setCategory(c.name); } return;
+    const pol = isPolarity(current());
+    if (pol) {
+      // Polarity cards: 1/2/3 pick the ruling; verdict letters and the category row are inert.
+      const r = POLARITY_RULINGS.find((x) => x.key === ev.key);
+      if (r) { ev.preventDefault(); setPolarity(r.value); return; }
+    } else {
+      const v = VERDICTS.find((x) => x.key === ev.key);
+      if (v) { ev.preventDefault(); setVerdict(v.value); return; }
+      if (/^[1-9]$/.test(ev.key)) {
+        const c = CATEGORIES[Number(ev.key) - 1];
+        if (c) { ev.preventDefault(); setCategory(c.name); } return;
+      }
     }
     if (ev.key === "s") { ev.preventDefault(); skip(); return; }
     if (ev.key === "b") { ev.preventDefault(); back(); return; }
     if (ev.key === "j") { ev.preventDefault(); jumpNextUnresolved(); return; }
     if (ev.key === "a") { ev.preventDefault(); if (!$("btn-batch").hidden) batchAccept(); return; }
-    if (ev.key === "e") { ev.preventDefault(); $("extraction").focus(); return; }
-    if (ev.key === "o") { ev.preventDefault(); $("source").focus(); return; }
+    if (ev.key === "e" && !pol) { ev.preventDefault(); $("extraction").focus(); return; }
+    if (ev.key === "o" && !pol) { ev.preventDefault(); $("source").focus(); return; }
     if (ev.key === "i") { ev.preventDefault(); $("note").focus(); return; }
     if (ev.key === "d") { ev.preventDefault(); download(); return; }
   });

@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync, readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,7 @@ import {
   normalizeClaim, dedupeDrafts, parseNoteHints, nextId, buildGoldenEntry,
   alreadyGraduated, prefixForCategory, applyHints, orderForSitting, sittingCluster,
   categoryNeeds, CATEGORIES, VERDICTS,
+  POLARITY_RULINGS, isPolarityRuling, buildPolarityEntries, applyPolarityToLine,
 } from "../tools/adjudicate/lib.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -391,6 +392,234 @@ test("hints.json parses, uses only known verdicts/categories, and every hint lan
       assert.ok(hit, `hint ${h.ref} "${(h.claim || (h.draftIds || []).join(",")).slice(0, 50)}" matches no card`);
     }
   } finally { rmSync(tmp, { recursive: true, force: true }); }
+});
+
+// ═══ Polarity micro-pass (the 31 negation-ambiguous rows) ══════════════════════════════
+
+// ---- rulings vocabulary --------------------------------------------------------------
+test("POLARITY_RULINGS covers asserts/denies/ambiguous-drop with 1/2/3 hotkeys", () => {
+  assert.deepEqual(POLARITY_RULINGS.map((r) => r.value), ["asserts", "denies", "ambiguous-drop"]);
+  assert.deepEqual(POLARITY_RULINGS.map((r) => r.key), ["1", "2", "3"]);
+  assert.ok(isPolarityRuling("asserts") && isPolarityRuling("ambiguous-drop"));
+  assert.ok(!isPolarityRuling("True") && !isPolarityRuling(null) && !isPolarityRuling("drop"));
+});
+
+// ---- buildPolarityEntries ------------------------------------------------------------
+test("buildPolarityEntries joins cards to live golden rows, drops ruled rows, never suggests", () => {
+  const cards = [
+    { id: "x-001", family: "fam A", readings: [{ ruling: "asserts", reading: "r1" }, { ruling: "denies", reading: "r2" }], ambiguity: "why" },
+    { id: "x-002", family: "fam A", readings: [], ambiguity: "" },
+    { id: "x-003", family: "fam B", readings: [], ambiguity: "" },   // already ruled (even null!)
+    { id: "x-404", family: "fam B", readings: [], ambiguity: "" },   // no golden row
+  ];
+  const goldenById = new Map([
+    ["x-001", { id: "x-001", category: "science_health", expected_extraction: "Claim one.", ground_truth_verdict: "False", transcript_snippet: "spoken one" }],
+    ["x-002", { id: "x-002", category: "science_health", expected_extraction: null, ground_truth_verdict: null, transcript_snippet: "spoken two" }],
+    ["x-003", { id: "x-003", category: "statistics", expected_extraction: "C", ground_truth_verdict: "True", transcript_snippet: "s", expected_polarity: null }],
+  ]);
+  const { entries, alreadyRuled, missing } = buildPolarityEntries(cards, goldenById);
+  assert.equal(entries.length, 2);
+  assert.deepEqual(alreadyRuled, ["x-003"], "explicit-null (ambiguous-drop) counts as ruled");
+  assert.deepEqual(missing, ["x-404"]);
+  const e = entries[0];
+  assert.equal(e.key, "pol::x-001");
+  assert.equal(e.mode, "polarity");
+  assert.equal(e.goldenId, "x-001");
+  assert.equal(e.category, "science_health");
+  assert.equal(e.claim, "Claim one.", "claim comes from the golden row, not the card");
+  assert.equal(e.sampleTranscript, "spoken one");
+  assert.equal(e.groundTruth, "False");
+  assert.equal(e.cluster, "polarity · fam A");
+  assert.equal(e.suggestedVerdict, null, "polarity cards NEVER carry suggestions");
+  assert.equal(e.suggestedCategory, null);
+  assert.equal(entries[1].claim, null, "null-extraction rows keep their null claim");
+});
+
+// ---- applyPolarityToLine (surgical line edit) ----------------------------------------
+test("applyPolarityToLine appends the field in the files' hand-spaced style, byte-preserving", () => {
+  const line = '{"id": "sci-012", "transcript_snippet": "lightning never strikes twice", "expected_extraction": "Lightning never strikes the same place twice.", "category": "science_health", "ground_truth_verdict": "False", "adjudication_note": "n", "source_of_truth": "NOAA"}';
+  const res = applyPolarityToLine(line, "asserts", "");
+  assert.equal(res.changed, true);
+  assert.ok(res.line.startsWith(line.slice(0, -1)), "every byte before the closing brace is preserved");
+  assert.ok(res.line.endsWith(', "expected_polarity": "asserts"}'), "field appended like the 229 labeled rows");
+  const row = JSON.parse(res.line);
+  assert.equal(row.expected_polarity, "asserts");
+  assert.ok(!Object.hasOwn(row, "polarity_note"), "no note field when the operator wrote none");
+
+  const withNote = applyPolarityToLine(line, "denies", "operator rationale");
+  const parsed = JSON.parse(withNote.line);
+  assert.equal(parsed.expected_polarity, "denies");
+  assert.equal(parsed.polarity_note, "operator rationale");
+});
+
+test("applyPolarityToLine ambiguous-drop writes EXPLICIT null + polarity_note (ruled ≠ unvisited)", () => {
+  const line = '{"id": "stat-010", "expected_extraction": null, "category": "statistics", "ground_truth_verdict": null}';
+  const res = applyPolarityToLine(line, "ambiguous-drop", "no claim, no stance");
+  assert.equal(res.changed, true);
+  const row = JSON.parse(res.line);
+  assert.ok(Object.hasOwn(row, "expected_polarity"), "key present = ruled");
+  assert.equal(row.expected_polarity, null, "explicit null — run.js skips it identically to absent");
+  assert.match(row.polarity_note, /excluded from the polarity slice/);
+  assert.match(row.polarity_note, /no claim, no stance/);
+});
+
+test("applyPolarityToLine refuses to clobber an already-ruled row and rejects unknown rulings", () => {
+  const ruled = '{"id": "adv-001", "category": "adversarial", "expected_polarity": "asserts"}';
+  const r1 = applyPolarityToLine(ruled, "denies", "");
+  assert.equal(r1.changed, false);
+  assert.equal(r1.line, ruled, "line untouched");
+  assert.match(r1.reason, /already ruled/);
+  const droppedBefore = '{"id": "x", "category": "statistics", "expected_polarity": null}';
+  assert.equal(applyPolarityToLine(droppedBefore, "asserts", "").changed, false, "explicit-null drop is also ruled");
+  const r2 = applyPolarityToLine('{"id": "y", "category": "statistics"}', "True", "");
+  assert.equal(r2.changed, false);
+  assert.match(r2.reason, /unknown ruling/);
+});
+
+// ---- polarity-cards.json integrity: exactly the 31 unset rows, transcription only ----
+test("polarity-cards.json covers exactly the golden rows missing expected_polarity, no invented answers", () => {
+  const cards = JSON.parse(readFileSync(path.join(TOOLDIR, "polarity-cards.json"), "utf8")).cards;
+  const goldenById = new Map();
+  const goldenDir = path.join(ROOT, "eval", "golden");
+  for (const name of readdirSync(goldenDir).filter((n) => n.endsWith(".jsonl") && !n.startsWith("drafts-"))) {
+    for (const l of readFileSync(path.join(goldenDir, name), "utf8").split("\n")) {
+      if (l.trim()) { const r = JSON.parse(l); goldenById.set(r.id, r); }
+    }
+  }
+  const unset = [...goldenById.values()].filter((r) => !Object.hasOwn(r, "expected_polarity")).map((r) => r.id).sort();
+  const cardIds = cards.map((c) => c.id).sort();
+  assert.deepEqual(cardIds, unset, "cards = exactly the unset rows (self-healing: ruled rows leave both sides)");
+  const rulings = new Set(POLARITY_RULINGS.map((r) => r.value));
+  const allowedKeys = new Set(["id", "category", "family", "readings", "ambiguity"]);
+  for (const c of cards) {
+    for (const k of Object.keys(c)) assert.ok(allowedKeys.has(k), `${c.id}: unexpected key ${k} (no suggestion fields allowed)`);
+    assert.equal(c.category, goldenById.get(c.id).category, `${c.id}: category matches the golden row`);
+    assert.ok(c.family, `${c.id}: has a family (cluster label)`);
+    assert.equal(c.readings.length, 2, `${c.id}: exactly two candidate readings`);
+    for (const r of c.readings) {
+      assert.ok(rulings.has(r.ruling), `${c.id}: reading ruling ${r.ruling} is a real ruling`);
+      assert.ok(r.reading && r.reading.length > 20, `${c.id}: reading text is substantive`);
+    }
+    assert.ok(c.ambiguity && c.ambiguity.length > 20, `${c.id}: neutral ambiguity framing present`);
+  }
+});
+
+// ---- prep.js stages the polarity block as its own trailing cluster group -------------
+test("prep.js appends polarity cards as their own contiguous cluster group (+ --polarity-only)", () => {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), "footnote-polprep-"));
+  try {
+    const out = path.join(tmp, "queue.json");
+    execFileSync("node", [path.join(TOOLDIR, "prep.js"), "--out", out], { cwd: ROOT });
+    const q = JSON.parse(readFileSync(out, "utf8"));
+    assert.equal(q.polarity_count, 31, "all 31 unset rows staged");
+    const polEntries = q.entries.filter((e) => e.mode === "polarity");
+    assert.equal(polEntries.length, 31);
+    const firstPol = q.entries.findIndex((e) => e.mode === "polarity");
+    assert.ok(q.entries.slice(firstPol).every((e) => e.mode === "polarity"),
+      "polarity block is contiguous at the END — graduation clusters are untouched in front");
+    assert.equal(q.unique_count, q.entries.length - 31, "unique_count stays graduation-only");
+    for (const e of polEntries) {
+      assert.match(e.cluster, /^polarity · /, "own cluster namespace");
+      assert.equal(e.suggestedVerdict, null);
+      assert.equal(e.suggestedCategory, null);
+      assert.equal(e.readings.length, 2);
+    }
+    // the standalone <=15-min sitting: just the micro-pass
+    const out2 = path.join(tmp, "queue-pol.json");
+    execFileSync("node", [path.join(TOOLDIR, "prep.js"), "--out", out2, "--polarity-only"], { cwd: ROOT });
+    const q2 = JSON.parse(readFileSync(out2, "utf8"));
+    assert.equal(q2.entries.length, 31);
+    assert.ok(q2.entries.every((e) => e.mode === "polarity"));
+    assert.equal(q2.draft_count, 0);
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+});
+
+// ---- apply.js polarity path: surgical write, RED values pass through, idempotent -----
+test("apply.js writes polarity rulings in place, preserves every other byte, idempotent", () => {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), "footnote-polapply-"));
+  try {
+    const goldenDir = path.join(tmp, "golden");
+    execFileSync("mkdir", ["-p", goldenDir]);
+    const lines = [
+      '{"id": "sci-011", "transcript_snippet": "keep me", "expected_extraction": "Untouched claim.", "category": "science_health", "ground_truth_verdict": "True", "adjudication_note": "", "source_of_truth": "x", "expected_polarity": "asserts"}',
+      '{"id": "sci-012", "transcript_snippet": "lightning never strikes twice", "expected_extraction": "Lightning never strikes the same place twice.", "category": "science_health", "ground_truth_verdict": "False", "adjudication_note": "", "source_of_truth": "NOAA"}',
+      '{"id": "sci-020", "transcript_snippet": "is coffee bad?", "expected_extraction": null, "category": "science_health", "ground_truth_verdict": null, "adjudication_note": "", "source_of_truth": "n/a"}',
+    ];
+    const file = path.join(goldenDir, "science_health.jsonl");
+    writeFileSync(file, lines.join("\n") + "\n");
+
+    const queuePath = path.join(tmp, "queue.json");
+    writeFileSync(queuePath, JSON.stringify({ generated_at: "x", entries: [
+      { key: "pol::sci-012", mode: "polarity", goldenId: "sci-012", category: "science_health" },
+      { key: "pol::sci-020", mode: "polarity", goldenId: "sci-020", category: "science_health" },
+    ] }));
+    const gradPath = path.join(tmp, "graduations.json");
+    writeFileSync(gradPath, JSON.stringify({ decisions: [
+      { key: "pol::sci-012", mode: "polarity", polarity: "asserts", resolved: true },
+      { key: "pol::sci-020", mode: "polarity", polarity: "ambiguous-drop", note: "question, no stance", resolved: true },
+    ] }));
+
+    const run = () => spawnSync("node", [path.join(TOOLDIR, "apply.js"), gradPath, "--queue", queuePath, "--golden-dir", goldenDir], { cwd: ROOT, encoding: "utf8" }).stderr;
+    const first = run();
+    assert.match(first, /~ sci-012 expected_polarity=asserts/);
+    assert.match(first, /~ sci-020 expected_polarity=null \(ambiguous-drop\)/);
+    assert.match(first, /0 entr\(ies\) appended/, "polarity rulings never reach the append path");
+
+    const after = readFileSync(file, "utf8").split("\n");
+    assert.equal(after[0], lines[0], "already-labeled neighbor byte-identical");
+    assert.ok(after[1].startsWith(lines[1].slice(0, -1)), "ruled line: prefix bytes preserved");
+    const r12 = JSON.parse(after[1]);
+    assert.equal(r12.expected_polarity, "asserts", "the RED value is exactly the operator's ruling");
+    const r20 = JSON.parse(after[2]);
+    assert.equal(r20.expected_polarity, null);
+    assert.match(r20.polarity_note, /question, no stance/);
+    assert.equal(after[3], "", "trailing newline preserved");
+
+    const second = run(); // idempotent — both rows now carry the key
+    assert.match(second, /already ruled/);
+    assert.match(second, /0 entr\(ies\) appended, 0 polarity ruling\(s\) written/);
+    assert.equal(readFileSync(file, "utf8"), after.join("\n"), "no drift on re-run");
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test("apply.js refuses unresolved and unknown-ruling polarity decisions (0b safety extended)", () => {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), "footnote-polsafety-"));
+  try {
+    const goldenDir = path.join(tmp, "golden");
+    execFileSync("mkdir", ["-p", goldenDir]);
+    const line = '{"id": "geo-001", "transcript_snippet": "t", "expected_extraction": "C.", "category": "geography_civics", "ground_truth_verdict": "True", "adjudication_note": "", "source_of_truth": "x"}';
+    const file = path.join(goldenDir, "geography_civics.jsonl");
+    writeFileSync(file, line + "\n");
+    const queuePath = path.join(tmp, "queue.json");
+    writeFileSync(queuePath, JSON.stringify({ generated_at: "x", entries: [
+      { key: "pol::geo-001", mode: "polarity", goldenId: "geo-001", category: "geography_civics" },
+    ] }));
+    const gradPath = path.join(tmp, "graduations.json");
+    writeFileSync(gradPath, JSON.stringify({ decisions: [
+      { key: "pol::geo-001", mode: "polarity", polarity: "asserts", resolved: false },
+    ] }));
+    const run = () => spawnSync("node", [path.join(TOOLDIR, "apply.js"), gradPath, "--queue", queuePath, "--golden-dir", goldenDir], { cwd: ROOT, encoding: "utf8" }).stderr;
+    assert.match(run(), /never resolved in cockpit/);
+    assert.equal(readFileSync(file, "utf8"), line + "\n", "unratified suggestion cannot touch a golden value");
+
+    writeFileSync(gradPath, JSON.stringify({ decisions: [
+      { key: "pol::geo-001", mode: "polarity", polarity: "True", resolved: true },
+    ] }));
+    assert.match(run(), /unknown polarity ruling/);
+    assert.equal(readFileSync(file, "utf8"), line + "\n", "a verdict is not a polarity ruling");
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+});
+
+// ---- page wiring for polarity mode ---------------------------------------------------
+test("cockpit page wires the polarity mode", () => {
+  const src = readFileSync(path.join(TOOLDIR, "adjudicate.js"), "utf8");
+  for (const h of ["POLARITY_RULINGS", "setPolarity", "polarity-buttons", "polarity-readings", "isPolarity"]) {
+    assert.ok(src.includes(h), `page wires ${h}`);
+  }
+  const html = readFileSync(path.join(TOOLDIR, "adjudicate.html"), "utf8");
+  for (const id of ["polarity-buttons", "polarity-readings", "verdict-label", "category-group", "source-group"]) {
+    assert.ok(html.includes(`id="${id}"`), `html has #${id}`);
+  }
 });
 
 // ---- apply.js refuses never-resolved decisions ---------------------------------------
