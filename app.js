@@ -143,6 +143,9 @@
         id: card.id, at: new Date().toISOString(), spoken: card.spoken, claim: card.claim,
         displayClaim: card.displayClaim || null,   // D17: what actually aired (speaker framing)
         verdict: card.verdict || null, confidence: card.confidence != null ? card.confidence : null,
+        // R53 (additive, display/telemetry only): polarity rides the entry so the R20 export
+        // supports the denial-watch count without the harness log
+        polarity: card.polarity || null, polarity_conflict: !!card.polarity_conflict,
         correction: card.correction || null, source: card.source || null, citations: card.citations || null,
         action: card.state === "error" ? "error" : "pending", aired: false, autoAired: false, vetoed: false,
         airedAt: null, pulledAt: null,
@@ -263,7 +266,7 @@
   const slimCard = (c) => ({ id: c.id, spoken: c.spoken, claim: c.claim, displayClaim: c.displayClaim || null, state: c.state,
     verdict: c.verdict || null, correction: c.correction || null, source: c.source || null,
     confidence: c.confidence != null ? c.confidence : null, errMsg: c.errMsg || null,
-    harm_class: c.harm_class || null, polarity_conflict: !!c.polarity_conflict, autoAirEligible: c.autoAirEligible === true,
+    harm_class: c.harm_class || null, polarity: c.polarity || null, polarity_conflict: !!c.polarity_conflict, autoAirEligible: c.autoAirEligible === true,   // polarity: R53 additive — survives a reload into the restored entry
     spokenAt: c.spokenAt || null, pendingAt: c.pendingAt || null,
     extractMs: c.extractMs != null ? c.extractMs : null, verifyMs: c.verifyMs != null ? c.verifyMs : null,
     _airedId: c._airedId || null, corrected: !!c.corrected });   // P3-C: keep the aired id + corrected flag across a reload
@@ -703,7 +706,10 @@
   function airCard(c) {
     if (tabReadOnly) return warnReadOnly();   // M6: read-only tab can't air
     if (c._auto) clearTimeout(c._auto); c.state = "aired"; renderQueue(); setOps();
-    FT.log("air", { id: c.id, cid: c._cid || null, verdict: c.verdict || null, auto: !!c._autoAired, test: c.test === true, claim: c.claim });
+    // R53 (additive, telemetry-only): polarity rides the air event so the denial-watch line
+    // is countable from the harness log alone (tools/fieldtest/session-summary.js)
+    FT.log("air", { id: c.id, cid: c._cid || null, verdict: c.verdict || null, auto: !!c._autoAired, test: c.test === true, claim: c.claim,
+      polarity: c.polarity || null, polarity_conflict: !!c.polarity_conflict });
     SESSION.mark(c.id, "aired", { auto: !!c._autoAired });
     const durationMs = holdMode ? null : DEFAULT_HOLD_MS;
     showOnAir(c, durationMs); chatReactToAir();
@@ -1712,7 +1718,8 @@
         renderQueue(); setOps();
         SESSION.mark(c.id, "aired", { auto: false, operator: true });
         showOnAir(c, cmd.durationMs === null ? null : (typeof cmd.durationMs === "number" ? cmd.durationMs : DEFAULT_HOLD_MS));
-        FT.log("air", { id: c.id, cid: c._cid || null, verdict: c.verdict || null, auto: false, operator: true, claim: c.claim });
+        FT.log("air", { id: c.id, cid: c._cid || null, verdict: c.verdict || null, auto: false, operator: true, claim: c.claim,
+          polarity: c.polarity || null, polarity_conflict: !!c.polarity_conflict });   // R53 additive, telemetry-only
         DBG.event("info", "operator AIR (second phone)", { claim: (c.claim || "").slice(0, 60), id: cmd.airedId || null });
       } else if (cmd.action === "skip" || cmd.action === "hold") {
         if (!c || c.state !== "pending") return;
