@@ -102,10 +102,20 @@ const QUEUE_SNAPSHOT_TTL_SEC = 180;
    still never back an air past its intended lifetime. The parts of N4 this can't reach are
    handled/bounded elsewhere: /op-originated HOLD/SKIPs are server-logged and scanned
    against qseq in the air branch below; control-LOCAL dismissals reach the server only via
-   the next snapshot push, so a hold inside the ~400ms debounce (+RTT), or one whose
-   best-effort re-push silently failed, remains airable for up to this window — that
-   residual is closable only control-side (synchronous push on dismiss). */
+   the next snapshot push — dismissCard now pushes synchronously (app.js pushNow, no
+   debounce), so the residual is the push RTT plus the silently-failed-push case
+   (opPushQueue is best-effort and swallows errors), airable for up to this window.
+   Shrinking THAT further is closable only control-side (retry/confirm on dismiss-push). */
 const OP_AIR_MAX_SNAPSHOT_AGE_MS = QUEUE_SNAPSHOT_TTL_SEC * 1000;
+/* TUNABLE — N2 residual (packet 5a): how long an UNCONFIRMED operator-air cmd entry (no
+   "air-landed" marker, no matching aired-log row — see the air branch) is presumed to be a
+   racer still in flight rather than a dead half-air whose publish never landed. Inside the
+   grace a retap answers dup (the presumed racer will land it); past the grace a retap
+   RE-AIRS the card — the self-heal for a store that failed between the cmd append and the
+   publish. Must comfortably exceed the platform's max function lifetime (Vercel default
+   ≤60s) so a live racer can never be misread as dead — misreading live-as-dead is the only
+   direction that can double-publish; dead-as-live merely delays the heal by the grace. */
+const OP_AIR_INFLIGHT_GRACE_MS = 90_000;
 // sanitize one queue card with the same strip/cut budget as the on-air path; extra
 // operator-facing fields (confidence, harm_class, …) get their own tight budgets.
 function slimQCard(c) {
@@ -379,11 +389,32 @@ export default async function handler(req, res) {
              the /op queue, so over-rejecting here has no false-positive path). Control-
              LOCAL dismissals stay invisible until the next snapshot — see the tunable. */
           const log = await state.readLog(cmdRoom(room));
-          const heldAfter = log.some((e) => e && (e.action === "hold" || e.action === "skip") && e.cardId === cardId
-            && ((e.spokenAt != null && qc.spokenAt != null) ? e.spokenAt === qc.spokenAt : (typeof e.t === "number" && e.t >= qseq)));
-          if (heldAfter) { res.status(409).json({ error: "card not airable", stale: true }); return; }
-          // serialized re-tap fast path: a prior COMPLETED air for this card instance → dup
-          const prior = log.find((e) => e && e.action === "air" && e.cardId === cardId && e.spokenAt === qc.spokenAt);
+          const heldMatch = (e) => e && (e.action === "hold" || e.action === "skip") && e.cardId === cardId
+            && ((e.spokenAt != null && qc.spokenAt != null) ? e.spokenAt === qc.spokenAt : (typeof e.t === "number" && e.t >= qseq));
+          if (log.some(heldMatch)) { res.status(409).json({ error: "card not airable", stale: true }); return; }
+          /* Serialized re-tap fast path — but only for priors whose publish is CONFIRMED
+             or plausibly in flight (packet 5a, N2 residual). A prior air entry proves a
+             cmd was logged, NOT that its publish landed (the store can fail between the
+             append and the publish below). Confirmation, strongest first:
+               1. an "air-landed" marker (appended best-effort after a successful publish
+                  + aired-log append — makes the cmd record self-describing), or
+               2. the aired log itself carries the prior's airedId (covers markers that
+                  failed to append, and every pre-marker deployment's log), or
+               3. the prior is younger than OP_AIR_INFLIGHT_GRACE_MS → presumed a racer
+                  mid-sequence: answer dup and let it land.
+             A prior that is none of these is a DEAD half-air: fall through and re-air —
+             the retap heals what the store failure lost. (Reachability note: healing
+             needs the card still pending in a live snapshot; when /control consumed the
+             orphan air cmd and dropped the card, the heal is unreachable — documented
+             residual, see docs/redteam/N2N4-RESIDUALS.md.) */
+          const airMatch = (e) => e && e.action === "air" && e.cardId === cardId && e.spokenAt === qc.spokenAt;
+          const priors = log.filter(airMatch);
+          let prior = priors.find((e) => log.some((m) => m && m.action === "air-landed" && m.of === e.id));
+          if (!prior && priors.length) {
+            const aired = await state.readLog(room);   // fallback ground truth — only read when unconfirmed priors exist
+            prior = priors.find((e) => e.airedId && aired.some((a) => a && a.id === e.airedId))
+              || priors.find((e) => typeof e.t === "number" && t - e.t <= OP_AIR_INFLIGHT_GRACE_MS);
+          }
           if (prior) { res.status(200).json({ ok: true, id: prior.id, airedId: prior.airedId || null, dup: true }); return; }
           /* N2 — concurrent double-air TOCTOU: two simultaneous airs can both pass the
              `prior` scan. Close it with append-then-elect: append our cmd entry FIRST,
@@ -393,22 +424,39 @@ export default async function handler(req, res) {
              racers agree on; both adapters' logs are arrival-ordered). The store
              serializes appends, so whichever racer appended second is guaranteed to see
              the winner on its read-back → exactly one publish + one aired-log entry;
-             the loser answers dup with the winner's airedId. Cost: the loser's cmd
-             entry stays in the log (control no-ops it: card no longer pending) and the
-             overlay publish now happens after the cmd append, so a store failing
-             mid-sequence can log a cmd whose publish never landed — the mirror image of
-             the old ordering's partial-failure mode, equally narrow. */
+             the loser answers dup with the winner's airedId. Dead half-airs (unconfirmed
+             + older than the grace — see the prior scan above) are excluded from the
+             elect so a healed retap can win despite a failed epoch's entry. */
           const dur = durationMs === null ? null : (typeof durationMs === "number" ? Math.max(0, Math.min(600000, durationMs)) : 10000);
           entry.airedId = mintId(t); entry.durationMs = dur; entry.spokenAt = qc.spokenAt;
           await state.appendLog(cmdRoom(room), entry);
-          const rivals = (await state.readLog(cmdRoom(room))).filter((e) => e && e.action === "air" && e.cardId === cardId && e.spokenAt === qc.spokenAt);
+          const logAfter = await state.readLog(cmdRoom(room));
+          const rivals = logAfter.filter((e) => airMatch(e) && typeof e.t === "number" && t - e.t <= OP_AIR_INFLIGHT_GRACE_MS);
           const winner = rivals[rivals.length - 1] || entry;   // newest-first ⇒ last = first appended
+          /* N4 — hold-vs-air adjudication by append order (packet 5a): the read-back we
+             already have re-runs the hold/skip scan POSITIONALLY. A hold/skip serialized
+             into the log BEFORE the winner's air entry (deeper in the newest-first list)
+             beat the air to the store — /control will apply it first and no-op the air —
+             so the server must not publish: 409 stale, from winner AND loser alike (a
+             loser answering dup here would vouch for a publish the winner will refuse).
+             A hold serialized AFTER the winner's entry lost the race: the card airs, then
+             holds — consistent everywhere, not a residual. This closes the former
+             window between the pre-append scan and the publish; what remains server-side
+             is only the store-failure epoch itself. */
+          const wIdx = logAfter.findIndex((e) => e && e.id === winner.id);
+          if (wIdx >= 0 && logAfter.some((e, i) => i > wIdx && heldMatch(e))) { res.status(409).json({ error: "card not airable", stale: true }); return; }
           if (winner.id !== entry.id) { res.status(200).json({ ok: true, id: winner.id, t, airedId: winner.airedId || null, dup: true }); return; }
           const seq = Date.now();
           const slim = slimCard(qc);
           await state.publish(room, { card: slim, seq, id: entry.airedId, airedAt: seq, durationMs: dur },
             { ttlSec: dur == null ? 3600 : Math.max(120, Math.ceil(dur / 1000) + 15) });
           await state.appendLog(room, Object.assign({ id: entry.airedId, airedAt: seq }, slim));   // same durability backstop as a control air
+          /* N2 compensating marker — appended ONLY after the publish + aired-log append
+             both landed, so its presence certifies the whole sequence. Best-effort by
+             design: a marker that fails to append must not turn a fully-landed air into
+             a 502 (the aired-log fallback in the prior scan covers confirmation), and
+             /control ignores unknown cmd actions (opApplyCmd has no branch for it). */
+          try { const t2 = Date.now(); await state.appendLog(cmdRoom(room), { id: mintId(t2), t: t2, action: "air-landed", cardId, spokenAt: qc.spokenAt, of: entry.id, airedId: entry.airedId }); } catch {}
           res.status(200).json({ ok: true, id: entry.id, t, airedId: entry.airedId });
           return;
         }
