@@ -25,6 +25,19 @@ const subs = new Map();    // room -> Set<handler>
 
 const now = () => Date.now();
 
+/* ---- TEST SEAM (packet 5a — N2/N4 race tests) --------------------------------------
+   _setHook installs an interception point at the ENTRY of the plain read/write verbs
+   (publish / get / appendLog / readLog — NOT merge or registerRoom, whose atomic
+   check-and-set bodies must stay await-free). The hook may:
+     - throw            → models a store failing on that verb (fault injection)
+     - return a Promise → the verb parks until the test resolves it (deterministic
+                          interleaving: a test can order two racing handlers' appends)
+   Production never sets it (hook === null → zero added awaits, zero behavior change).
+   fn(verb, room, payload) — payload is the event (publish) / entry (appendLog). */
+let hook = null;
+export function _setHook(fn) { hook = fn || null; }
+async function tap(verb, room, payload) { if (hook) { const p = hook(verb, room, payload); if (p) await p; } }
+
 // Return the slot if still live, else purge it and return null (read-time expiry).
 function fresh(map, room) {
   const slot = map.get(room);
@@ -43,6 +56,7 @@ function sweep(map) {
 
 /** @type {import("../../../core/interfaces/state-channel.js").StateChannel["publish"]} */
 export async function publish(room, event, { ttlSec } = {}) {
+  await tap("publish", room, event);
   sweep(rooms);
   rooms.set(room, { event, expiresAt: now() + (ttlSec ?? 3600) * 1000 });
   for (const h of subs.get(room) || []) {
@@ -52,6 +66,7 @@ export async function publish(room, event, { ttlSec } = {}) {
 
 /** @type {import("../../../core/interfaces/state-channel.js").StateChannel["get"]} */
 export async function get(room) {
+  await tap("get", room);
   return fresh(rooms, room)?.event ?? null;
 }
 
@@ -88,6 +103,7 @@ export async function registerRoom(room, writeKey, { ttlSec } = {}) {
 
 /** @type {import("../../../core/interfaces/state-channel.js").StateChannel["appendLog"]} */
 export async function appendLog(room, entry) {
+  await tap("appendLog", room, entry);
   sweep(logs);
   const slot = fresh(logs, room) || { entries: [] };
   slot.entries.unshift(entry);
@@ -98,6 +114,7 @@ export async function appendLog(room, entry) {
 
 /** @type {import("../../../core/interfaces/state-channel.js").StateChannel["readLog"]} */
 export async function readLog(room) {
+  await tap("readLog", room);
   return (fresh(logs, room)?.entries ?? []).slice();
 }
 
