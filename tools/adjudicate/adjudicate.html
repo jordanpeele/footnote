@@ -8,7 +8,10 @@
 </head>
 <body>
 <header>
-  <h1>Adjudication Cockpit</h1>
+  <div id="header-row">
+    <h1>Adjudication Cockpit</h1>
+    <button id="btn-download-top" title="Download everything resolved so far (d)">Download so far <kbd>d</kbd></button>
+  </div>
   <div id="progress-wrap">
     <div id="progress-bar"><span id="progress-fill"></span></div>
     <span id="progress-label">loading…</span>
@@ -17,13 +20,16 @@
 
 <main id="app">
   <section id="card" hidden>
+    <div id="cluster-bar" class="dim"></div>
     <div class="meta">
       <span id="repeat-badge" class="badge"></span>
+      <span id="resolved-badge" class="badge badge-done" hidden></span>
       <span id="source-drafts" class="dim"></span>
       <span id="pipeline-hint" class="dim"></span>
     </div>
+    <div id="hint-note" hidden></div>
 
-    <h2 class="claim-label">CLAIM (editable extraction)</h2>
+    <h2 class="claim-label">CLAIM (editable extraction) <kbd>e</kbd></h2>
     <textarea id="extraction" rows="2" spellcheck="false"></textarea>
 
     <h3 class="t-label">TRANSCRIPT SAMPLE</h3>
@@ -41,11 +47,11 @@
     </div>
 
     <div class="control-group">
-      <label>SOURCE OF TRUTH</label>
+      <label>SOURCE OF TRUTH <kbd>o</kbd></label>
       <input id="source" type="text" placeholder="e.g. whitehouse.gov, BEA, CIA World Factbook" />
     </div>
     <div class="control-group">
-      <label>ADJUDICATION NOTE (provenance is appended automatically)</label>
+      <label>ADJUDICATION NOTE (provenance is appended automatically) <kbd>i</kbd></label>
       <input id="note" type="text" placeholder="one-line ruling rationale" />
     </div>
 
@@ -58,7 +64,7 @@
   </section>
 
   <section id="done" hidden>
-    <h2>All cards decided</h2>
+    <h2>All cards walked</h2>
     <p id="done-summary"></p>
     <button id="btn-download" class="primary">Download graduations.json</button>
   </section>
@@ -67,9 +73,13 @@
 <footer>
   <div id="keyhelp" class="dim">
     keys: <b>t</b>=True <b>f</b>=False <b>m</b>=Misleading <b>n</b>=NeedsContext <b>u</b>=Unverifiable
-    · <b>1–9</b>=category · <b>Enter</b>=accept &amp; next · <b>s</b>=skip · <b>b</b>=back · <b>d</b>=download
+    · <b>1–9</b>=category · <b>Enter</b>=accept &amp; next · <b>a</b>=accept batch · <b>s</b>=skip · <b>b</b>=back
+    · <b>j</b>=next unresolved · <b>e</b>/<b>o</b>/<b>i</b>=edit claim/source/note (<b>Esc</b> leaves the field) · <b>d</b>=download
   </div>
-  <div id="status" class="dim"></div>
+  <div id="footer-row">
+    <div id="status" class="dim"></div>
+    <button id="btn-reset" class="linkish" title="Discard all decisions for this sitting">reset sitting</button>
+  </div>
 </footer>
 
 <script type="module" src="/tools/adjudicate/adjudicate.js"></script>

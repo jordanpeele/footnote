@@ -11,7 +11,18 @@ body {
 }
 header, footer { padding: 10px 18px; background: var(--panel); border-bottom: 1px solid var(--line); }
 footer { border-bottom: none; border-top: 1px solid var(--line); font-size: 12px; }
-header h1 { font-size: 15px; margin: 0 0 6px; letter-spacing: .04em; text-transform: uppercase; color: var(--dim); }
+header h1 { font-size: 15px; margin: 0; letter-spacing: .04em; text-transform: uppercase; color: var(--dim); }
+#header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+#header-row button { padding: 4px 10px; font-size: 12px; }
+#footer-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+button.linkish { background: none; border: none; color: var(--dim); font-size: 11px; padding: 2px 4px;
+  text-decoration: underline; cursor: pointer; }
+#cluster-bar { font-size: 12px; margin-bottom: 10px; padding: 6px 10px; background: var(--panel2);
+  border-radius: 6px; border-left: 3px solid var(--accent); }
+#hint-note { font-size: 13px; color: var(--warn); background: rgba(255, 180, 84, .07);
+  border: 1px solid rgba(255, 180, 84, .35); border-radius: 6px; padding: 8px 10px; margin-bottom: 12px; }
+.badge-done { background: var(--good); color: #0b1220; }
+.pill .need { color: var(--warn); font-size: 11px; font-weight: 700; }
 #progress-wrap { display: flex; align-items: center; gap: 10px; }
 #progress-bar { flex: 1; height: 8px; background: var(--panel2); border-radius: 4px; overflow: hidden; }
 #progress-fill { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s; }

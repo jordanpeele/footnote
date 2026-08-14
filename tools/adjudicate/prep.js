@@ -2,25 +2,27 @@
 // Footnote adjudication cockpit — PREP STEP.
 //   node tools/adjudicate/prep.js [--out tools/adjudicate/queue.json]
 //
-// Reads the three field-draft files (eval/golden/drafts-*.jsonl), dedupes by normalized
-// claim (the 26 "Peter Thiel is the president…" repeats collapse to ONE card, etc.), and
-// writes tools/adjudicate/queue.json — the work list the browser page walks card by card.
-// Pure dedup logic lives in lib.js; this file is just the I/O around it.
+// Reads EVERY field-draft file (eval/golden/drafts-*.jsonl — globbed, so new session
+// ingests join the sitting automatically), dedupes by normalized claim (the 26 "Peter
+// Thiel is the president…" repeats collapse to ONE card, etc.), merges the sitting
+// hints (tools/adjudicate/hints.json — transcribed queue-doc recommendations + run-log
+// annotations; suggestions only, never ground truth), sorts the cards into batchable
+// clusters (same suggested category+verdict contiguous; policy families together), and
+// writes tools/adjudicate/queue.json — the work list the browser page walks card by
+// card. It also counts each golden category file and annotates how many adjudicated
+// cards the category still needs to reach the n>=30 target. Pure logic lives in lib.js;
+// this file is just the I/O around it.
 
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { dedupeDrafts } from "./lib.js";
+import {
+  dedupeDrafts, applyHints, orderForSitting, sittingCluster, categoryNeeds, CATEGORIES,
+} from "./lib.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..", "..");
 const GOLDEN = path.join(ROOT, "eval", "golden");
-
-const DRAFT_FILES = [
-  "drafts-2026-08-08-fieldtest.jsonl",
-  "drafts-2026-08-09-pass2.jsonl",
-  "drafts-2026-08-10-street.jsonl",
-];
 
 const args = process.argv.slice(2);
 const outIdx = args.indexOf("--out");
@@ -37,28 +39,63 @@ function readJsonl(file) {
   return rows;
 }
 
-const allRows = [];
-const sourceFiles = [];
-for (const name of DRAFT_FILES) {
-  const file = path.join(GOLDEN, name);
-  if (!existsSync(file)) {
-    console.error(`note: ${name} not present (already graduated?) — skipping`);
-    continue;
-  }
-  sourceFiles.push(name);
-  for (const r of readJsonl(file)) rows_push(r, name);
-}
-function rows_push(r, name) { r._sourceDraft = name; allRows.push(r); }
+// Every drafts file present joins the sitting (they get deleted as they graduate).
+const draftFiles = readdirSync(GOLDEN).filter((n) => /^drafts-.*\.jsonl$/.test(n)).sort();
+if (!draftFiles.length) console.error("note: no drafts-*.jsonl present under eval/golden — empty queue");
 
-const entries = dedupeDrafts(allRows);
+const allRows = [];
+for (const name of draftFiles) {
+  for (const r of readJsonl(path.join(GOLDEN, name))) {
+    r._sourceDraft = name;
+    allRows.push(r);
+  }
+}
+
+let entries = dedupeDrafts(allRows);
+
+// Sitting hints (optional file): transcribed recommendations from the queue doc plus
+// factual run-log annotations. Fill-only; the human ratifies everything in the cockpit.
+const hintsPath = path.join(HERE, "hints.json");
+let hintCount = 0;
+if (existsSync(hintsPath)) {
+  const hints = JSON.parse(readFileSync(hintsPath, "utf8")).hints || [];
+  applyHints(entries, hints);
+  hintCount = entries.filter((e) => e.hintNote || e.suggestedVerdict || e.suggestedCategory).length;
+}
+
+// Cluster-contiguous order so one ruling (batch-accept) covers each same-suggestion run.
+entries = orderForSitting(entries);
+for (const e of entries) e.cluster = sittingCluster(e);
+
+const clusters = [];
+for (const e of entries) {
+  const last = clusters[clusters.length - 1];
+  if (last && last.label === e.cluster) last.count += 1;
+  else clusters.push({ label: e.cluster, count: 1 });
+}
+
+// Golden-set gap per category: current adjudicated count vs the n>=30 target.
+const counts = {};
+for (const c of CATEGORIES) {
+  const file = path.join(GOLDEN, c.name + ".jsonl");
+  counts[c.name] = existsSync(file) ? readJsonl(file).length : 0;
+}
+const categoryStats = categoryNeeds(counts);
+
 const queue = {
   generated_at: new Date().toISOString(),
-  source_files: sourceFiles,
+  source_files: draftFiles,
   draft_count: allRows.length,
   unique_count: entries.length,
+  hinted_count: hintCount,
+  categoryStats,
+  clusters,
   entries,
 };
 
 writeFileSync(outPath, JSON.stringify(queue, null, 2) + "\n");
-console.error(`prep: ${allRows.length} drafts across ${sourceFiles.length} file(s) -> ${entries.length} unique claim card(s)`);
+console.error(`prep: ${allRows.length} drafts across ${draftFiles.length} file(s) -> ${entries.length} unique claim card(s) in ${clusters.length} cluster(s), ${hintCount} hinted`);
+for (const s of categoryStats.filter((s) => s.needed > 0)) {
+  console.error(`      golden gap: ${s.category} ${s.current}/${s.target} (needs ${s.needed})`);
+}
 console.error(`      wrote ${path.relative(ROOT, outPath)}`);

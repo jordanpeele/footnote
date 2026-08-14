@@ -2,6 +2,10 @@
 // Footnote — drafts golden-set entries from a live /control session download.
 //
 //   node eval/ingest-session.js session.json [--out eval/golden/drafts-<stamp>.jsonl]
+//                                            [--stamp YYYY-MM-DD]
+//
+// --stamp overrides the draft-id date prefix (default: today). Use the SESSION date when
+// ingesting an older export so draft ids line up with the session they came from.
 //
 // The session JSON has entries shaped like {spoken, claim, verdict, confidence, ...}.
 // This script maps them into the golden schema as DRAFTS ONLY: ground_truth_verdict is
@@ -25,7 +29,8 @@ const entries = Array.isArray(raw) ? raw
     Object.values(raw).find((v) => Array.isArray(v)) || [];
 if (!entries.length) { console.error("no entries found in session file"); process.exit(1); }
 
-const stamp = new Date().toISOString().slice(0, 10);
+const stampIdx = args.indexOf("--stamp");
+const stamp = stampIdx >= 0 ? args[stampIdx + 1] : new Date().toISOString().slice(0, 10);
 const lines = entries
   .filter((e) => (e.spoken || e.text || "").trim())
   .map((e, i) => JSON.stringify({
