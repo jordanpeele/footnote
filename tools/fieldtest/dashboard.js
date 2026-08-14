@@ -29,6 +29,7 @@ const byCardId = new Map();       // card id -> cid
 const airs = [];                  // recent airs awaiting a render match
 const finals = [];                // recent stt finals for dupe detection
 let interims = 0, checks = 0, renders = 0;
+let spendEstUsd = 0, spendTicks = 0;   // running SPEND totals (estimates — see src/core/spendmeter.js)
 
 function line(t, tag, msg, extra) { console.log(`${C.dim}${ts(t)}${C.r} ${tag} ${msg}${extra || ""}`); }
 
@@ -109,6 +110,14 @@ function handle(e) {
       break;
     }
     case "publish": if (!e.pull) push("publish", e.ms); break;
+    case "spend": {
+      // Per-call spend metering (src/core/spendmeter.js) — figures are ESTIMATES from
+      // the static price table; compact one-liner so spend is visible as it happens.
+      spendTicks++;
+      spendEstUsd += e.est_usd || 0;
+      line(t, `${C.yel}$ SPEND${C.r}`, `est $${(e.est_usd || 0).toFixed(4)} ${e.route}:${e.vendor} ${C.dim}· session est $${spendEstUsd.toFixed(3)}${C.r}`);
+      break;
+    }
     case "render": {
       renders++;
       const m = airs.findLast((a) => a.claim.slice(0, 120) === (e.claim || "") || Math.abs(a.t - t) < 6000);
@@ -142,5 +151,6 @@ process.on("SIGINT", () => {
   for (const [k, a] of Object.entries(stages))
     if (a.length) console.log(`${pad(k, 12)} p50 ${pad(median(a) + "ms", 9)} p95 ${pad((a.length >= 4 ? pct(a, 95) : "—") + (a.length >= 4 ? "ms" : ""), 9)} n=${a.length}`);
   console.log(`${C.dim}checks=${checks} renders=${renders} interims=${interims}${C.r}`);
+  if (spendTicks) console.log(`${C.dim}spend est $${spendEstUsd.toFixed(4)} across ${spendTicks} vendor calls (estimates — price table in src/core/spendmeter.js)${C.r}`);
   process.exit(0);
 });

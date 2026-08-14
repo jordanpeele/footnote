@@ -10,6 +10,7 @@
 // feeds the D11 auto-air gate. No-claim responses stay exactly { claim: null }.
 export const config = { api: { bodyParser: true } };
 import { spendGate } from "../src/core/spendgate.js";
+import { tick } from "../src/core/spendmeter.js";
 import { rateLimit } from "./_ratelimit.js";
 import { getAdapter } from "../src/core/registry.js";
 import { groundedClaim } from "../src/core/grounding.js";
@@ -23,7 +24,9 @@ export default async function handler(req, res) {
   const text = (req.body?.text || "").trim();
   if (text.length < 8) { res.status(200).json({ claim: null }); return; }
   try {
-    const { claim, polarity, harm_class, category } = await getAdapter("extractor").extract(text);
+    const extractor = getAdapter("extractor");
+    tick("extract", extractor.name);   // spend metering (est. only) — count the attempt as the call leaves
+    const { claim, polarity, harm_class, category } = await extractor.extract(text);
     res.setHeader("Cache-Control", "no-store");
     if (claim == null) { res.status(200).json({ claim: null }); return; }
     // P4-F1 grounding gate: an LLM extractor can echo its own prompt as a "claim" when

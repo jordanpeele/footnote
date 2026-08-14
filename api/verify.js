@@ -5,6 +5,7 @@
 // parse/validate → rate limit → room cap/BYOK → adapter → editorial → polarity → shape.
 export const config = { api: { bodyParser: true } };
 import { spendGate } from "../src/core/spendgate.js";
+import { tick } from "../src/core/spendmeter.js";
 import { rateLimit } from "./_ratelimit.js";
 import { getAdapter } from "../src/core/registry.js";
 import { UpstreamError } from "../src/core/errors.js";
@@ -82,8 +83,20 @@ export default async function handler(req, res) {
     // any error — never rejects, never forces a hold on its own failure.
     const ctx = utterance ? { utterance, claimedPolarity: polarity } : {};
     const signalOn = Boolean(utterance) && process.env.FOOTNOTE_POLARITY_SIGNAL !== "off";
+    const verifier = getAdapter("verifier");
+    // Spend metering (est. only) — count the attempt(s) as the calls leave. The
+    // concurrence meta-verifier spends on BOTH configured arms (spend ≈ A + B, its own
+    // header comment), so meter the arms, not the meta-adapter; the R50 polarity signal
+    // is its own Haiku call and gets its own line.
+    if (verifier.name === "concurrence") {
+      tick("verify", process.env.FOOTNOTE_CONCURRENCE_A || "perplexity");
+      tick("verify", process.env.FOOTNOTE_CONCURRENCE_B || "brave-claude");
+    } else {
+      tick("verify", verifier.name);
+    }
+    if (signalOn) tick("verify", "polarity-signal");
     const [raw, signal] = await Promise.all([
-      getAdapter("verifier").verify(claim, ctx, credentials),
+      verifier.verify(claim, ctx, credentials),
       signalOn ? independentPolarity(utterance, credentials) : Promise.resolve(null),
     ]);
     const v = finalizeVerification(raw);

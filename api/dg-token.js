@@ -6,6 +6,7 @@
 // shape response.
 export const config = { api: { bodyParser: true } };
 import { spendGate } from "../src/core/spendgate.js";
+import { tick } from "../src/core/spendmeter.js";
 import { rateLimit } from "./_ratelimit.js";
 import { getAdapter } from "../src/core/registry.js";
 import { UpstreamError } from "../src/core/errors.js";
@@ -46,6 +47,10 @@ export default async function handler(req, res) {
   if (!credentials && !stt.isConfigured()) { res.status(501).json({ error: "DEEPGRAM_API_KEY not configured" }); return; }
 
   try {
+    // Spend metering (est. only): the mint itself is free ($0 in the price table) but
+    // mint COUNTS are the best server-side proxy for client streaming sessions —
+    // spend-by-proxy, counted, honestly priced at zero.
+    tick("dg-token", stt.name);
     const t = await stt.mintToken(credentials);
     res.status(200).json({ access_token: t.accessToken, expires_in: t.expiresIn });
   } catch (e) {
