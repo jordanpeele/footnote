@@ -10,7 +10,7 @@
   ],
   "headers": [
     {
-      "source": "/(app.js|app.css|index.html|overlay.html|overlay.js|overlay.css|receipts.html|receipts.js|receipts.css|operator.html|operator.js|operator.css)",
+      "source": "/(app.js|app.css|pacer.js|index.html|overlay.html|overlay.js|overlay.css|receipts.html|receipts.js|receipts.css|operator.html|operator.js|operator.css)",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
       ]

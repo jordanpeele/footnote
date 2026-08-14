@@ -700,6 +700,24 @@
   let onAirRAF = 0, onAirHideT = 0;
   const DEFAULT_HOLD_MS = 10000;
   let holdMode = false;   // "Hold on screen": aired checks stay up until Pull, instead of auto-retiring
+  /* STREET AUTO-AIR UX — on-air pacing (display layer ONLY; /pacer.js). Consecutive airs
+     used to flash-replace the current lower-third mid-display; now every air — operator
+     click, auto-air, TESTAIR, second-phone AIR (this layer can't tell them apart) —
+     funnels through the pacer: the current card holds its minimum dwell (6s of the 10s
+     hold), then the next queued card takes over with an exit→entrance beat. Decision
+     logic (maybeAutoAir, gates, caps, veto) is untouched upstream of this line. Falls
+     back to the legacy immediate swap if /pacer.js somehow didn't load — a missing
+     script must never take the lower-third down. */
+  const onAirPacer = globalThis.FootnotePacer ? globalThis.FootnotePacer.createPacer({
+    render: (c, durationMs) => renderOnAirNow(c, durationMs),
+    exitStart: () => { cancelAnimationFrame(onAirRAF); onAir.classList.remove("show"); },
+    onEvent: (action, d) => FT.log("pace", { action, id: d.card && d.card.id != null ? d.card.id : null,
+      queued: d.queued, waited_ms: d.waitedMs != null ? d.waitedMs : undefined }),
+  }) : null;
+  function showOnAir(c, durationMs) {
+    if (onAirPacer) onAirPacer.air(c, durationMs);
+    else renderOnAirNow(c, durationMs);
+  }
   function airCard(c) {
     if (tabReadOnly) return warnReadOnly();   // M6: read-only tab can't air
     if (c._auto) clearTimeout(c._auto); c.state = "aired"; renderQueue(); setOps();
@@ -710,7 +728,7 @@
     // keep the server-assigned aired id on the card (R9) — the correction composer joins on it
     if (fcPublish) fcPublish(c, durationMs).then((id) => { if (id) { c._airedId = id; schedulePersist(); } });
   }
-  function showOnAir(c, durationMs) {
+  function renderOnAirNow(c, durationMs) {   // the painter — reached ONLY through the pacer (or its fallback)
     if (durationMs === undefined) durationMs = DEFAULT_HOLD_MS;
     cancelAnimationFrame(onAirRAF); clearTimeout(onAirHideT);
     const m = vmeta(c.verdict);
@@ -728,8 +746,12 @@
       if (p < 1) onAirRAF = requestAnimationFrame(tick); else hideOnAir();
     })(start);
   }
-  function hideOnAir() { cancelAnimationFrame(onAirRAF); onAir.classList.remove("show"); onAirHideT = setTimeout(() => { onAir.hidden = true; }, 400); }
-  function pullOnAir() { if (tabReadOnly) return warnReadOnly(); hideOnAir(); SESSION.markPulled(); if (fcPublish) fcPublish(null, 0); }   // take the current graphic off-air (locally + overlay)
+  // natural end of a card's countdown: fade down, then let the pacer promote a queued card
+  // (retire is a no-op unless a card was showing — clearOnAir paths reach here with phase idle)
+  function hideOnAir() { cancelAnimationFrame(onAirRAF); onAir.classList.remove("show"); onAirHideT = setTimeout(() => { onAir.hidden = true; }, 400); if (onAirPacer) onAirPacer.retire(); }
+  // pull / stream boundary: flush the pacing queue too — a PULL means EVERYTHING comes down
+  function clearOnAir() { if (onAirPacer) onAirPacer.clear(); hideOnAir(); }
+  function pullOnAir() { if (tabReadOnly) return warnReadOnly(); clearOnAir(); SESSION.markPulled(); if (fcPublish) fcPublish(null, 0); }   // take the current graphic off-air (locally + overlay)
 
   // optional auto-air: only definitive, high-confidence, sourced, tier-eligible checks — with a veto window
   function maybeAutoAir(c) {
@@ -776,7 +798,7 @@
     SESSION.byId.forEach((e) => { if (e.action === "pending" && !live.has(e.id)) { e.action = "expired"; e.expiredAt = new Date().toISOString(); n++; } });
     if (n) { DBG.event("info", `${n} unactioned check(s) → expired`); updateSessionBtn(); }
     lastUtterance = ""; recentClaims.clear();   // F2: dedupe window is per-stream — a new broadcast may legitimately re-air a claim
-    renderQueue(); hideOnAir(); setOps();
+    renderQueue(); clearOnAir(); setOps();
   }
 
   /* ================= PLATFORM SKINS ================= */
@@ -1741,7 +1763,7 @@
         setMuted(cmd.action === "mute");
         DBG.event("info", `operator ${cmd.action.toUpperCase()} (second phone)`);
       } else if (cmd.action === "pull") {
-        hideOnAir(); SESSION.markPulled();   // server already published card:null — local half only
+        clearOnAir(); SESSION.markPulled();   // server already published card:null — local half only (pacing queue flushed too)
         DBG.event("info", "operator PULL (second phone)");
       } else if (cmd.action === "attention") {
         // R54: one-tap tag from /op — same applyAttention path as the Mac keystroke (first tag wins)

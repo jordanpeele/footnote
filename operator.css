@@ -14,19 +14,48 @@ html{background:var(--bg)}
 body{background:var(--bg);color:var(--txt);font-family:var(--disp);min-height:100vh;
   padding:0 0 40px;padding-bottom:calc(40px + env(safe-area-inset-bottom));-webkit-font-smoothing:antialiased}
 
-/* header */
-.hd{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px;
-  padding:12px 14px;padding-top:calc(12px + env(safe-area-inset-top));
-  background:rgba(11,13,17,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
-.brand{font:800 17px var(--disp);letter-spacing:.01em}
-.brand .sup{font:800 11px Georgia,serif;color:var(--fn);vertical-align:super}
+/* header — DEMOTED (glanceability pass): identity + connection only, small and quiet;
+   the glance strip below it is what the eye should land on */
+.hd{display:flex;align-items:center;gap:8px;
+  padding:7px 14px 6px;padding-top:calc(7px + env(safe-area-inset-top));
+  background:var(--bg);border-bottom:none}
+.brand{font:800 12px var(--disp);letter-spacing:.01em;color:var(--dim)}
+.brand .sup{font:800 9px Georgia,serif;color:var(--fn);vertical-align:super}
 .brand-op{color:var(--fn)}
-.room-chip{font:700 12px var(--mono);color:var(--dim);background:var(--panel2);
-  border:1px solid var(--line);border-radius:6px;padding:4px 9px;max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.room-chip{font:700 10px var(--mono);color:var(--mut);background:var(--panel2);
+  border:1px solid var(--line);border-radius:5px;padding:2px 7px;max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .conn-dot{margin-left:auto;width:10px;height:10px;border-radius:50%;background:#3a414d;flex:none;transition:background .3s}
 .conn-dot.ok{background:var(--up)}
 .conn-dot.degraded{background:var(--warn)}
 .conn-dot.down{background:var(--down)}
+
+/* ===== STREET GLANCE STRIP — the arm's-length surface (AUTO · MUTE · last-aired · STALL).
+   Sticky, big type, nothing else competes: the queue below is the work surface, this is
+   the "what is my machine doing right now" surface. ===== */
+.glance{position:sticky;top:0;z-index:10;display:flex;flex-direction:column;gap:8px;
+  padding:10px 14px 12px;background:rgba(13,16,21,.97);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line)}
+.g-chips{display:flex;align-items:center;gap:10px}
+.glance .aa-chip{font-size:14px;padding:10px 13px;border-radius:9px}
+.g-mute{margin-left:auto;min-height:48px;min-width:100px;font:800 14px var(--disp);
+  letter-spacing:.04em;color:#c9d1dc;background:#1a1e26;border:1.5px solid #2a2f3a;
+  border-radius:10px;cursor:pointer;touch-action:manipulation}
+.g-mute:active{background:#252a35}
+.g-mute.on{color:#1a1204;background:var(--warn);border-color:var(--warn)}
+.g-last{display:flex;align-items:center;gap:9px;min-width:0}
+.g-verdict{flex:none;font:800 13px var(--disp);letter-spacing:.05em;border-radius:5px;
+  padding:5px 9px;white-space:nowrap}
+.g-verdict.v-true{color:var(--up);background:rgba(0,224,138,.14)}
+.g-verdict.v-false{color:var(--down);background:rgba(255,77,94,.14)}
+.g-verdict.v-warn{color:var(--warn);background:rgba(245,166,35,.14)}
+.g-verdict.v-gray{color:var(--gray);background:rgba(120,130,145,.16)}
+.g-verdict.v-corr{color:#5aa7f0;background:rgba(79,155,232,.14)}
+.g-claim{font:700 15px/1.25 var(--disp);color:var(--txt);min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.g-claim.g-none{color:var(--mut);font-weight:600}
+.g-stall{font:800 13px var(--disp);letter-spacing:.03em;text-align:center;color:#1a1204;
+  background:var(--warn);border-radius:8px;padding:11px 10px;
+  animation:stall-pulse 1.1s ease-in-out infinite}
 
 /* offline / forbidden banner */
 .banner{position:sticky;top:0;z-index:9;font:700 13px var(--disp);text-align:center;
@@ -126,15 +155,9 @@ body{background:var(--bg);color:var(--txt);font-family:var(--disp);min-height:10
 .card.unv .b-air{flex:1;color:var(--fn);background:transparent;border:1.5px solid rgba(0,214,143,.45);font-size:14px}
 .card.unv .b-air:active{background:rgba(0,214,143,.12)}
 
-/* P7-C mute toggle (header latch) + passive latched banner. Big enough for a street thumb. */
-.btn-mute{margin-left:auto;flex:none;min-height:44px;min-width:74px;font:800 13px var(--disp);
-  letter-spacing:.04em;color:#c9d1dc;background:#1a1e26;border:1.5px solid #2a2f3a;border-radius:10px;
-  cursor:pointer;touch-action:manipulation}
-.btn-mute:active{background:#252a35}
-.btn-mute.on{color:#1a1204;background:var(--warn);border-color:var(--warn)}
-.btn-mute + .conn-dot{margin-left:0}   /* the button takes over the auto-margin push */
-.mute-banner{position:sticky;top:0;z-index:8;font:800 12px var(--mono);letter-spacing:.12em;
-  text-align:center;color:#1a1204;background:var(--warn);padding:7px 14px}
+/* P7-C mute latch: state + toggle live in the glance strip's .g-mute chip now
+   (glanceability pass) — the old header button and the separate MIC MUTED banner are gone;
+   the amber latched chip carries both jobs. */
 
 /* P4-F3 new-card cue: full-screen flash paired with the vibrate/beep — visible even
    with the phone at arm's length in daylight */
