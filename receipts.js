@@ -6,6 +6,12 @@
    to the refClaim string, and entries with neither degrade to a plain correction card.
    SECURITY: claims are adversarial speech — every log string lands via textContent, never
    innerHTML; source URLs only become links if they parse as http(s).
+   Deep links (4a): every entry with a server-minted aired id is addressable as #<id> —
+   location.hash scrolls + highlights it on load, and each card carries a copy-link button.
+   Attention events (4a, DARK): log entries with kind==="attention" are R54 operator-
+   attention tags joined to their auto-aired original by refId. They are metadata, never
+   cards — always filtered from the card list — and render as a small neutral chip on the
+   original ONLY under ?attn=1 (default OFF pending the operator's disclosure ruling).
    ?base=<origin> overrides the API origin (default same-origin) so a local copy of this page
    can be tested against prod. */
 (() => {
@@ -13,6 +19,7 @@
   const qs = new URLSearchParams(location.search);
   const room = qs.get("room");
   const base = (qs.get("base") || "").replace(/\/+$/, "");
+  const SHOW_ATTN = qs.has("attn");   // 4a: dark flag — attention chips render only when explicitly asked
   const feed = byId("feed"), empty = byId("empty");
 
   // same accent language as the overlay (SPRINT-02 C1): NeedsContext gets its own violet
@@ -96,6 +103,10 @@
            d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
   };
   const fmtDay = (ms) => new Date(ms).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+  /* 4a anchors: an entry id becomes a DOM id / URL hash ONLY if it matches the server's
+     mintId shape (ms timestamp + 4 base36 chars). The log is adversarial-adjacent data —
+     never let an arbitrary string become an element id (DOM-clobbering hygiene). */
+  const okAnchor = (s) => typeof s === "string" && /^\d{1,17}-[a-z0-9]{4}$/.test(s);
 
   /* Sourcing line (SPRINT-02 C2): the surfaced source leads (name from the log, tier chip
      from the entry's top-level tier passthrough), then EVERY other qualifying citation the
@@ -126,19 +137,61 @@
     return line;
   }
 
+  // 4a: per-card copy-link — copies this page's URL (room + flags preserved) with the
+  // entry's stable aired id as the hash. Clipboard write is user-gesture-scoped.
+  function copyBtn(id) {
+    const b = el("button", "rc-link", "#");
+    b.type = "button";
+    b.title = "copy a direct link to this check";
+    b.setAttribute("aria-label", "copy link to this check");
+    b.addEventListener("click", () => {
+      const u = new URL(location.href);
+      u.hash = id;
+      const done = () => { b.textContent = "✓"; b.classList.add("ok"); setTimeout(() => { b.textContent = "#"; b.classList.remove("ok"); }, 1200); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(u.href).then(done).catch(() => {});
+      else { location.hash = id; done(); }   // clipboard unavailable → at least land the hash in the URL bar
+    });
+    return b;
+  }
+
   // byIdMap: log entries keyed by stable aired id (R9); correctedIds: originals referenced by
-  // some correction (so the original card can wear a "corrected" chip without being mutated).
-  function renderEntry(e, byIdMap, correctedIds) {
+  // some correction (so the original card can wear a "corrected" chip without being mutated);
+  // attnByRef (4a): aired id → operator attention state, rendered only under ?attn=1.
+  function renderEntry(e, byIdMap, correctedIds, attnByRef) {
     const isCorr = e.kind === "correction";          // missing kind ⇒ plain check
     const card = el("article", isCorr ? "rc rc-correction" : "rc");
+    const anchored = okAnchor(e.id);
+    if (anchored) card.id = e.id;                    // 4a: stable per-card anchor (#<aired id>)
     const top = el("div", "rc-top");
     const m = isCorr ? { cls: "", icon: "↺", label: "CORRECTION" } : vmeta(e.verdict);
     top.appendChild(el("span", ("rc-badge " + m.cls).trim(), m.icon + " " + m.label));
+    /* R63 framing: TEST airs are field-test artifacts — visibly watermarked and excluded
+       from the ledger's accounting. The card renders (the record hides nothing) but wears
+       the exclusion on its sleeve. */
+    if (e.test === true) {
+      card.classList.add("rc-test");
+      const t = el("span", "rc-testchip", "TEST · not in ledger");
+      t.title = "field-test air — watermarked on screen and excluded from the session ledger (R63)";
+      top.appendChild(t);
+    }
     // D18: machine-aired cards are distinctly marked — the record always tells you whether
     // a human thumb or the auto-air gate put this on screen
-    if (e.autoAired === true) top.appendChild(el("span", "rc-auto", "AUTO · machine-aired"));
+    if (e.autoAired === true) {
+      const a = el("span", "rc-auto", "AUTO · machine-aired");
+      a.title = "aired by the auto-air gate under live operator supervision — every machine air runs a 4-second operator veto window (D18)";
+      top.appendChild(a);
+      // 4a (DARK, ?attn=1): the operator's self-reported attention during this card's veto
+      // window (R54) — neutral metadata chip, never a judgment dressed as one
+      const attn = SHOW_ATTN && anchored ? attnByRef.get(e.id) : null;
+      if (attn) {
+        const s = el("span", "rc-attn", "operator: " + attn);
+        s.title = "R54 — the operator's self-reported attention state during this card's 4-second veto window";
+        top.appendChild(s);
+      }
+    }
     if (!isCorr && e.id && correctedIds.has(e.id)) top.appendChild(el("span", "rc-corrected", "↺ corrected"));
     if (e.airedAt) top.appendChild(el("time", "rc-time", fmtTime(e.airedAt)));
+    if (anchored) top.appendChild(copyBtn(e.id));
     card.appendChild(top);
     if (isCorr) {
       card.appendChild(el("div", "rc-claim", e.correction || ""));
@@ -156,24 +209,53 @@
 
   function render(log) {
     feed.querySelectorAll(".rc").forEach((n) => n.remove());
-    if (!log.length) { empty.hidden = false; empty.textContent = "no aired checks in this room yet"; byId("dateRange").textContent = ""; return; }
+    /* 4a: attention events are per-card METADATA, not checks — always split out of the
+       card list (regardless of the flag, so they can never render as empty cards) and
+       joined onto their originals by refId. First entry wins per refId (server enforces
+       one, this is belt-and-braces). */
+    const attnByRef = new Map();
+    const entries = [];
+    for (const e of log) {
+      if (e && e.kind === "attention") {
+        if (e.refId && typeof e.attn === "string" && ["watching", "talking", "away"].includes(e.attn) && !attnByRef.has(e.refId)) attnByRef.set(e.refId, e.attn);
+      } else if (e) entries.push(e);
+    }
+    if (!entries.length) { empty.hidden = false; empty.textContent = "no aired checks in this room yet"; byId("dateRange").textContent = ""; return; }
     empty.hidden = true;
-    const times = log.map((e) => e.airedAt).filter(Boolean);
+    const times = entries.map((e) => e.airedAt).filter(Boolean);
     if (times.length) {
       const lo = fmtDay(Math.min(...times)), hi = fmtDay(Math.max(...times));
       byId("dateRange").textContent = lo === hi ? lo : lo + " — " + hi;
     }
     // one pass to index ids + collect correction references (old logs have no id → maps stay empty)
     const byIdMap = new Map(), correctedIds = new Set();
-    for (const e of log) {
+    for (const e of entries) {
       if (e.id) byIdMap.set(e.id, e);
       if (e.kind === "correction" && e.refId) correctedIds.add(e.refId);
     }
     const frag = document.createDocumentFragment();
     // server is newest-first; re-sort defensively so corrections interleave chronologically
-    for (const e of [...log].sort((a, b) => (b.airedAt || 0) - (a.airedAt || 0))) frag.appendChild(renderEntry(e, byIdMap, correctedIds));
+    for (const e of [...entries].sort((a, b) => (b.airedAt || 0) - (a.airedAt || 0))) frag.appendChild(renderEntry(e, byIdMap, correctedIds, attnByRef));
     feed.appendChild(frag);
+    focusHash();   // 4a: deep link — scroll + highlight once the target exists in the DOM
   }
+
+  /* 4a deep links: #<aired id> scrolls to and highlights that card. One-shot per hash —
+     the 30s auto-refresh re-renders the feed but must not re-scroll under the reader;
+     navigating to a new hash (hashchange) re-arms it. Unknown/absent ids no-op silently
+     (the entry may have aged past the 7-day window). */
+  let hashDone = "";
+  function focusHash() {
+    const id = decodeURIComponent(location.hash.slice(1));
+    if (!id || !okAnchor(id) || hashDone === id) return;
+    const n = document.getElementById(id);
+    if (!n || !n.classList.contains("rc")) return;
+    hashDone = id;
+    feed.querySelectorAll(".rc-hit").forEach((x) => x.classList.remove("rc-hit"));
+    n.classList.add("rc-hit");
+    n.scrollIntoView({ block: "center" });
+  }
+  window.addEventListener("hashchange", () => { hashDone = ""; focusHash(); });
 
   byId("roomChip").textContent = room ? "room: " + room : "no room";
   if (!room) { empty.hidden = false; empty.textContent = "add ?room=<room> to the URL to view a session's receipts"; return; }

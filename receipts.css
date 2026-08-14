@@ -74,6 +74,28 @@ a.rc-cite:hover{color:var(--fn);border-color:rgba(0,214,143,.4)}
   .rc-claim{font-size:16px}
 }
 
-/* D18: machine-aired marker — amber-edged, unmissable in the record */
-.rc-auto{font:700 10px var(--mono);letter-spacing:.08em;color:#f5a623;background:rgba(245,166,35,.1);
-  border:1px solid rgba(245,166,35,.4);border-radius:4px;padding:2px 7px;white-space:nowrap}
+/* D18: machine-aired marker (4a repolish) — DISTINCT but not alarmist: amber read as a
+   warning, but a machine air that cleared the gate + veto window is a disclosure, not a
+   defect. Cool slate-blue, clearly separate from every verdict color and from the tier/
+   cite chips; the AUTO token leads bold, the explanation trails lighter. */
+.rc-auto{font:700 10px var(--mono);letter-spacing:.08em;color:#9db4dd;background:rgba(157,180,221,.09);
+  border:1px solid rgba(157,180,221,.42);border-radius:4px;padding:2px 7px;white-space:nowrap;cursor:help}
+
+/* R63: field-test airs — visibly TEST, framed as excluded from the ledger. The card stays
+   in the record (nothing is hidden) but reads as an artifact: dashed frame, dimmed. */
+.rc-testchip{font:700 10px var(--mono);letter-spacing:.08em;color:#c9a0e8;background:rgba(201,160,232,.08);
+  border:1px dashed rgba(201,160,232,.5);border-radius:4px;padding:2px 7px;white-space:nowrap;cursor:help}
+.rc.rc-test{border-style:dashed;opacity:.78}
+
+/* 4a (DARK — renders only under ?attn=1): operator attention during the veto window (R54).
+   Deliberately neutral — same gray family as the tier chip, no color-coding of states. */
+.rc-attn{font:600 10px var(--mono);letter-spacing:.05em;color:var(--mut);border:1px solid var(--line);
+  border-radius:4px;padding:2px 7px;white-space:nowrap;cursor:help}
+
+/* 4a: per-card deep links — quiet copy-link affordance + arrival highlight */
+.rc-link{font:700 12px var(--mono);color:var(--mut);background:none;border:1px solid transparent;
+  border-radius:4px;padding:2px 6px;cursor:pointer;line-height:1}
+.rc-link:hover{color:var(--fn);border-color:rgba(0,214,143,.4)}
+.rc-link.ok{color:var(--fn)}
+.rc-hit{border-color:rgba(0,214,143,.65);animation:rc-hit-fade 2.4s ease-out}
+@keyframes rc-hit-fade{0%{box-shadow:0 0 0 3px rgba(0,214,143,.45)}100%{box-shadow:0 0 0 3px rgba(0,214,143,0)}}
