@@ -72,6 +72,7 @@
   let fcCards = [], fcId = 0, fcInflight = 0, lastUtterance = "";
   let recentClaims = new Map();   // F2 dedupe: normalized claim → last card-creation epoch ms (cleared per stream)
   let fcPublish = null;   // set in control view → publishes an aired card to the OBS /overlay channel
+  let fcAttnPublish = null;   // set in control view → 4a: attention event → aired log (DARK — only fires under ?attn=1, see ATTN_PUBLIC)
   let opBridge = null;    // set in control view → second-phone operator bridge (P3-J): queue snapshot push + command poll
   let fcRoom = null;      // control view's room id — sent on verify calls for per-room caps/BYOK
   let byokActive = false; // room has its own vendor keys registered (caps lifted)
@@ -97,6 +98,13 @@
      path, and the `test` flag rides the card so the overlay shows the watermark. */
   const FT_LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
   const TESTAIR = FT_LOCAL && new URLSearchParams(location.search).has("testair");
+  /* 4a — PUBLIC attention plumbing is DARK BY DEFAULT. Attention tags (R54) stay a
+     session-record/harness fact unless the operator opens /control with ?attn=1, in which
+     case each tag ALSO lands on the room's aired log (op:"attn" — append-only event, never
+     mutates the aired entry) where /receipts?attn=1 can render it. Surfacing operator
+     attention publicly changes what the public record discloses — the default stays OFF
+     until the operator rules on it (see daysprint-handoff-4a.md). */
+  const ATTN_PUBLIC = new URLSearchParams(location.search).has("attn");
   let ftSeq = 0, ftUid = 0, ftLastInterim = 0;
   const FT = {
     log(ev, data) {
@@ -708,7 +716,10 @@
     const durationMs = holdMode ? null : DEFAULT_HOLD_MS;
     showOnAir(c, durationMs); chatReactToAir();
     // keep the server-assigned aired id on the card (R9) — the correction composer joins on it
-    if (fcPublish) fcPublish(c, durationMs).then((id) => { if (id) { c._airedId = id; schedulePersist(); } });
+    if (fcPublish) fcPublish(c, durationMs).then((id) => { if (id) { c._airedId = id; schedulePersist();
+      // 4a: a tag applied before the publish resolved still reaches the public log (dark — ?attn=1 only)
+      if (c.attention && fcAttnPublish) fcAttnPublish(id, c.attention);
+    } });
   }
   function showOnAir(c, durationMs) {
     if (durationMs === undefined) durationMs = DEFAULT_HOLD_MS;
@@ -1287,6 +1298,9 @@
     const e = SESSION.byId.get(c.id); if (e) e.attention = state;
     FT.log("attention", { id: c.id, cid: c._cid || null, state, source, ms_after_air: c._airedAtMs ? Date.now() - c._airedAtMs : null });
     DBG.event("info", `attention tagged: ${state} (${source})`, { id: c.id });
+    // 4a: mirror to the public aired log — no-op unless ?attn=1 (dark default). If the
+    // publish response hasn't resolved yet (_airedId still unset), airCard's .then covers it.
+    if (fcAttnPublish && c._airedId) fcAttnPublish(c._airedId, state);
     renderQueue(); updateSessionBtn();
     if (opBridge && opBridge.scheduleQueuePush) opBridge.scheduleQueuePush();   // clears the card from /op's attention strip
   }
@@ -1659,6 +1673,18 @@
         DBG.event("info", card ? "aired → overlay" : "pulled ← overlay", { claim: card ? (card.claim || "").slice(0, 60) : null, id: (j && j.id) || null });
         return (j && j.id) || null;
       } catch (e) { DBG.event("err", "overlay publish network error", { error: String(e && e.message || e) }); return null; }
+    };
+    /* 4a: attention → aired log (op:"attn"). Best-effort fire-and-forget like the queue
+       push — the tag's canonical home stays the session record (R54); this only mirrors it
+       to the public log, and ONLY under ?attn=1 (dark default). Server dedupes (first tag
+       wins), so the double call sites (applyAttention now / airCard's publish-resolve
+       later, whichever has the airedId) can't double-log. */
+    fcAttnPublish = (refId, attnState) => {
+      if (tabReadOnly || !ATTN_PUBLIC || !refId || !attnState) return;
+      fetch("/api/onair", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ room: s.room, writeKey: s.writeKey, op: "attn", refId, state: attnState }) })
+        .then((r) => { if (r.ok) DBG.event("info", "attention → public record (?attn=1)", { refId, state: attnState }); })
+        .catch(() => {});
     };
 
     /* ---- P3-J: street-operator bridge — a second phone drives AIR/HOLD/SKIP from /op ----

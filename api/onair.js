@@ -4,6 +4,7 @@
 //   POST /api/onair  { room, writeKey, op:"keys", keys:{…} }  -> store room BYOK keys   (write, gated)
 //   POST /api/onair  { room, writeKey, op:"queue", cards }    -> operator-queue snapshot (write, gated; P3-J)
 //   POST /api/onair  { room, writeKey, op:"cmd", cmd:{…} }    -> operator command        (write, gated; P3-J)
+//   POST /api/onair  { room, writeKey, op:"attn", refId, state } -> attention event on the aired log (write, gated; 4a — client-side DARK)
 //   GET  /api/onair?room=<room>                                -> { card, seq, activeAt?, renderedId?, renderedAt? } (read, open)
 //   GET  /api/onair?room=<room>&byok=1                         -> { perplexity, anthropic, deepgram } booleans ONLY
 //   GET  /api/onair?room=<room>&log=1                           -> { log } aired record — public, CORS * (R9)
@@ -270,6 +271,35 @@ export default async function handler(req, res) {
         }
         await pipeline([["SET", `rk:${room}`, JSON.stringify({ perplexity: perplexity || undefined, anthropic: anthropic || undefined, deepgram: deepgram || undefined }), "EX", String(ROOM_TTL_SEC)]]);
         res.status(200).json({ ok: true, perplexity: Boolean(perplexity), anthropic: Boolean(anthropic), deepgram: Boolean(deepgram) });   // booleans only
+        return;
+      }
+      if (op === "attn") {
+        /* 4a (R54 → public record, DARK): the operator's attention tag for an AUTO-AIRED
+           card, appended to the AIRED log as its own event — kind:"attention", joined to
+           the original by refId (the original's server-minted aired id), exactly the
+           correction pattern (D6: append-only, the original entry is NEVER mutated).
+           DISCLOSURE STANCE: this op only fires when /control is opened with ?attn=1
+           (app.js gates the send) — by default NOTHING new reaches the public log. The
+           server accepts the op unconditionally because the gate is a disclosure choice,
+           not a security boundary (the writer already holds the room's writeKey).
+           Guards: state is the R54 closed set (never defaulted — "uncaptured" is only
+           ever the ABSENCE of a tag); refId must reference an EXISTING autoAired log
+           entry (attention is defined per auto-aired card — junk refIds and tags on
+           human airs don't pollute the record); first tag wins (dup → 200 {dup}, no
+           second append), mirroring applyAttention's client-side first-tag-wins. */
+        const st = req.body.state;
+        if (st !== "watching" && st !== "talking" && st !== "away") { res.status(400).json({ error: "bad attn" }); return; }
+        const refId = typeof req.body.refId === "string" ? cut(strip(req.body.refId), 32) : "";
+        if (!refId) { res.status(400).json({ error: "bad attn" }); return; }
+        const log = await state.readLog(room);
+        const dup = log.find((e) => e && e.kind === "attention" && e.refId === refId);
+        if (dup) { res.status(200).json({ ok: true, id: dup.id, dup: true }); return; }
+        const orig = log.find((e) => e && e.id === refId && e.kind !== "attention");
+        if (!orig || orig.autoAired !== true) { res.status(409).json({ error: "no auto-aired entry" }); return; }
+        const t = Date.now();
+        const entry = { id: mintId(t), t, kind: "attention", refId, attn: st };
+        await state.appendLog(room, entry);
+        res.status(200).json({ ok: true, id: entry.id });
         return;
       }
       if (op === "queue") {

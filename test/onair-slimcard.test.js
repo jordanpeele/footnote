@@ -120,6 +120,29 @@ test("canonical: survives the operator-air path (queue snapshot → op air → a
   assert.equal(lg.body.log[0].claim, "spoken form");
 });
 
+/* 4a: receipts now renders BOTH watermark flags — pin their passthrough contract.
+   test (R63 field-test watermark) and autoAired (D18 machine-air marker) are boolean-true
+   -only: strictly `=== true` survives to the on-air card and the aired log; every truthy
+   impostor (1, "true", {}) comes out ABSENT — a marker the sanitizer can be talked into
+   is not a marker. */
+test("test + autoAired: boolean true passes through to the on-air card AND the aired log", async () => {
+  const room = "slim-flags-ok";
+  const got = await air(room, card({ test: true, autoAired: true }));
+  assert.equal(got.test, true);
+  assert.equal(got.autoAired, true);
+  const lg = await get({ room, log: "1" });
+  assert.equal(lg.body.log[0].test, true, "the log keeps the R63 test watermark");
+  assert.equal(lg.body.log[0].autoAired, true, "the log keeps the D18 machine-air marker");
+});
+
+test("test + autoAired: any non-`true` value comes out ABSENT (no truthy coercion)", async () => {
+  for (const [i, bad] of [[1], ["true"], [{}], [0], [false], [null]].entries()) {
+    const got = await air("slim-flags-bad-" + i, card({ test: bad[0], autoAired: bad[0] }));
+    assert.equal("test" in got, false, `test ${JSON.stringify(bad[0])} must be absent`);
+    assert.equal("autoAired" in got, false, `autoAired ${JSON.stringify(bad[0])} must be absent`);
+  }
+});
+
 test("citations: empty-after-filter and non-array both leave the field ABSENT", async () => {
   const a = await air("slim-cite-empty", card({ citations: ["javascript:alert(1)"] }));
   assert.equal("citations" in a, false);
