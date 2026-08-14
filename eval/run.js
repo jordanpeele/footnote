@@ -107,7 +107,7 @@ const MAX_RETRIES = 3;
 const FUZZY_F1_THRESHOLD = 0.6; // token-overlap F1 needed for a fuzzy extraction pass
 
 function usage(code = 0) {
-  console.log("usage: node eval/run.js [--base URL] [--category X] [--limit N | --all] [--extract-only] [--judge] [--aired] [--delay MS] [--out FILE]");
+  console.log("usage: node eval/run.js [--base URL] [--category X] [--limit N | --all] [--extract-only] [--judge] [--aired] [--delay MS] [--out FILE] [--skip-done FILE]");
   process.exit(code);
 }
 
@@ -124,6 +124,7 @@ function parseArgs(argv) {
     else if (a === "--aired") args.aired = true;   // Task 0b: score the AIRED verdict (verify∘polarity)
     else if (a === "--delay") args.delay = Number(argv[++i]);
     else if (a === "--out") args.out = argv[++i];
+    else if (a === "--skip-done") args.skipDone = argv[++i];
     else if (a === "--help" || a === "-h") usage();
     else { console.error(`unknown arg: ${a}`); usage(1); }
   }
@@ -215,7 +216,16 @@ async function throttledPost(base, endpoint, body, delayOverride) {
 // ---------- main ----------
 async function main() {
   const args = parseArgs(process.argv);
-  const cases = loadGolden(args.category).slice(0, args.limit === Infinity ? undefined : args.limit);
+  let cases = loadGolden(args.category).slice(0, args.limit === Infinity ? undefined : args.limit);
+  /* --skip-done <file>: crash-resume — skip case ids already present in an existing
+     results file and APPEND new rows to --out (daysprint health fix: the cal#5 run died
+     silently at 227/260; rerunning finished rows would double-spend). */
+  if (args.skipDone) {
+    const done = new Set(readFileSync(args.skipDone, "utf8").trim().split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l).id; } catch { return null; } }).filter(Boolean));
+    const before = cases.length;
+    cases = cases.filter((c) => !done.has(c.id));
+    console.log(`--skip-done: ${before - cases.length} already complete in ${args.skipDone}, ${cases.length} remaining`);
+  }
   if (!cases.length) { console.error("no golden cases matched (check --category spelling)"); process.exit(1); }
 
   mkdirSync(RESULTS_DIR, { recursive: true });
