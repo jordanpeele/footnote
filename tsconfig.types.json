@@ -1,0 +1,15 @@
+{
+  "//": "Dev-only declaration emit: generates the committed .d.ts files in types/ from the JSDoc in src/core (adapters come along transitively via registry.js imports). This is NOT part of any runtime or CI path — npm start / npm test never touch it. Regenerate after changing src/core with: npx -y -p typescript tsc -p tsconfig.types.json  (types/index.d.ts is a hand-written barrel; tsc leaves it alone).",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "rootDir": "src",
+    "outDir": "types"
+  },
+  "include": ["src/core/**/*.js"]
+}
