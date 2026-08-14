@@ -176,3 +176,18 @@ adjudicate against a real source** (never copy the model's live verdict — that
 measure self-agreement, not accuracy); write the `adjudication_note` and `source_of_truth`.
 Then move finished lines into the right `eval/golden/<category>.jsonl` and delete the
 drafts file.
+
+### AUTHORED candidate drafts (`drafts-authored-*.jsonl`)
+
+Under-target categories that live sessions can't feed (quote attributions, engineered
+polarity traps) grow through **authored candidates**: rows carrying `authored: true`
+plus a *provisional* `ground_truth_verdict`, `expected_polarity`, an evidence note with
+a `Recommend: <Verdict> · <category>` line, and a cited `source_of_truth`. The
+provisional label is authored against a checkable source, but it is still a DRAFT —
+these files are excluded from eval runs exactly like ingest drafts (the `drafts-`
+prefix; pinned by `test/golden-drafts-exclusion.test.js`), and nothing becomes golden
+until the operator ratifies label+claim together in the adjudication cockpit, where
+authored cards appear as their own `AUTHORED`-marked clusters
+(`tools/adjudicate/README.md`). Authoring discipline: only claims checkable against
+stable authoritative sources, durable through 2027+, no current-events drift, no living
+private persons.

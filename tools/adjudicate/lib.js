@@ -109,6 +109,18 @@ export function dedupeDrafts(rows) {
     }
     e.repeatCount += 1;
     e.sourceDrafts.push(r.id);
+    // AUTHORED candidate rows (drafts-authored-*.jsonl) are written by an author with a
+    // PROVISIONAL label + evidence note — not session ingests. Propagate the marker and
+    // the fields the operator needs to ratify label+claim together: expected_polarity
+    // rides through to the graduated golden entry (run.js/report.js read it for the
+    // aired-verdict slice), the authored note surfaces in the hint panel, and the cited
+    // source pre-fills the source field (all editable/overridable in the cockpit).
+    if (r.authored) {
+      e.authored = true;
+      if (r.expected_polarity && !e.expected_polarity) e.expected_polarity = r.expected_polarity;
+      if (!e.hintNote && r.adjudication_note) e.hintNote = r.adjudication_note;
+      if (!e.sourceOfTruth && r.source_of_truth) e.sourceOfTruth = r.source_of_truth;
+    }
     // Fill hints from any member that carries them (first non-null wins).
     if (!e.suggestedCategory || !e.suggestedVerdict) {
       const h = parseNoteHints(r.adjudication_note);
@@ -155,13 +167,15 @@ export function applyHints(entries, hints) {
 // contiguous so ONE ruling (batch-accept) covers all N cards in a row. Cards without a
 // suggested category cluster by their queue-doc section ref (the 3.2 echo family, the
 // 5.2 Erewhon family, …) so policy clusters are also walked as a block.
+// AUTHORED candidates get their own clusters (prefixed label) so the operator always
+// knows they're ratifying an authored claim+label pair, not a field capture.
 export function sittingCluster(entry) {
-  if (entry.suggestedCategory) {
-    return entry.suggestedVerdict
-      ? `${entry.suggestedCategory} · ${entry.suggestedVerdict}`
-      : entry.suggestedCategory;
-  }
-  return entry.hintRef ? `§${entry.hintRef}` : "unassigned";
+  const base = entry.suggestedCategory
+    ? (entry.suggestedVerdict
+        ? `${entry.suggestedCategory} · ${entry.suggestedVerdict}`
+        : entry.suggestedCategory)
+    : (entry.hintRef ? `§${entry.hintRef}` : "unassigned");
+  return entry.authored ? `AUTHORED · ${base}` : base;
 }
 
 const CATEGORY_ORDER = new Map(CATEGORIES.map((c, i) => [c.name, i]));
@@ -176,6 +190,11 @@ export function orderForSitting(entries) {
     const ac = a.suggestedCategory ? CATEGORY_ORDER.get(a.suggestedCategory) : 99;
     const bc = b.suggestedCategory ? CATEGORY_ORDER.get(b.suggestedCategory) : 99;
     if (ac !== bc) return ac - bc;
+    // Field cards first, AUTHORED candidates as their own trailing block per category —
+    // keeps the AUTHORED-prefixed clusters contiguous instead of interleaving them into
+    // same-suggestion field runs (which would split both clusters).
+    const aa = a.authored ? 1 : 0, ba = b.authored ? 1 : 0;
+    if (aa !== ba) return aa - ba;
     const ar = a.hintRef || "￿", br = b.hintRef || "￿"; // no-ref cards last
     if (!a.suggestedCategory && ar !== br) return ar < br ? -1 : 1;
     const av = a.suggestedVerdict ? VERDICT_ORDER.get(a.suggestedVerdict) : 99;
@@ -216,10 +235,12 @@ export function buildGoldenEntry(decision, queueEntry, id) {
   const verdict = decision.verdict ?? null;
   let extraction = decision.extraction !== undefined ? decision.extraction : queueEntry.canonical;
   if (verdict === null) extraction = null; // null verdict ⇒ null extraction (echo/opinion)
-  const provenance = queueEntry.repeatCount > 1
-    ? ` [graduated from ${queueEntry.repeatCount} field drafts: ${queueEntry.sourceDrafts.join(", ")}]`
-    : ` [graduated from field draft ${queueEntry.sourceDrafts[0]}]`;
-  return {
+  const provenance = queueEntry.authored
+    ? ` [ratified from AUTHORED candidate ${queueEntry.sourceDrafts.join(", ")}]`
+    : queueEntry.repeatCount > 1
+      ? ` [graduated from ${queueEntry.repeatCount} field drafts: ${queueEntry.sourceDrafts.join(", ")}]`
+      : ` [graduated from field draft ${queueEntry.sourceDrafts[0]}]`;
+  const out = {
     id,
     transcript_snippet: queueEntry.sampleTranscript || "",
     expected_extraction: extraction,
@@ -228,6 +249,11 @@ export function buildGoldenEntry(decision, queueEntry, id) {
     adjudication_note: (decision.note || "").trim() + provenance,
     source_of_truth: decision.source_of_truth || "",
   };
+  // expected_polarity travels with the card (polarity traps + denial-phrased quote
+  // cards). The operator ratifies it as part of the claim — run.js/report.js read it for
+  // the aired-verdict slice, so dropping it here would silently degrade graduated traps.
+  if (queueEntry.expected_polarity) out.expected_polarity = queueEntry.expected_polarity;
+  return out;
 }
 
 // Idempotency guard for apply.js: has this claim already been graduated into the target
