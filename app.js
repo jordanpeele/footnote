@@ -1074,12 +1074,24 @@
      per stream (killed at End Stream). Overlapping windows re-extracting the same claim
      are absorbed by F2 dedupe; hallucination is fenced by the P4-F1 grounding gate. */
   let winWords = [], winLastAt = 0, winNewWords = 0, winLastExtract = 0, winEndsTerminal = false, winTimer = 0, winLastSent = "";
+  /* W1.3 window hardening — per-STREAM window lifecycle accounting for the morning field
+     read: windows fired by trigger reason, words that entered the window vs words handed
+     to extraction, and how often the winLastSent identical-window suppressor consumed a
+     fire. Emitted as ONE `window_summary` harness event at End Stream. Counters survive
+     Deepgram reconnects on purpose (the window STATE resets per connect; the summary is
+     per stream) and reset at Start Stream too, in case a reload skipped endStream.
+     Observability only — no window behavior changes. */
+  let winStats;
+  const winStatsReset = () => { winStats = { windows: 0, by_reason: { terminal: 0, cadence: 0, silence: 0 }, suppressed: 0, words_in: 0, words_sent: 0 }; };
+  winStatsReset();
   function windowExtract(reason) {
     const text = winWords.slice(-WINDOW_WORDS).join(" ").trim();
     winNewWords = 0; winLastExtract = Date.now(); winEndsTerminal = false;
-    if (!text || text === winLastSent) return;
+    if (!text || text === winLastSent) { if (text) winStats.suppressed++; return; }
     winLastSent = text;
-    FT.log("window_extract", { reason, words: text.split(/\s+/).length, text: text.slice(0, 200) });
+    const wordCount = text.split(/\s+/).length;
+    winStats.windows++; winStats.by_reason[reason] = (winStats.by_reason[reason] || 0) + 1; winStats.words_sent += wordCount;
+    FT.log("window_extract", { reason, words: wordCount, text: text.slice(0, 200) });
     checkUtterance(text, { merged: true });   // merged: word-min bypass only — F2 + grounding still gate
   }
   let dgEverWorked = false, dgRetryN = 0, dgRetryT = 0;   // mid-session drop → auto-reconnect (unattended/auto-air safe)
@@ -1172,6 +1184,7 @@
         const ws_ = tr.split(/\s+/).filter(Boolean);
         winWords.push(...ws_); if (winWords.length > 60) winWords = winWords.slice(-60);
         winNewWords += ws_.length; winLastAt = nowAt; winEndsTerminal = /[.!?]$/.test(tr);
+        winStats.words_in += ws_.length;   // W1.3 summary: every word that entered the window
         if (winEndsTerminal && windowShouldExtract(winNewWords, nowAt - winLastExtract, 0, true)) windowExtract("terminal");
       }
     };
@@ -1197,6 +1210,7 @@
   async function startStream() {
     streaming = true; const myGen = ++gen; clearFactChecks();
     autoAirCount = 0; autoAirCapNoted = false;   // D18: cap is per-session
+    winStatsReset();   // W1.3: window_summary is per-stream (belt-and-suspenders — a reload can skip endStream)
     if (applyKeyterms) applyKeyterms();   // R40: keyterms snapshot for this stream
     if (opBridge) opBridge.streamStarted();   // P3-J: start the operator command poll + baseline the queue snapshot
     dgEverWorked = false; dgRetryN = 0; clearTimeout(dgRetryT);
@@ -1320,6 +1334,10 @@
     if (dgProc) { try { dgProc.disconnect(); } catch {} dgProc = null; }
     dgSource = null; dgCtx = null; dgFinalWords = []; prevFinalText = ""; prevFinalAt = 0;
     clearInterval(winTimer); winTimer = 0; winWords = []; winNewWords = 0;   // window dies with the stream — never extract into a dead broadcast
+    // W1.3 summary: one per-stream lifecycle event — windows by trigger reason, words in vs
+    // sent, suppressor hits. Emitted before reset so the morning read gets the whole stream.
+    if (winStats.windows || winStats.words_in || winStats.suppressed) FT.log("window_summary", winStats);
+    winStatsReset();
     callTabSource = null; mixBus = null;   // nodes die with the context; the tab STREAM survives for the next start
     if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
     audioStream = null;
