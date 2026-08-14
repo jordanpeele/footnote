@@ -11,7 +11,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   normalizeClaim, dedupeDrafts, parseNoteHints, nextId, buildGoldenEntry,
-  alreadyGraduated, prefixForCategory, CATEGORIES, VERDICTS,
+  alreadyGraduated, prefixForCategory, applyHints, orderForSitting, sittingCluster,
+  categoryNeeds, CATEGORIES, VERDICTS,
 } from "../tools/adjudicate/lib.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -88,19 +89,116 @@ test("buildGoldenEntry mirrors golden schema + null verdict forces null extracti
   assert.equal(echo.ground_truth_verdict, null);
 });
 
+// ---- applyHints ----------------------------------------------------------------------
+test("applyHints fills empty suggestion slots by claim or draft id, never overrides", () => {
+  const entries = [
+    { key: "claim::a", claim: "Peter Thiel is the president of the United States.", sourceDrafts: ["d1"], suggestedVerdict: null, suggestedCategory: null },
+    { key: "claim::b", claim: "Some other claim", sourceDrafts: ["d2"], suggestedVerdict: "True", suggestedCategory: "statistics" },
+    { key: "id::e1", claim: "echo text", sourceDrafts: ["echo-1"], suggestedVerdict: null, suggestedCategory: null },
+  ];
+  applyHints(entries, [
+    { ref: "R1", claim: "peter thiel is the PRESIDENT of the united states", suggestedVerdict: "False", suggestedCategory: "person_claims", note: "queue R1" },
+    { ref: "RX", claim: "Some other claim", suggestedVerdict: "False", suggestedCategory: "adversarial", note: "must not override" },
+    { ref: "3.2", draftIds: ["echo-1", "echo-2"], suggestedCategory: "adversarial", note: "echo family" },
+  ]);
+  assert.equal(entries[0].suggestedVerdict, "False");
+  assert.equal(entries[0].suggestedCategory, "person_claims");
+  assert.equal(entries[0].hintRef, "R1");
+  assert.equal(entries[1].suggestedVerdict, "True", "existing suggestion wins");
+  assert.equal(entries[1].suggestedCategory, "statistics", "existing suggestion wins");
+  assert.equal(entries[1].hintNote, "must not override", "note still attaches for display");
+  assert.equal(entries[2].suggestedCategory, "adversarial", "draft-id match works");
+});
+
+// ---- orderForSitting + sittingCluster ------------------------------------------------
+test("orderForSitting makes same-suggestion runs contiguous, policy families grouped, unassigned last", () => {
+  const mk = (key, cat, verdict, ref, repeat = 1) => ({
+    key, claim: key, repeatCount: repeat, sourceDrafts: [key],
+    suggestedCategory: cat, suggestedVerdict: verdict, hintRef: ref,
+  });
+  const shuffled = [
+    mk("erewhon-1", null, null, "5.2"),
+    mk("stat-false-1", "statistics", "False", "R7"),
+    mk("person-false-1", "person_claims", "False", "R1", 26),
+    mk("no-hint", null, null, null),
+    mk("stat-false-2", "statistics", "False", "R7"),
+    mk("erewhon-2", null, null, "5.2"),
+    mk("person-true", "person_claims", "True", "R2"),
+    mk("person-false-2", "person_claims", "False", "R3"),
+  ];
+  const out = orderForSitting(shuffled);
+  const keys = out.map((e) => e.key);
+  // person_claims first (CATEGORIES order), True before False (VERDICTS order),
+  // most-repeated first within a run; unassigned families after categories; no-ref dead last
+  assert.deepEqual(keys, [
+    "person-true", "person-false-1", "person-false-2",
+    "stat-false-1", "stat-false-2",
+    "erewhon-1", "erewhon-2",
+    "no-hint",
+  ]);
+  assert.equal(sittingCluster(out[0]), "person_claims · True");
+  assert.equal(sittingCluster(out[1]), "person_claims · False");
+  assert.equal(sittingCluster(out[5]), "§5.2");
+  assert.equal(sittingCluster(out[7]), "unassigned");
+  // clusters are contiguous: same-label cards are never split
+  const labels = out.map(sittingCluster);
+  const seen = new Set();
+  for (let i = 0; i < labels.length; i++) {
+    if (i > 0 && labels[i] !== labels[i - 1]) assert.ok(!seen.has(labels[i]), `cluster ${labels[i]} split`);
+    seen.add(labels[i]);
+  }
+});
+
+// ---- categoryNeeds -------------------------------------------------------------------
+test("categoryNeeds computes the n>=30 gap per category", () => {
+  const stats = categoryNeeds({ person_claims: 20, polarity_traps: 12, statistics: 35 });
+  const by = Object.fromEntries(stats.map((s) => [s.category, s]));
+  assert.equal(stats.length, CATEGORIES.length);
+  assert.equal(by.person_claims.needed, 10);
+  assert.equal(by.polarity_traps.needed, 18);
+  assert.equal(by.statistics.needed, 0, "at/over target needs 0");
+  assert.equal(by.attributed_quotes.current, 0, "missing category counts as 0");
+  assert.equal(by.attributed_quotes.needed, 30);
+});
+
 // ---- prep.js end-to-end --------------------------------------------------------------
-test("prep.js produces a queue.json with expected unique-claim collapse", () => {
+test("prep.js produces a clustered, hinted, gap-annotated queue.json", () => {
   const tmp = mkdtempSync(path.join(os.tmpdir(), "footnote-prep-"));
   const out = path.join(tmp, "queue.json");
   try {
     execFileSync("node", [path.join(TOOLDIR, "prep.js"), "--out", out], { cwd: ROOT });
     const q = JSON.parse(readFileSync(out, "utf8"));
-    assert.equal(q.draft_count, 99, "all three drafts files ingested");
+    assert.equal(q.draft_count, 111, "all five drafts files ingested (99 field + 8 d18pilot2 + 4 runtest)");
     assert.ok(q.unique_count < q.draft_count, "dedup shrinks the list");
-    assert.ok(q.unique_count >= 55 && q.unique_count <= 70, `~60 unique claims, got ${q.unique_count}`);
+    assert.ok(q.unique_count >= 60 && q.unique_count <= 75, `~68 unique claims, got ${q.unique_count}`);
     const thiel = q.entries.find((e) => (e.claim || "").toLowerCase().startsWith("peter thiel"));
     assert.ok(thiel, "Thiel family present");
     assert.equal(thiel.repeatCount, 26, "26 Thiel repeats collapse to one card");
+    assert.equal(thiel.suggestedVerdict, "False", "queue-doc R1 recommendation transcribed as suggestion");
+    assert.equal(thiel.suggestedCategory, "person_claims");
+    assert.ok(thiel.cluster, "entries carry a cluster label");
+
+    // cross-session fold: Trump-president spans 08-08, street ×4, and the 08-12 pilot
+    const trump = q.entries.find((e) => (e.claim || "").toLowerCase().startsWith("donald trump is the president"));
+    assert.equal(trump.repeatCount, 6, "Trump repeats fold across all five sessions");
+
+    // clusters are contiguous in the entry order
+    const seen = new Set();
+    let prev = null;
+    for (const e of q.entries) {
+      if (e.cluster !== prev) { assert.ok(!seen.has(e.cluster), `cluster ${e.cluster} split`); seen.add(e.cluster); }
+      prev = e.cluster;
+    }
+    assert.ok(Array.isArray(q.clusters) && q.clusters.length > 5, "cluster summary present");
+
+    // golden-gap annotation matches the actual golden files
+    assert.equal(q.categoryStats.length, CATEGORIES.length);
+    for (const s of q.categoryStats) {
+      const file = path.join(ROOT, "eval", "golden", s.category + ".jsonl");
+      const current = existsSync(file) ? readFileSync(file, "utf8").split("\n").filter((l) => l.trim()).length : 0;
+      assert.equal(s.current, current, `${s.category} current count matches file`);
+      assert.equal(s.needed, Math.max(0, 30 - current), `${s.category} gap math`);
+    }
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 });
 
@@ -176,10 +274,63 @@ test("adjudicate.js wires handlers and syntax-checks clean", () => {
   execFileSync("node", ["--check", path.join(TOOLDIR, "adjudicate.js")], { cwd: ROOT });
   execFileSync("node", ["--check", path.join(TOOLDIR, "lib.js")], { cwd: ROOT });
   const src = readFileSync(path.join(TOOLDIR, "adjudicate.js"), "utf8");
-  for (const h of ["addEventListener(\"keydown\"", "btn-decide", "btn-download", "queue.json", "setVerdict", "setCategory"]) {
+  for (const h of ["addEventListener(\"keydown\"", "btn-decide", "btn-download", "queue.json", "setVerdict", "setCategory",
+    "localStorage", "resolvedDecisions", "cluster-bar", "hint-note", "btn-download-top", "etaLabel"]) {
     assert.ok(src.includes(h), `page wires ${h}`);
   }
   const html = readFileSync(path.join(TOOLDIR, "adjudicate.html"), "utf8");
   assert.ok(html.includes("/tools/adjudicate/adjudicate.js"), "html loads the module");
+  for (const id of ["cluster-bar", "hint-note", "btn-download-top", "btn-reset", "resolved-badge"]) {
+    assert.ok(html.includes(`id="${id}"`), `html has #${id}`);
+  }
   assert.ok(existsSync(path.join(TOOLDIR, "adjudicate.css")), "css present");
+});
+
+// ---- hints.json is transcription-shaped and matches real queue cards -----------------
+test("hints.json parses, uses only known verdicts/categories, and every hint lands on a card", () => {
+  const hints = JSON.parse(readFileSync(path.join(TOOLDIR, "hints.json"), "utf8")).hints;
+  assert.ok(hints.length > 40, "hint set covers the sitting");
+  const verdicts = new Set(VERDICTS.map((v) => v.value));
+  const cats = new Set(CATEGORIES.map((c) => c.name));
+  for (const h of hints) {
+    assert.ok(h.ref, "every hint cites its queue-doc section / source log");
+    assert.ok(h.claim || (h.draftIds && h.draftIds.length), "every hint has a match key");
+    if (h.suggestedVerdict) assert.ok(verdicts.has(h.suggestedVerdict), `${h.ref}: verdict ${h.suggestedVerdict}`);
+    if (h.suggestedCategory) assert.ok(cats.has(h.suggestedCategory), `${h.ref}: category ${h.suggestedCategory}`);
+  }
+  // every hint must attach to at least one card in the real queue (no dead transcriptions)
+  const tmp = mkdtempSync(path.join(os.tmpdir(), "footnote-hints-"));
+  const out = path.join(tmp, "queue.json");
+  try {
+    execFileSync("node", [path.join(TOOLDIR, "prep.js"), "--out", out], { cwd: ROOT });
+    const q = JSON.parse(readFileSync(out, "utf8"));
+    const claims = new Set(q.entries.filter((e) => e.claim).map((e) => normalizeClaim(e.claim)));
+    const draftIds = new Set(q.entries.flatMap((e) => e.sourceDrafts));
+    for (const h of hints) {
+      const hit = (h.claim && claims.has(normalizeClaim(h.claim))) ||
+        (h.draftIds || []).some((id) => draftIds.has(id));
+      assert.ok(hit, `hint ${h.ref} "${(h.claim || (h.draftIds || []).join(",")).slice(0, 50)}" matches no card`);
+    }
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+});
+
+// ---- apply.js refuses never-resolved decisions ---------------------------------------
+test("apply.js skips decisions marked resolved:false (suggestion never ratified)", () => {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), "footnote-unresolved-"));
+  try {
+    const goldenDir = path.join(tmp, "golden");
+    execFileSync("mkdir", ["-p", goldenDir]);
+    const queuePath = path.join(tmp, "queue.json");
+    writeFileSync(queuePath, JSON.stringify({ generated_at: "x", entries: [
+      { key: "claim::a", claim: "A", canonical: "A", sampleTranscript: "t", repeatCount: 1, sourceDrafts: ["d1"] },
+    ] }));
+    const gradPath = path.join(tmp, "graduations.json");
+    writeFileSync(gradPath, JSON.stringify({ decisions: [
+      { key: "claim::a", verdict: "False", category: "person_claims", resolved: false },
+    ] }));
+    const res = spawnSync("node", [path.join(TOOLDIR, "apply.js"), gradPath, "--queue", queuePath, "--golden-dir", goldenDir], { cwd: ROOT, encoding: "utf8" });
+    assert.match(res.stderr, /never resolved in cockpit/);
+    assert.match(res.stderr, /0 entr\(ies\) appended/);
+    assert.ok(!existsSync(path.join(goldenDir, "person_claims.jsonl")), "nothing written");
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
 });

@@ -24,19 +24,30 @@ pass the downloaded file's path as the first arg if it landed in `~/Downloads`.
 
 ### 1 · prep
 
-`prep.js` reads the three `eval/golden/drafts-*.jsonl` files, dedupes by *normalized
-claim* (lowercase / strip quotes / collapse whitespace / drop trailing period), and
-writes `queue.json`. Repeats collapse with a count — the 26 "Peter Thiel is the president
-of the United States" drafts become ONE card with `repeatCount: 26`, and cross-session
-repeats (e.g. the Trump-president line) fold together too. Current run: **99 drafts → 60
-unique claim cards.** Null-extraction drafts (the F1 extractor-echo cases, opinion→null)
-can't dedup by claim, so each keeps its own card.
+`prep.js` reads **every** `eval/golden/drafts-*.jsonl` file (globbed — new session
+ingests join the sitting automatically), dedupes by *normalized claim* (lowercase /
+strip quotes / collapse whitespace / drop trailing period), and writes `queue.json`.
+Repeats collapse with a count — the 26 "Peter Thiel is the president of the United
+States" drafts become ONE card with `repeatCount: 26`, and cross-session repeats (e.g.
+the Trump-president line) fold together too. Current run: **111 drafts → 68 unique claim
+cards.** Null-extraction drafts (the F1 extractor-echo cases, opinion→null) can't dedup
+by claim, so each keeps its own card.
+
+Prep then merges **`hints.json`** — a transcription of the pre-filled recommendations
+already written in `eval/ADJUDICATION_QUEUE.md` (R1–R32 + the §3.2/§3.3/§5.2 policy
+clusters) plus factual run-log annotations for newer drafts. Hints only *fill* empty
+suggestion slots and attach a display note; they are never ground truth and never
+auto-applied. Finally the cards are sorted into **batchable clusters**: same suggested
+category+verdict runs are contiguous (in golden-category order), policy families stay
+together, unsuggested cards go last. The queue also carries `categoryStats` — each
+golden category's current count vs the n≥30 target — and a `clusters` summary.
 
 Each queue entry: `{ key, claim, canonical, sampleTranscript, repeatCount,
-sourceDrafts[], suggestedCategory, suggestedVerdict, pipelineVerdict }`. The suggested
-category/verdict come from an explicit `Recommend:` line in a draft's note if present
-(the ingest-shaped notes only carry the live *pipeline* verdict, surfaced separately as
-`pipelineVerdict` — a HINT, never ground truth).
+sourceDrafts[], suggestedCategory, suggestedVerdict, pipelineVerdict, hintNote?,
+hintRef?, cluster }`. Suggested category/verdict come from an explicit `Recommend:` line
+in a draft's note or from `hints.json` (the draft's own line wins); the ingest-shaped
+notes only carry the live *pipeline* verdict, surfaced separately as `pipelineVerdict` —
+a HINT, never ground truth.
 
 ### 2–3 · decide (the page)
 
@@ -46,18 +57,33 @@ change). One card at a time:
 - **Verdict** — `t`=True `f`=False `m`=Misleading `n`=NeedsContext `u`=Unverifiable
 - **Category** — number keys `1`–`9` (or click): person_claims, statistics,
   geography_civics, science_health, current_events, historical_events, adversarial,
-  attributed_quotes, polarity_traps
-- **Extraction** — editable textarea (clear it to graduate a null-verdict echo/opinion card)
+  attributed_quotes, polarity_traps. Pills show `+N` where the category is under the
+  n≥30 golden target.
+- **Extraction** — editable textarea (clear it to graduate a null-verdict echo/opinion
+  card); `e`/`o`/`i` jump the cursor into extraction/source/note, `Esc` jumps back out
 - **Source of truth** + **note** — text fields; provenance (draft ids, repeat count) is
   appended to the note automatically
-- **Enter** = accept & next · **s** = skip · **b** = back · **d** = download
+- **Enter** = accept & next · `a` = accept batch · `s` = skip · `b` = back ·
+  `j` = next unresolved · `d` = download
 - **Batch mode** — when a card's verdict+category match the *suggested* verdict+category
   of later unresolved cards, an "Accept all N like this" button appears (ratifies
-  verdict+category across the group; each card keeps its own extraction/transcript)
+  verdict+category across the group; each card keeps its own extraction/transcript).
+  Because prep sorts same-suggestion runs contiguously, one `a` usually clears the whole
+  cluster and lands you on the next one.
+- **Cluster bar** — shows which cluster you're in, your position in it, and the target
+  category's golden gap. The amber **hint note** under it is the queue-doc
+  recommendation (with its R-number) or the run-log annotation for newer drafts.
+- **Progress** — header shows resolved/remaining plus a remaining-time estimate from
+  your own pace. Decisions **autosave to localStorage** (keyed to the queue's
+  `generated_at`) — a reload resumes mid-sitting; "reset sitting" in the footer starts
+  over. "Download so far" in the header exports a partial `graduations.json` any time.
 
-A suggested verdict/category is pre-selected (amber outline) and can be overridden. The
-page accumulates decisions in memory and downloads `graduations.json` — no server
-endpoint, no state channel; fully client-side.
+A suggested verdict/category is pre-selected (amber outline) and can be overridden. Only
+cards you **explicitly resolve** (Enter / skip / batch) are downloaded — a merely-visited
+card with a pre-seeded suggestion never reaches `graduations.json`, and `apply.js`
+additionally refuses any decision marked `resolved: false`. The page accumulates
+decisions client-side and downloads `graduations.json` — no server endpoint, no state
+channel.
 
 ### 4 · apply
 
@@ -72,9 +98,12 @@ After applying, per the queue doc's mechanics: delete each fully-graduated
 
 ## Files
 
-- `lib.js` — pure, testable logic (dedup, id allocation, graduation, idempotency);
-  imported by prep.js, apply.js, **and** the page so the picker/graduation math can't drift
-- `prep.js` — drafts → `queue.json`
+- `lib.js` — pure, testable logic (dedup, hints, sitting order, category gaps, id
+  allocation, graduation, idempotency); imported by prep.js, apply.js, **and** the page
+  so the picker/graduation math can't drift
+- `prep.js` — drafts → `queue.json` (glob + hints + clustering + golden-gap stats)
+- `hints.json` — transcribed queue-doc recommendations + run-log annotations
+  (suggestions only; the human ratifies everything)
 - `apply.js` — `graduations.json` → `eval/golden/<category>.jsonl`
 - `adjudicate.html` / `.js` / `.css` — the cockpit page
 - tests: `test/adjudicate.test.js`

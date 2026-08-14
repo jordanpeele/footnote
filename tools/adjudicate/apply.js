@@ -58,6 +58,7 @@ const wrote = [];
 const skipped = [];
 for (const d of decisions) {
   if (d.skip) { skipped.push({ key: d.key, why: "skipped in cockpit" }); continue; }
+  if (d.resolved === false) { skipped.push({ key: d.key, why: "never resolved in cockpit (suggestion only)" }); continue; }
   if (!d.category || !prefixForCategory(d.category)) { skipped.push({ key: d.key, why: `unknown category ${d.category}` }); continue; }
   const qe = queueByKey.get(d.key);
   if (!qe) { skipped.push({ key: d.key, why: "no matching queue entry" }); continue; }

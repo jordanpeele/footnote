@@ -123,6 +123,77 @@ export function dedupeDrafts(rows) {
   );
 }
 
+// Merge sitting hints into deduped queue entries. hints.json is a TRANSCRIPTION of the
+// pre-filled recommendations already authored in eval/ADJUDICATION_QUEUE.md (R1–R32 +
+// the section policy clusters) plus factual run-log annotations for new drafts — it
+// never invents rulings. A hint matches an entry by normalized claim (`claim`) or by
+// draft-id membership (`draftIds` ∩ entry.sourceDrafts). Hints only FILL empty
+// suggestion slots (a draft's own explicit "Recommend:" line wins) and attach
+// hintNote/hintRef for display. Suggestions stay suggestions — the human ratifies or
+// overrides every card in the cockpit; nothing here is ground truth.
+export function applyHints(entries, hints) {
+  if (!hints || !hints.length) return entries;
+  const byClaim = new Map();
+  const byDraftId = new Map();
+  for (const h of hints) {
+    if (h.claim) byClaim.set(normalizeClaim(h.claim), h);
+    for (const id of h.draftIds || []) byDraftId.set(id, h);
+  }
+  for (const e of entries) {
+    let h = e.claim ? byClaim.get(normalizeClaim(e.claim)) : null;
+    if (!h) h = (e.sourceDrafts || []).map((id) => byDraftId.get(id)).find(Boolean) || null;
+    if (!h) continue;
+    e.suggestedVerdict ||= h.suggestedVerdict || null;
+    e.suggestedCategory ||= h.suggestedCategory || null;
+    if (h.note) e.hintNote = h.note;
+    if (h.ref) e.hintRef = h.ref;
+  }
+  return entries;
+}
+
+// The cluster a card belongs to for the sitting: same-suggestion runs must be
+// contiguous so ONE ruling (batch-accept) covers all N cards in a row. Cards without a
+// suggested category cluster by their queue-doc section ref (the 3.2 echo family, the
+// 5.2 Erewhon family, …) so policy clusters are also walked as a block.
+export function sittingCluster(entry) {
+  if (entry.suggestedCategory) {
+    return entry.suggestedVerdict
+      ? `${entry.suggestedCategory} · ${entry.suggestedVerdict}`
+      : entry.suggestedCategory;
+  }
+  return entry.hintRef ? `§${entry.hintRef}` : "unassigned";
+}
+
+const CATEGORY_ORDER = new Map(CATEGORIES.map((c, i) => [c.name, i]));
+const VERDICT_ORDER = new Map(VERDICTS.map((v, i) => [v.value, i]));
+
+// Sitting order: category-suggested cards first, grouped in CATEGORIES order, then by
+// suggested verdict, most-repeated first — so batch-accept eats each cluster in one
+// keystroke. Unsuggested cards follow, grouped by queue-doc section ref (policy
+// clusters stay together), then by repeat count. Pure sort; never drops/merges cards.
+export function orderForSitting(entries) {
+  return [...entries].sort((a, b) => {
+    const ac = a.suggestedCategory ? CATEGORY_ORDER.get(a.suggestedCategory) : 99;
+    const bc = b.suggestedCategory ? CATEGORY_ORDER.get(b.suggestedCategory) : 99;
+    if (ac !== bc) return ac - bc;
+    const ar = a.hintRef || "￿", br = b.hintRef || "￿"; // no-ref cards last
+    if (!a.suggestedCategory && ar !== br) return ar < br ? -1 : 1;
+    const av = a.suggestedVerdict ? VERDICT_ORDER.get(a.suggestedVerdict) : 99;
+    const bv = b.suggestedVerdict ? VERDICT_ORDER.get(b.suggestedVerdict) : 99;
+    if (av !== bv) return av - bv;
+    return b.repeatCount - a.repeatCount || String(a.claim).localeCompare(String(b.claim));
+  });
+}
+
+// Per-category golden-set gap: how many adjudicated cards each category still needs to
+// reach the n>=30 target. `counts` maps category name -> current golden line count.
+export function categoryNeeds(counts, target = 30) {
+  return CATEGORIES.map((c) => {
+    const current = counts[c.name] ?? 0;
+    return { category: c.name, current, target, needed: Math.max(0, target - current) };
+  });
+}
+
 // Next sequential id for a category, given the ids already present in its golden file.
 // Matches the existing convention: "<prefix>-NNN" zero-padded to 3 (person-021, …).
 export function nextId(prefix, existingIds) {
