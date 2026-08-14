@@ -4,6 +4,7 @@
 // adapter transcribe → shape response.
 export const config = { api: { bodyParser: false } };
 import { spendGate } from "../src/core/spendgate.js";
+import { tick } from "../src/core/spendmeter.js";
 import { rateLimit } from "./_ratelimit.js";
 import { getAdapter } from "../src/core/registry.js";
 import { UpstreamError } from "../src/core/errors.js";
@@ -41,6 +42,7 @@ export default async function handler(req, res) {
   if (audio.length > 1_200_000) { res.status(413).json({ error: "audio too large" }); return; }  // ~2.2s Opus is tiny
 
   const audioType = req.headers["x-audio-type"] || "audio/webm";
+  tick("transcribe", stt.name);   // spend metering (est. only) — after all validation, as the call leaves
   let out;
   try {
     out = await stt.transcribe(audio, audioType);
