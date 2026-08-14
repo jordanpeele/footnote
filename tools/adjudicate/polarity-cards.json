@@ -1,0 +1,210 @@
+{
+  "_comment": [
+    "Polarity micro-pass cards — the 31 golden rows whose expected_polarity was left UNSET",
+    "on purpose by Task 0 (commit 82feaba: 'guessing labels would corrupt the eval — flagged",
+    "for a human micro-pass'). TRANSCRIPTION ONLY: each card states the two candidate",
+    "readings and a neutral framing of what makes the row ambiguous. NO card carries a",
+    "suggested ruling — the queue docs carry none for these rows, so none is invented here.",
+    "Where a card cites a precedent (pol-001 rule, geo-029/geo-030 labels), that is a factual",
+    "transcription of ADJUDICATIONS.md / the golden files, explicitly marked not controlling.",
+    "",
+    "prep.js joins each card to its live golden row by id (utterance + claim come from the",
+    "golden file, never duplicated here) and drops any card whose row has since been ruled",
+    "(expected_polarity key present, even if null). Rulings: asserts | denies | ambiguous-drop.",
+    "ambiguous-drop writes an explicit `expected_polarity: null` (+ polarity_note) so a ruled-",
+    "out row is distinguishable from a never-visited one; run.js skips both identically.",
+    "",
+    "Card order is sitting order; `family` becomes the cluster label (polarity · <family>)."
+  ],
+  "cards": [
+    { "id": "quote-012", "category": "attributed_quotes", "family": "null-claim filler",
+      "readings": [
+        { "ruling": "asserts", "reading": "Follow the null-row convention: other null-extraction goldens (adv-017, curr-020, hist-015, sci-017, stat-011, …) carry expected_polarity asserts — the field then describes the stance any wrongly-extracted claim would have carried." },
+        { "ruling": "ambiguous-drop", "reading": "expected_extraction is null — there is no claim whose polarity can be expected; leave the row out of the polarity slice." }
+      ],
+      "ambiguity": "Null-extraction row. The negation token is inside the trailing-off proverb ('whatever doesn't kill you'), i.e. quoted-content negation in filler, not a stance toward any checkable claim. The open question is whether a polarity label is meaningful at all on a no-extraction row." },
+    { "id": "curr-013", "category": "current_events", "family": "null-claim filler",
+      "readings": [
+        { "ruling": "asserts", "reading": "Null-row convention (see quote-012): label asserts like the other null-extraction goldens." },
+        { "ruling": "ambiguous-drop", "reading": "No claim, no stance — exclude from the polarity slice." }
+      ],
+      "ambiguity": "Null-extraction venting row; the tokens 'cannot keep up' tripped the negation screen but negate the speaker's own capacity, not any claim." },
+    { "id": "curr-034", "category": "current_events", "family": "null-claim filler",
+      "readings": [
+        { "ruling": "asserts", "reading": "Null-row convention (see quote-012): label asserts like the other null-extraction goldens." },
+        { "ruling": "ambiguous-drop", "reading": "No claim, no stance — exclude from the polarity slice." }
+      ],
+      "ambiguity": "Null-extraction venting row; \"can't even list it all\" is self-directed negation inside filler, no checkable claim in the utterance." },
+    { "id": "geo-017", "category": "geography_civics", "family": "null-claim filler",
+      "readings": [
+        { "ruling": "asserts", "reading": "Null-row convention (see quote-012): label asserts like the other null-extraction goldens." },
+        { "ruling": "ambiguous-drop", "reading": "No claim, no stance — exclude from the polarity slice." }
+      ],
+      "ambiguity": "Null-extraction preference row; 'could never live somewhere cold' / 'no thank you' are personal-preference negations, no claim extracted." },
+    { "id": "geo-034", "category": "geography_civics", "family": "null-claim filler",
+      "readings": [
+        { "ruling": "asserts", "reading": "Null-row convention (see quote-012): label asserts like the other null-extraction goldens." },
+        { "ruling": "ambiguous-drop", "reading": "No claim, no stance — exclude from the polarity slice." }
+      ],
+      "ambiguity": "Null-extraction anecdote row; 'no idea how any of this works' is self-deprecation, no claim extracted." },
+    { "id": "hist-034", "category": "historical_events", "family": "null-claim filler",
+      "readings": [
+        { "ruling": "asserts", "reading": "Null-row convention (see quote-012): label asserts like the other null-extraction goldens." },
+        { "ruling": "ambiguous-drop", "reading": "No claim, no stance — exclude from the polarity slice." }
+      ],
+      "ambiguity": "Null-extraction complaint row; \"don't teach history right\" / 'know nothing' negate inside a vague opinion with no determinable referent — that vagueness is why extraction is null, and it makes any polarity label equally undetermined." },
+    { "id": "sci-020", "category": "science_health", "family": "null-claim filler",
+      "readings": [
+        { "ruling": "asserts", "reading": "Null-row convention (see quote-012): label asserts like the other null-extraction goldens." },
+        { "ruling": "ambiguous-drop", "reading": "No claim, no stance — exclude from the polarity slice. A question arguably has NO polarity even in principle." }
+      ],
+      "ambiguity": "Null-extraction QUESTION row ('is coffee actually bad for you or what?'); 'never keep track' tripped the screen. Questions assert nothing — whether the asserts convention should stretch to interrogatives is exactly the open call." },
+    { "id": "sci-034", "category": "science_health", "family": "null-claim filler",
+      "readings": [
+        { "ruling": "asserts", "reading": "Null-row convention (see quote-012): label asserts like the other null-extraction goldens." },
+        { "ruling": "ambiguous-drop", "reading": "No claim, no stance — exclude from the polarity slice. A question arguably has NO polarity even in principle." }
+      ],
+      "ambiguity": "Null-extraction QUESTION row ('feed a cold starve a fever, or the other way?'); 'can never remember' tripped the screen. Same interrogative question as sci-020 — whatever is ruled there should rule here." },
+    { "id": "stat-010", "category": "statistics", "family": "null-claim filler",
+      "readings": [
+        { "ruling": "asserts", "reading": "Null-row convention (see quote-012): label asserts like the other null-extraction goldens." },
+        { "ruling": "ambiguous-drop", "reading": "No claim, no stance — exclude from the polarity slice." }
+      ],
+      "ambiguity": "Null-extraction vibes row; \"something doesn't add up\" negates inside pure opinion, no claim extracted." },
+    { "id": "stat-034", "category": "statistics", "family": "null-claim filler",
+      "readings": [
+        { "ruling": "asserts", "reading": "Null-row convention (see quote-012): label asserts like the other null-extraction goldens." },
+        { "ruling": "ambiguous-drop", "reading": "No claim, no stance — exclude from the polarity slice." }
+      ],
+      "ambiguity": "Null-extraction aphorism row; \"I don't know man\" is discourse filler, no claim extracted." },
+
+    { "id": "geo-001", "category": "geography_civics", "family": "negation in supporting clause",
+      "readings": [
+        { "ruling": "asserts", "reading": "The speaker affirms the extracted claim (Canberra is the capital); 'not Sydney' is a contrastive aside about a DIFFERENT proposition than the one recorded." },
+        { "ruling": "denies", "reading": "Read the utterance's denial half ('not Sydney') as operative: the speaker is denying 'Sydney is the capital of Australia'. A denies label would describe stance toward that unrecorded positive proposition, not toward the recorded claim." }
+      ],
+      "ambiguity": "Contrastive 'X, not Y' carries an assertion and a denial in one breath. The recorded claim is the positive half; the negation token belongs to the contrast clause." },
+    { "id": "geo-009", "category": "geography_civics", "family": "negation in supporting clause",
+      "readings": [
+        { "ruling": "asserts", "reading": "The speaker affirms the extracted claim (Russia is the largest); \"it's not even close\" is an intensifier, not a stance reversal." },
+        { "ruling": "denies", "reading": "A denies label is only coherent if the operative proposition is taken to be the closeness claim ('the margin is close') that the intensifier denies — not the recorded largest-country claim." }
+      ],
+      "ambiguity": "Negation token lives in an intensifying tag clause; the recorded claim itself is affirmed in positive form." },
+    { "id": "stat-002", "category": "statistics", "family": "negation in supporting clause",
+      "readings": [
+        { "ruling": "asserts", "reading": "The speaker affirms the extracted 50%-unemployment figure; \"half the country just couldn't find work\" restates the same statistic — content-level negation, not stance." },
+        { "ruling": "denies", "reading": "A denies label would require treating the restatement as a denial of 'half the country could find work' — i.e. reading the claim-content negation as speaker stance." }
+      ],
+      "ambiguity": "The Task-0 flag class exactly: negation inside the claim's own paraphrase ('couldn't find work') vs speaker denial. The recorded claim string is positive-form." },
+    { "id": "stat-003", "category": "statistics", "family": "negation in supporting clause",
+      "readings": [
+        { "ruling": "asserts", "reading": "The speaker affirms the extracted $7.25-in-2024 claim; \"hadn't moved in like fifteen years\" is a supporting restatement of the same fact." },
+        { "ruling": "denies", "reading": "A denies label would require taking 'the minimum wage moved' as the operative proposition being denied — restating the supporting clause as the claim." }
+      ],
+      "ambiguity": "Negation token in a supporting clause that AGREES with the recorded positive-form claim; both halves of the utterance point at the same fact from opposite polarities." },
+    { "id": "person-011", "category": "person_claims", "family": "negation in supporting clause",
+      "readings": [
+        { "ruling": "asserts", "reading": "The speaker affirms the extracted six-championships claim; 'never lost one' is a supporting restatement (6-0 in Finals) in negative form." },
+        { "ruling": "denies", "reading": "A denies label would require taking 'Jordan lost a Finals' as the operative proposition being denied — the canonical-positive-plus-denies shape (cf. geo-030's recorded label, not controlling) applied to the supporting clause rather than the recorded claim." }
+      ],
+      "ambiguity": "Positive claim plus a negative-form restatement in the same breath; the mechanical pass could not tell which proposition the polarity field should describe." },
+    { "id": "person-018", "category": "person_claims", "family": "negation in supporting clause",
+      "readings": [
+        { "ruling": "asserts", "reading": "The speaker affirms the extracted dropout claim ('Bill Gates dropped out of high school'); 'never even finished school' restates it in negative form." },
+        { "ruling": "denies", "reading": "Canonical-positive shape: restate as 'Bill Gates finished high school' and record the utterance as its denial. Note the recorded claim string and ground_truth_verdict (False, on the dropout claim) are keyed to the ASSERTIVE reading — a denies ruling here implicates more than the polarity field." }
+      ],
+      "ambiguity": "'Dropped out' (positive-form claim) and 'never finished' (negation) are the same proposition stated both ways; which one the polarity field should key on is the open call." },
+    { "id": "sci-010", "category": "science_health", "family": "negation in supporting clause",
+      "readings": [
+        { "ruling": "asserts", "reading": "The speaker affirms the extracted causal claim ('sugar makes kids hyper' is given as the reason); 'no sugar for the kids' is an imperative house rule, not a stance toward the claim." },
+        { "ruling": "denies", "reading": "A denies label would require reading the imperative negation as the operative move — but the negation targets the speaker's own policy ('no sugar after seven'), not the causal proposition recorded as the claim." }
+      ],
+      "ambiguity": "Imperative negation ('no sugar…') precedes an explicitly asserted causal claim; the negation token is behavioral, not propositional." },
+    { "id": "sci-015", "category": "science_health", "family": "negation in supporting clause",
+      "readings": [
+        { "ruling": "asserts", "reading": "The speaker affirms the extracted claim (ibuprofen is an anti-inflammatory); \"it's not just a painkiller\" is a contrast clause reinforcing it." },
+        { "ruling": "denies", "reading": "A denies label would require taking 'ibuprofen is just a painkiller' as the operative proposition being denied — the contrast clause, not the recorded claim." }
+      ],
+      "ambiguity": "Contrastive negation ('not just X') supports the recorded positive claim; assertion and denial coexist pointing at the same fact." },
+    { "id": "sci-023", "category": "science_health", "family": "negation in supporting clause",
+      "readings": [
+        { "ruling": "asserts", "reading": "The speaker affirms the extracted claim ('the flu shot literally gives you the flu, that's how they work') — the negation (\"I don't get flu shots\") describes their own behavior, offered as a consequence of the claim." },
+        { "ruling": "denies", "reading": "A denies label would require taking 'I get flu shots' as the operative proposition being denied — a personal-behavior statement, not the recorded causal claim." }
+      ],
+      "ambiguity": "First-person behavioral negation ('I don't get…') wrapped around an emphatically asserted causal claim; the token that tripped the screen is not about the claim." },
+    { "id": "sci-025", "category": "science_health", "family": "negation in supporting clause",
+      "readings": [
+        { "ruling": "asserts", "reading": "The speaker affirms the extracted claim (humans evolved from chimps); 'and then we weren't' is narrative content inside their telling of it." },
+        { "ruling": "denies", "reading": "A denies label would require reading the trailing \"we weren't [chimps]\" as denial of a proposition — but it narrates the claimed transition itself, i.e. content-level negation." }
+      ],
+      "ambiguity": "The negation is inside the speaker's own narrative of the claim they are affirming; no proposition is being denied by the speaker." },
+    { "id": "sci-029", "category": "science_health", "family": "negation in supporting clause",
+      "readings": [
+        { "ruling": "asserts", "reading": "The speaker affirms the extracted danger claim ('MSG is dangerous, basically poison'); 'never eat anything with MSG' is imperative advice built on it." },
+        { "ruling": "denies", "reading": "A denies label would require reading the imperative negation as the operative move — but it commands behavior; it does not deny any proposition." }
+      ],
+      "ambiguity": "Imperative negation ('never eat…') plus an emphatic positive-form danger claim — same shape as sci-010; whatever is ruled there should rule here." },
+    { "id": "hist-033", "category": "historical_events", "family": "negation in supporting clause",
+      "readings": [
+        { "ruling": "asserts", "reading": "The speaker affirms the extracted causal myth (Parks refused because her feet were tired); \"that's why she didn't get up\" restates the refusal — the negation IS the claim's content (a refusal), not a stance." },
+        { "ruling": "denies", "reading": "A denies label would require taking 'Parks got up / gave up her seat' as the operative proposition being denied — restating the event's content as the claim." }
+      ],
+      "ambiguity": "The claimed event is itself a negative act (refusing / not getting up), so negation tokens are unavoidable in ANY assertive telling of it; content-negation vs stance is the exact Task-0 ambiguity class." },
+    { "id": "quote-007", "category": "attributed_quotes", "family": "negation in supporting clause",
+      "readings": [
+        { "ruling": "asserts", "reading": "The speaker affirms the extracted ATTRIBUTION claim (JFK said this); the negation ('ask not…') is inside the quoted words and inert to the speaker's stance toward the attribution." },
+        { "ruling": "denies", "reading": "A denies label is only reachable by keying polarity on the quoted content's negation rather than on the attribution claim actually recorded. Possibly relevant, not controlling: ADJUDICATIONS.md (pol-001 correction, 2026-08-12) records 'an approving quotation is a net assertion' for a speaker quoting a claim approvingly." }
+      ],
+      "ambiguity": "Quoted-content negation vs speaker stance: the checkable claim is the attribution (asserted in positive form); the negation token belongs to Kennedy's words, not the speaker's move." },
+    { "id": "quote-015", "category": "attributed_quotes", "family": "negation in supporting clause",
+      "readings": [
+        { "ruling": "asserts", "reading": "The speaker affirms the extracted attribution claim (Washington said 'I cannot tell a lie'); the negation is inside the quoted words. The row's ground_truth_verdict (False — apocryphal) is about the attribution, separate from polarity." },
+        { "ruling": "denies", "reading": "A denies label is only reachable by keying polarity on the quoted content ('cannot tell a lie') rather than the attribution claim recorded. Same quoted-negation shape as quote-007 — whatever is ruled there should rule here. ('I mean that's the founding story' adds a whiff of narrative distance, which is the only stance wrinkle beyond quote-007.)" }
+      ],
+      "ambiguity": "Negation inside quoted words on an attribution claim, plus light story-framing distance ('the founding story'); stance toward the attribution vs content of the quote." },
+
+    { "id": "adv-016", "category": "adversarial", "family": "negative-proposition claim",
+      "readings": [
+        { "ruling": "asserts", "reading": "The recorded claim string is ITSELF negative ('A duck's quack does not echo.') and the speaker asserts exactly that proposition ('it just doesn't, that's real') — stance toward the recorded string is assertive." },
+        { "ruling": "denies", "reading": "Canonical-positive shape: restate as 'A duck's quack echoes' and record polarity denies (the shape geo-030/geo-031 use — factual cite, not controlling). NOTE: this micro-pass only writes the polarity field; a denies ruling here would leave the negative claim string and its ground_truth_verdict (False, on the negative string) keyed to the other convention — flag for a follow-up edit rather than ruling denies alone." }
+      ],
+      "ambiguity": "The Task-0 example class verbatim: claim-content negation vs speaker denial. The golden claim string carries the negation itself, so 'asserts the negative string' and 'denies the positive form' describe the same utterance." },
+    { "id": "adv-026", "category": "adversarial", "family": "negative-proposition claim",
+      "readings": [
+        { "ruling": "asserts", "reading": "The recorded claim string is negative ('Honey never spoils.') and the speaker asserts it emphatically ('sounds fake but it's real') — stance toward the recorded string is assertive." },
+        { "ruling": "denies", "reading": "Canonical-positive shape: restate as 'Honey spoils' + polarity denies. Same follow-up-edit caveat as adv-016: ground_truth_verdict (True) is currently the verdict on the NEGATIVE string; flipping conventions via polarity alone would invert what the row means." }
+      ],
+      "ambiguity": "This row is the example named in the Task-0 commit ('honey never goes bad: claim-content negation vs speaker denial'). The negation is the claim's content; the speaker's stance toward it is affirmative." },
+    { "id": "sci-012", "category": "science_health", "family": "negative-proposition claim",
+      "readings": [
+        { "ruling": "asserts", "reading": "The recorded claim string is negative ('Lightning never strikes the same place twice.') and the speaker asserts it as folk wisdom — stance toward the recorded string is assertive." },
+        { "ruling": "denies", "reading": "Canonical-positive shape: restate as 'Lightning strikes the same place twice' + polarity denies. Same caveat as adv-016: ground_truth_verdict (False) is keyed to the negative string; a polarity-only denies would need the companion string/verdict edit." }
+      ],
+      "ambiguity": "Claim-content negation vs speaker denial on a negative-form myth; same class as adv-016/adv-026 — whatever is ruled there should rule here." },
+    { "id": "hist-029", "category": "historical_events", "family": "negative-proposition claim",
+      "readings": [
+        { "ruling": "asserts", "reading": "The recorded claim string carries its own contrast-negation ('…states' rights, not slavery.') and the speaker asserts that compound proposition — stance toward the recorded string is assertive." },
+        { "ruling": "denies", "reading": "Read the operative move as denying 'the Civil War was about slavery' (positive form + denies). Factual cite, not controlling: geo-029 ('a republic, not a democracy'), the same compound 'X, not Y' shape, carries expected_polarity denies in the golden set." }
+      ],
+      "ambiguity": "Compound 'X, not Y' claim where the negation is load-bearing content AND a denial of a well-known positive proposition; the golden set's closest sibling (geo-029) is labeled denies while this row's Misleading verdict is keyed to the compound string as recorded." },
+
+    { "id": "adv-019", "category": "adversarial", "family": "hedged / self-corrected",
+      "readings": [
+        { "ruling": "asserts", "reading": "Net-assertion reading: the row's own adjudication_note already rules that the load-bearing claim under the 'just asking questions' hedge is the faked-landing claim itself — on that reading the hedge is laundering, and the speaker's net stance toward the claim is assertive." },
+        { "ruling": "denies", "reading": "Literal reading: the speaker explicitly disclaims asserting it (\"I'm not saying it's true\") and attributes the claim to others ('a lot of people are saying'). Labeling this denies would stretch the field (the speaker isn't denying the claim either); the literal reading arguably points at ambiguous-drop as much as denies." }
+      ],
+      "ambiguity": "Hedge-laundering: explicit self-negation of assertion ('I'm not saying it's true') wrapped around a promoted claim. The verdict-level ruling (extract and rule the claim) is settled in the row's note; whether the POLARITY field should record net-assertion or the literal distancing is not." },
+    { "id": "curr-003", "category": "current_events", "family": "hedged / self-corrected",
+      "readings": [
+        { "ruling": "asserts", "reading": "Net move: the speaker lands on asserting the LA claim ('I remember watching the LA stuff'); 'wait no' negates their own previous thought (discourse-level self-correction INTO the claim), and 'right' is a confirmation-seeking tag, not a retraction." },
+        { "ruling": "denies", "reading": "A mechanical read keys on the 'no' adjacent to the claim and the interrogative tag ('right?') and treats the utterance as not-asserted — closer to uncertainty than denial; as with adv-019, the literal reading arguably points at ambiguous-drop as much as denies." }
+      ],
+      "ambiguity": "Self-correction negation ('wait no') plus a question tag: the negation targets the speaker's own prior thought, not the claim, but the tag softens the assertion below a flat statement." },
+    { "id": "curr-011", "category": "current_events", "family": "hedged / self-corrected",
+      "readings": [
+        { "ruling": "asserts", "reading": "Net move: the speaker wobbles ('um, wait no') and then re-affirms ('yeah Russia hosted the 2022 one') — the negation targets their own hesitation, and the utterance ends in a flat assertion of the recorded claim." },
+        { "ruling": "denies", "reading": "A mechanical read keys on the mid-utterance 'no' as negating the Russia claim it interrupts. Same self-correction shape as curr-003 — whatever is ruled there should rule here." }
+      ],
+      "ambiguity": "Mid-utterance self-correction negation immediately reversed by re-affirmation; the 'no' is discourse repair, not stance, but it sits directly against the claim text." }
+  ]
+}

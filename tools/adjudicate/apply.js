@@ -13,11 +13,21 @@
 // source_of_truth?, skip? }. `key` ties back to the queue entry (provenance/transcript).
 // Skipped decisions are ignored. Decisions with a null verdict graduate as null-extraction
 // echo/opinion cases (schema: no verdict ⇒ no claim).
+//
+// POLARITY decisions ({ key: "pol::<id>", mode: "polarity", polarity, note? }) take a
+// separate path: they RULE ON an existing golden row instead of appending one. The write
+// is surgical — only the ruled row's line changes (expected_polarity appended before the
+// closing brace, matching the 229 already-labeled rows); every other byte of the file is
+// preserved. Same explicit-resolution safety as graduations: resolved:false is refused,
+// and a row already carrying the field is never clobbered (which is also idempotency).
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildGoldenEntry, nextId, prefixForCategory, alreadyGraduated } from "./lib.js";
+import {
+  buildGoldenEntry, nextId, prefixForCategory, alreadyGraduated,
+  applyPolarityToLine, isPolarityRuling,
+} from "./lib.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..", "..");
@@ -56,7 +66,37 @@ function loadCategory(category) {
 
 const wrote = [];
 const skipped = [];
+const ruled = [];
+
+// ── Polarity pass FIRST (surgical in-place line edits), so the graduation pass below
+// re-reads files that already carry the fresh rulings.
+const polarityDecisions = decisions.filter((d) => d.mode === "polarity");
+const polarityFiles = new Map(); // abs path -> { lines, dirty }
+for (const d of polarityDecisions) {
+  if (d.skip) { skipped.push({ key: d.key, why: "skipped in cockpit" }); continue; }
+  if (d.resolved === false) { skipped.push({ key: d.key, why: "never resolved in cockpit (suggestion only)" }); continue; }
+  if (!isPolarityRuling(d.polarity)) { skipped.push({ key: d.key, why: `unknown polarity ruling ${JSON.stringify(d.polarity)}` }); continue; }
+  const qe = queueByKey.get(d.key);
+  if (!qe || qe.mode !== "polarity") { skipped.push({ key: d.key, why: "no matching polarity queue entry" }); continue; }
+  const file = path.join(goldenDir, qe.category + ".jsonl");
+  if (!existsSync(file)) { skipped.push({ key: d.key, why: `golden file missing: ${qe.category}.jsonl` }); continue; }
+  if (!polarityFiles.has(file)) polarityFiles.set(file, { lines: readFileSync(file, "utf8").split("\n"), dirty: false });
+  const f = polarityFiles.get(file);
+  const idx = f.lines.findIndex((l) => { if (!l.trim()) return false; try { return JSON.parse(l).id === qe.goldenId; } catch { return false; } });
+  if (idx < 0) { skipped.push({ key: d.key, why: `row ${qe.goldenId} not found in ${qe.category}.jsonl` }); continue; }
+  const res = applyPolarityToLine(f.lines[idx], d.polarity, d.note);
+  if (!res.changed) { skipped.push({ key: d.key, why: `${qe.goldenId}: ${res.reason}` }); continue; }
+  f.lines[idx] = res.line;
+  f.dirty = true;
+  ruled.push({ id: qe.goldenId, category: qe.category, ruling: d.polarity });
+}
+if (!dryRun) {
+  for (const [file, f] of polarityFiles) if (f.dirty) writeFileSync(file, f.lines.join("\n"));
+}
+
+// ── Graduation pass (append path) — polarity decisions never reach it.
 for (const d of decisions) {
+  if (d.mode === "polarity") continue; // handled above; must never append
   if (d.skip) { skipped.push({ key: d.key, why: "skipped in cockpit" }); continue; }
   if (d.resolved === false) { skipped.push({ key: d.key, why: "never resolved in cockpit (suggestion only)" }); continue; }
   if (!d.category || !prefixForCategory(d.category)) { skipped.push({ key: d.key, why: `unknown category ${d.category}` }); continue; }
@@ -83,6 +123,7 @@ if (!dryRun) {
   }
 }
 
-console.error(`apply${dryRun ? " (dry-run)" : ""}: ${wrote.length} entr(ies) appended, ${skipped.length} skipped`);
+console.error(`apply${dryRun ? " (dry-run)" : ""}: ${wrote.length} entr(ies) appended, ${ruled.length} polarity ruling(s) written, ${skipped.length} skipped`);
+for (const r of ruled) console.error(`  ~ ${r.id} expected_polarity=${r.ruling === "ambiguous-drop" ? "null (ambiguous-drop)" : r.ruling}`);
 for (const w of wrote) console.error(`  + ${w.id} [${w.verdict}] ${JSON.stringify(w.claim)}`);
 for (const s of skipped) console.error(`  · skip ${s.key || "?"}: ${s.why}`);

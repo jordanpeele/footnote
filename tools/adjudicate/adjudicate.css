@@ -66,3 +66,11 @@ kbd { background: rgba(255,255,255,.08); border: 1px solid var(--line); border-r
   padding: 0 5px; font-size: 11px; font-family: ui-monospace, Menlo, monospace; }
 b { color: var(--ink); }
 #status { margin-top: 4px; }
+
+/* polarity micro-pass cards */
+#polarity-readings { font-size: 13px; background: rgba(110, 168, 254, .06);
+  border: 1px solid rgba(110, 168, 254, .3); border-radius: 6px; padding: 8px 10px; margin-bottom: 12px; }
+.pol-ambiguity { color: var(--accent); margin-bottom: 8px; }
+.pol-reading { color: #cfd4e0; margin-top: 6px; padding-left: 10px; border-left: 2px solid var(--line); }
+.pol-reading b { color: var(--ink); }
+#extraction[readonly] { opacity: .75; border-style: dashed; }
