@@ -112,6 +112,18 @@ function notFound(res) { res.statusCode = 404; res.setHeader("content-type", "te
    their pipeline events here (localhost-gated client-side too); each POST body is one
    JSON event, appended as JSONL with a server receive-timestamp. ---- */
 const FT_LOG = process.env.FOOTNOTE_FIELDTEST_LOG || null;
+/* Size guard (packet 5de): the sink appends forever — a runaway client (or a long run)
+   can grow the JSONL without bound. When the active log crosses FT_MAX_BYTES it is
+   rotated once to <name>.1 (clobbering any previous .1 — single rotation, no dependency)
+   and appending continues on a fresh file. */
+const FT_MAX_BYTES = 50 * 1024 * 1024;
+function ftRotateIfNeeded() {
+  try {
+    if (fs.statSync(FT_LOG).size < FT_MAX_BYTES) return;
+    fs.renameSync(FT_LOG, FT_LOG + ".1");
+    console.log(`fieldtest log exceeded ${Math.round(FT_MAX_BYTES / (1024 * 1024))}MB — rotated to ${FT_LOG}.1`);
+  } catch {}   // ENOENT before the first event — nothing to rotate
+}
 
 /* ---- R42: non-loopback addresses (self-host only — Vercel never runs this server).
    /control uses this to offer a ready-made tailnet-origin OPERATOR URL: hand-assembled
@@ -137,6 +149,7 @@ async function ftSink(req, res) {
   try { ev = JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch {}
   if (ev && typeof ev === "object") {
     ev.srv_t = Date.now();
+    ftRotateIfNeeded();
     try { fs.appendFileSync(FT_LOG, JSON.stringify(ev) + "\n"); } catch {}
   }
   res.statusCode = 204; res.end();
