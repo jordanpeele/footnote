@@ -149,6 +149,65 @@ test("orderForSitting makes same-suggestion runs contiguous, policy families gro
   }
 });
 
+// ---- AUTHORED candidate handling (packet 3a) -----------------------------------------
+test("dedupeDrafts propagates the AUTHORED marker, polarity, note, and source", () => {
+  const note = "AUTHORED CANDIDATE (packet 3a) — provisional label. Recommend: False · polarity_traps. Expected polarity: denies. Evidence: NASA. Trap: denial-of-false.";
+  const rows = [
+    { id: "auth-pol-001", authored: true, expected_extraction: "The Great Wall of China is visible from the Moon with the naked eye.", transcript_snippet: "the Great Wall is not visible from the Moon", expected_polarity: "denies", adjudication_note: note, source_of_truth: "NASA" },
+    { id: "d1", expected_extraction: "Gold is worth more than silver", transcript_snippet: "gold", adjudication_note: "pipeline said True @ conf 0.98" },
+  ];
+  const out = dedupeDrafts(rows);
+  const auth = out.find((e) => e.authored);
+  assert.ok(auth, "authored marker propagates");
+  assert.equal(auth.expected_polarity, "denies");
+  assert.equal(auth.hintNote, note, "authored note surfaces as the hint note");
+  assert.equal(auth.sourceOfTruth, "NASA");
+  assert.equal(auth.suggestedVerdict, "False", "Recommend: line parsed as suggestion");
+  assert.equal(auth.suggestedCategory, "polarity_traps");
+  assert.equal(sittingCluster(auth), "AUTHORED · polarity_traps · False");
+  const field = out.find((e) => !e.authored);
+  assert.ok(!sittingCluster(field).startsWith("AUTHORED"), "field cards unmarked");
+  assert.equal(field.authored, undefined);
+});
+
+test("orderForSitting keeps AUTHORED cards as their own contiguous block per category", () => {
+  const mk = (key, cat, verdict, authored) => ({
+    key, claim: key, repeatCount: 1, sourceDrafts: [key],
+    suggestedCategory: cat, suggestedVerdict: verdict, authored: authored || undefined,
+  });
+  const out = orderForSitting([
+    mk("auth-q-1", "attributed_quotes", "False", true),
+    mk("field-q-1", "attributed_quotes", "False"),
+    mk("auth-q-2", "attributed_quotes", "True", true),
+    mk("field-q-2", "attributed_quotes", "False"),
+    mk("auth-pol-1", "polarity_traps", "True", true),
+  ]);
+  assert.deepEqual(out.map((e) => e.key),
+    ["field-q-1", "field-q-2", "auth-q-2", "auth-q-1", "auth-pol-1"],
+    "field cards first, then AUTHORED block (verdict-ordered), per category");
+  const labels = out.map(sittingCluster);
+  const seen = new Set();
+  for (let i = 0; i < labels.length; i++) {
+    if (i > 0 && labels[i] !== labels[i - 1]) assert.ok(!seen.has(labels[i]), `cluster ${labels[i]} split`);
+    seen.add(labels[i]);
+  }
+});
+
+test("buildGoldenEntry carries expected_polarity + AUTHORED provenance for authored cards", () => {
+  const qe = {
+    key: "claim::gw", canonical: "The Great Wall of China is visible from the Moon with the naked eye.",
+    sampleTranscript: "the Great Wall is not visible from the Moon", repeatCount: 1,
+    sourceDrafts: ["auth-pol-001"], authored: true, expected_polarity: "denies",
+  };
+  const e = buildGoldenEntry({ verdict: "False", category: "polarity_traps", note: "ratified", source_of_truth: "NASA" }, qe, "pol-013");
+  assert.equal(e.expected_polarity, "denies", "polarity survives graduation");
+  assert.match(e.adjudication_note, /ratified from AUTHORED candidate auth-pol-001/);
+  // non-authored entries keep the exact 7-key schema — no stray polarity field
+  const plain = buildGoldenEntry({ verdict: "True", category: "statistics", note: "n", source_of_truth: "s" },
+    { canonical: "X", sampleTranscript: "t", repeatCount: 1, sourceDrafts: ["d1"] }, "stat-036");
+  assert.ok(!("expected_polarity" in plain));
+});
+
 // ---- categoryNeeds -------------------------------------------------------------------
 test("categoryNeeds computes the n>=30 gap per category", () => {
   const stats = categoryNeeds({ person_claims: 20, polarity_traps: 12, statistics: 35 });
@@ -168,9 +227,9 @@ test("prep.js produces a clustered, hinted, gap-annotated queue.json", () => {
   try {
     execFileSync("node", [path.join(TOOLDIR, "prep.js"), "--out", out], { cwd: ROOT });
     const q = JSON.parse(readFileSync(out, "utf8"));
-    assert.equal(q.draft_count, 111, "all five drafts files ingested (99 field + 8 d18pilot2 + 4 runtest)");
+    assert.equal(q.draft_count, 141, "all six drafts files ingested (99 field + 8 d18pilot2 + 4 runtest + 30 authored)");
     assert.ok(q.unique_count < q.draft_count, "dedup shrinks the list");
-    assert.ok(q.unique_count >= 60 && q.unique_count <= 75, `~68 unique claims, got ${q.unique_count}`);
+    assert.ok(q.unique_count >= 90 && q.unique_count <= 105, `~98 unique claims, got ${q.unique_count}`);
     const thiel = q.entries.find((e) => (e.claim || "").toLowerCase().startsWith("peter thiel"));
     assert.ok(thiel, "Thiel family present");
     assert.equal(thiel.repeatCount, 26, "26 Thiel repeats collapse to one card");
@@ -190,6 +249,26 @@ test("prep.js produces a clustered, hinted, gap-annotated queue.json", () => {
       prev = e.cluster;
     }
     assert.ok(Array.isArray(q.clusters) && q.clusters.length > 5, "cluster summary present");
+
+    // AUTHORED candidates (packet 3a): all 30 present, marked, never folded into field
+    // cards, and clustered under AUTHORED-prefixed labels with their evidence note +
+    // cited source + polarity riding along for the operator to ratify.
+    const authored = q.entries.filter((e) => e.authored);
+    assert.equal(authored.length, 30, "12 attributed_quotes + 18 polarity_traps authored candidates");
+    assert.equal(q.authored_count, 30, "queue-level authored count");
+    for (const e of authored) {
+      assert.ok(e.cluster.startsWith("AUTHORED · "), `${e.sourceDrafts[0]} clustered as AUTHORED`);
+      assert.ok(e.hintNote && e.hintNote.includes("AUTHORED CANDIDATE"), "evidence note surfaces in hint panel");
+      assert.ok(e.sourceOfTruth, "cited source rides along");
+      assert.ok(["asserts", "denies"].includes(e.expected_polarity), "polarity rides along");
+      assert.ok(e.suggestedVerdict && e.suggestedCategory, "provisional label pre-seeded as a suggestion");
+      assert.ok(e.sourceDrafts.every((id) => id.startsWith("auth-")), "no fold with field drafts");
+    }
+    assert.equal(authored.filter((e) => e.suggestedCategory === "attributed_quotes").length, 12);
+    assert.equal(authored.filter((e) => e.suggestedCategory === "polarity_traps").length, 18);
+    for (const e of q.entries.filter((e) => !e.authored)) {
+      assert.ok(!e.cluster.startsWith("AUTHORED"), "field cards never marked AUTHORED");
+    }
 
     // golden-gap annotation matches the actual golden files
     assert.equal(q.categoryStats.length, CATEGORIES.length);

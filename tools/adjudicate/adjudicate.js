@@ -117,7 +117,8 @@ function decisionFor(entry) {
       category: entry.suggestedCategory || null,
       extraction: entry.canonical,
       note: "",
-      source_of_truth: "",
+      // AUTHORED candidates carry their cited source; pre-fill it (still editable).
+      source_of_truth: entry.sourceOfTruth || "",
       skip: false,
       resolved: false,  // only Enter/skip/batch set this; unresolved cards never download
     };
@@ -168,7 +169,8 @@ function render() {
   $("cluster-bar").textContent =
     `cluster ${e.cluster || "—"} · card ${state.idx - i0 + 1}/${i1 - i0 + 1}${gapTxt}`;
 
-  $("repeat-badge").textContent = e.repeatCount > 1 ? `×${e.repeatCount} repeats` : "unique";
+  $("repeat-badge").textContent =
+    (e.authored ? "AUTHORED · " : "") + (e.repeatCount > 1 ? `×${e.repeatCount} repeats` : "unique");
   $("resolved-badge").hidden = !isResolved(e);
   $("resolved-badge").textContent = d.skip ? "skipped" : "resolved";
   $("source-drafts").textContent = e.sourceDrafts.join(", ");

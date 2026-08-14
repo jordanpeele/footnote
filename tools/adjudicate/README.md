@@ -44,10 +44,21 @@ golden category's current count vs the n≥30 target — and a `clusters` summar
 
 Each queue entry: `{ key, claim, canonical, sampleTranscript, repeatCount,
 sourceDrafts[], suggestedCategory, suggestedVerdict, pipelineVerdict, hintNote?,
-hintRef?, cluster }`. Suggested category/verdict come from an explicit `Recommend:` line
-in a draft's note or from `hints.json` (the draft's own line wins); the ingest-shaped
-notes only carry the live *pipeline* verdict, surfaced separately as `pipelineVerdict` —
-a HINT, never ground truth.
+hintRef?, cluster, authored?, expected_polarity?, sourceOfTruth? }`. Suggested
+category/verdict come from an explicit `Recommend:` line in a draft's note or from
+`hints.json` (the draft's own line wins); the ingest-shaped notes only carry the live
+*pipeline* verdict, surfaced separately as `pipelineVerdict` — a HINT, never ground
+truth.
+
+**AUTHORED candidates** (packet 3a): drafts files whose rows carry `authored: true`
+(convention: `drafts-authored-*.jsonl`) are author-written claim + *provisional* label
+pairs targeting under-target categories — not session ingests. They join the sitting via
+the same glob but land in their own **`AUTHORED · <category> · <verdict>`** clusters at
+the end of each category block, with the authored evidence/trap note in the amber hint
+panel, the cited source pre-filled (editable), and `expected_polarity` riding along into
+the graduated golden entry. The operator **ratifies label+claim together** — the
+provisional verdict is only ever a pre-seeded suggestion; nothing graduates without an
+explicit Enter/batch, same as every other card.
 
 ### 2–3 · decide (the page)
 

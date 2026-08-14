@@ -12,6 +12,12 @@
 // card. It also counts each golden category file and annotates how many adjudicated
 // cards the category still needs to reach the n>=30 target. Pure logic lives in lib.js;
 // this file is just the I/O around it.
+//
+// AUTHORED candidates: drafts files whose rows carry `authored: true` (convention:
+// drafts-authored-*.jsonl) are author-written claim+provisional-label pairs, not session
+// ingests. The glob picks them up like any drafts file; lib.js routes them into their
+// own AUTHORED-prefixed clusters with the evidence note in the hint panel — the operator
+// ratifies label+claim together, exactly like the rest of the sitting.
 
 import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import path from "node:path";
@@ -82,12 +88,15 @@ for (const c of CATEGORIES) {
 }
 const categoryStats = categoryNeeds(counts);
 
+const authoredCount = entries.filter((e) => e.authored).length;
+
 const queue = {
   generated_at: new Date().toISOString(),
   source_files: draftFiles,
   draft_count: allRows.length,
   unique_count: entries.length,
   hinted_count: hintCount,
+  authored_count: authoredCount,
   categoryStats,
   clusters,
   entries,
@@ -95,6 +104,7 @@ const queue = {
 
 writeFileSync(outPath, JSON.stringify(queue, null, 2) + "\n");
 console.error(`prep: ${allRows.length} drafts across ${draftFiles.length} file(s) -> ${entries.length} unique claim card(s) in ${clusters.length} cluster(s), ${hintCount} hinted`);
+if (authoredCount) console.error(`      ${authoredCount} AUTHORED candidate card(s) (provisional labels — ratify label+claim together)`);
 for (const s of categoryStats.filter((s) => s.needed > 0)) {
   console.error(`      golden gap: ${s.category} ${s.current}/${s.target} (needs ${s.needed})`);
 }

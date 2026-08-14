@@ -132,7 +132,10 @@ function parseArgs(argv) {
   return args;
 }
 
-function loadGolden(categoryFilter) {
+// Exported so the test suite can pin the drafts-exclusion contract (drafts-*.jsonl —
+// including AUTHORED candidate files like drafts-authored-*.jsonl — must never ride
+// along in a run). See test/golden-drafts-exclusion.test.js.
+export function loadGolden(categoryFilter) {
   // drafts-*.jsonl are UNADJUDICATED ingest staging (no ground truth) — they burned ~$2 of
   // spend in calibration #4 by riding along. Runs score goldens only.
   const files = readdirSync(GOLDEN_DIR).filter((f) => f.endsWith(".jsonl") && !f.startsWith("drafts-")).sort();
