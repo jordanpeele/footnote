@@ -5,11 +5,29 @@ session exists to bank the controls evidence sessions 1–2 left open. Target:
 ≤20 minutes start-to-export. Lint first:
 `node tools/session-lint.js docs/D18_PILOT_SESSION_SCRIPT_3.md`
 
+## What's new since this sheet was written (read before arming)
+
+- **W1.3 rolling-window extraction is live.** The client now keeps a rolling
+  ~30-word transcript and extracts claims from the window on a cadence
+  (sentence end / 3.5s ceiling / 1.5s trailing silence), alongside the
+  per-final path. Net effect on this sheet: claims may card slightly
+  EARLIER than sessions 1–2 trained you to expect. Same gates, same 4s
+  veto — nothing else about the protocol changes.
+- **`duplicate_claim` gate events on the dashboard are NORMAL and
+  EXPECTED.** The window and the per-final path both extracting the same
+  claim is the system working correctly — F2 dedupes down to one card.
+  Their ABSENCE during fragmented speech would be the anomaly worth
+  writing down, not their presence.
+- **The every-claim-≥6-words advice is now a nicety, not a hard
+  requirement.** The window catches short phrasings the fragment guard
+  used to drop. Scripted claims on this sheet stay ≥6 words anyway for
+  lint cleanliness; when improvising, a short phrasing is no longer lost.
+
 Standing constraints: science_health only (now CODE-enforced per R57 — but
 stay on the sheet anyway; protocol discipline is the habit that matters) ·
 operator present · 4s veto · kill-switch cycle at start · cap 10 ·
 concurrence verifier · marked receipts · tag every auto-air W/T/A as it
-fires · improvised claims ≥6 words. The attention timer goes on a kitchen
+fires · improvised claims ≥6 words (a nicety since W1.3 — see What's new). The attention timer goes on a kitchen
 timer or the streaming phone — NEVER the `/op` phone (session-2 ops nit).
 
 ## Arm
@@ -74,3 +92,5 @@ Negation ahead; conflicts holding is normal, not failure.
 - [ ] All auto-airs tagged (End Stream prompts if not)
 - [ ] End Stream → export downloads → hand off for the field report
       (denial-watch line + attention × timing + FS-2 render verdict)
+- [ ] Attach the `window_summary` numbers (from the harness log) to the
+      field-report handoff
