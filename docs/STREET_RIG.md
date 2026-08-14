@@ -65,6 +65,32 @@ record did it *with* a human in the loop. The [street protocol](./STREET_PROTOCO
 the operator's rulebook: veto everything, don't air Unverifiable, and if the card text
 doesn't match what was said — skip it.
 
+## Capture — the mic is the street's first filter
+
+The [2026-08-14 run test](./RUN_TEST_FIELD_REPORT_2026-08-14.md) proved the chain can
+deliver a broken capture perfectly: wind on iPhone A's unprotected body mic produced
+18.8 LU of loudness range with gusts at -0.3 dBFS over speech in the -30s, and the
+SRT/relay/OBS path handed every decibel of it to Deepgram intact. The fix starts at the
+mouth, not in software:
+
+- **Wired-mic earbuds or AirPods as Moblin's input.** An inline mic rides inches from
+  the mouth instead of at arm's length, which beats the phone's body mic in wind by a
+  lot — voice-to-wind ratio is mostly a distance game. Plug in (or pair) before going
+  live, then pick the mic in **Moblin's mic picker (Settings → Mic)** — it does not
+  always follow the system default when a route appears mid-session.
+- **Windscreen.** Foam over whatever capsule is live. For produced sessions the real
+  answer is a lav with a proper windscreen; for a run, even the AirPods' in-stem mics
+  under a hood/collar beat bare metal in the airstream.
+- **Sanity check, every session:** after selecting the mic, speak and watch level move
+  in Moblin, then confirm at the Mac end (OBS mixer meter on the relay media source)
+  that it's the earbud audio — cover the phone's body mic and talk; if the meter dips,
+  the wrong mic is live.
+
+Downstream of capture, the [OBS street-audio preset](../tools/street/obs-audio-preset.md)
+(low-shelf wind cut + -6 dBFS limiter on the relay media source) is standing policy —
+it keeps residual rumble and gusts from dominating what BlackHole feeds the pipeline
+and the recording.
+
 ## The bonded uplink (SRTLA)
 
 Single-path SRT dies with the cell signal. The upgrade is
