@@ -1,0 +1,80 @@
+<!doctype html>
+<!-- Footnote demo-GIF capture stage (tools/demo/capture.html).
+     Side-by-side framing of the two REAL demo surfaces for the README GIF:
+       left  — /overlay in a 16:9 "program feed" stage (what OBS composites over video;
+               the gradient backdrop is a labeled stand-in for the stream itself)
+       right — /op in a phone bezel (the operator's thumb)
+     Open as a plain file with the running demo's coordinates:
+       capture.html?base=http://localhost:3400&key=demo-xxxx
+     Nothing here is a product surface — it's staging for an honest recording: both
+     iframes are the live pages of a running `npm run demo`, untouched. -->
+<html lang="en">
+<meta charset="utf-8">
+<title>Footnote — demo capture stage</title>
+<style>
+  :root{
+    --bg:#0b0d11; --panel:#12151c; --line:#232936;
+    --txt:#eef1f4; --dim:#9aa3af; --mut:#7a828f; --fn:#00d68f;
+    --disp:"Archivo","Helvetica Neue",Arial,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font-family:var(--disp);
+    width:1280px;height:680px;overflow:hidden}
+  header{display:flex;align-items:baseline;gap:12px;padding:14px 22px 10px}
+  header .wm{font-weight:800;font-size:18px;letter-spacing:.2px}
+  header .wm sup{color:var(--fn)}
+  header .note{font:500 11px var(--mono);color:var(--mut)}
+  .stage{display:flex;gap:20px;padding:0 22px;align-items:flex-start}
+  .col{display:flex;flex-direction:column;gap:8px}
+  .lbl{font:700 10px var(--mono);color:var(--dim);letter-spacing:.12em;text-transform:uppercase}
+  .lbl b{color:var(--fn)}
+  /* program-feed stage: 16:9, overlay iframe scaled down from a 1080p-ish viewport */
+  .feed{position:relative;width:906px;height:510px;border:1px solid var(--line);
+    border-radius:10px;overflow:hidden;
+    background:
+      radial-gradient(120% 90% at 20% 10%,#1c2431 0%,transparent 60%),
+      radial-gradient(110% 100% at 85% 85%,#131a26 0%,transparent 55%),
+      linear-gradient(160deg,#141926 0%,#0e1219 55%,#0a0d13 100%)}
+  .feed .standin{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font:600 13px var(--mono);color:#39414f;letter-spacing:.14em;text-transform:uppercase}
+  .feed iframe{position:absolute;top:0;left:0;width:1647px;height:927px;border:0;
+    transform:scale(.55);transform-origin:top left}
+  .feed .bug{position:absolute;top:14px;right:16px;display:flex;align-items:center;gap:7px;
+    font:700 11px var(--mono);color:#e6e9ee;letter-spacing:.1em;
+    background:rgba(10,12,17,.55);padding:5px 10px;border-radius:6px}
+  .feed .bug i{width:8px;height:8px;border-radius:50%;background:#ff4b57;display:inline-block}
+  /* operator phone */
+  .phone{width:312px;height:604px;border:1px solid var(--line);border-radius:22px;
+    overflow:hidden;background:#000;padding:6px}
+  .phone .scr{width:100%;height:100%;border-radius:16px;overflow:hidden;background:var(--bg)}
+  .phone iframe{width:390px;height:740px;border:0;transform:scale(.7692);transform-origin:top left}
+</style>
+<body>
+  <header>
+    <span class="wm">Footnote<sup>1</sup></span>
+    <span class="note">npm run demo — replayed field data · zero API keys · real surfaces</span>
+  </header>
+  <div class="stage">
+    <div class="col">
+      <span class="lbl">program feed — <b>/overlay</b> (OBS browser source)</span>
+      <div class="feed">
+        <div class="standin">your live video goes here</div>
+        <iframe id="ov" title="overlay"></iframe>
+        <div class="bug"><i></i>LIVE</div>
+      </div>
+    </div>
+    <div class="col">
+      <span class="lbl">operator — <b>/op</b> (any phone)</span>
+      <div class="phone"><div class="scr"><iframe id="op" title="operator"></iframe></div></div>
+    </div>
+  </div>
+  <script>
+    const q = new URLSearchParams(location.search);
+    const base = q.get("base") || "http://localhost:3400";
+    const key = q.get("key") || "";
+    document.getElementById("ov").src = base + "/overlay?room=demo&layout=landscape";
+    document.getElementById("op").src = base + "/op?room=demo&key=" + encodeURIComponent(key);
+  </script>
+</body>
+</html>

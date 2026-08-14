@@ -1,46 +1,50 @@
 {
-  "$comment": "Footnote demo fixture — real cards replayed from the public field record (docs/FIELD_TEST_2026-08-08.md, docs/FIELD_TEST_2026-08-10_STREET.md, eval/golden drafts, eval/ADJUDICATION_QUEUE.md). Verdicts and corrections match those records; no invented facts, no personal content. The four-minute-mile card is FS-1 shown CORRECTLY: the displayed claim keeps the speaker's negation and the verdict is of the claim as spoken.",
+  "$comment": "Footnote demo fixture — real cards replayed from the public field record across the project's eras: the first manual field test (docs/FIELD_TEST_2026-08-08.md), the PASS-2 TESTAIR session (same doc, addendum), the street session (docs/FIELD_TEST_2026-08-10_STREET.md), and the D18 supervised auto-air pilot (docs/D18_PILOT_FIELD_REPORT_2026-08-12.md). Verdicts, confidences and framings match those records; corrections/sources follow the adjudicated notes in eval/golden. No invented cards, no operator-private data (raw session JSONLs are gitignored; everything here is quoted in the docs). demo.mode drives how tools/demo/run.js replays each card: 'operator' = veto window then a human-path air (op:cmd); 'auto' = D18 choreography (4s veto countdown, then the machine airs it — AUTO-marked on receipts); 'testair' = PASS-2 choreography (settled verdict airs immediately, TEST watermark); 'hold' = D4 person-claim posture (MANUAL tag, never machine-aired; demo holds it for a human); 'skip' = the R41 street norm (don't air what we couldn't verify). Dispositions are demo choreography — e.g. the Thiel card was operator-aired in its original 2026-08-08 session; here it demonstrates the person-hold posture that D4 enforces on the auto path. The four-minute-mile card is FS-1 shown CORRECTLY: the displayed claim keeps the speaker's negation and the verdict is of the claim as spoken. The measles card is one of the first machine-aired polarity-applied verdicts (D17): the canonical claim is False, the speaker DENIED it, the overlay rendered the speaker's framing.",
   "room": "demo",
   "cards": [
     {
-      "claim": "Donald Trump is the president of the United States.",
-      "canonical": "Donald Trump is the president of the United States",
+      "claim": "Gold is worth more than silver.",
+      "canonical": "Gold is worth more than silver.",
       "verdict": "True",
       "confidence": 0.98,
-      "correction": "Correct as spoken.",
-      "harm_class": "person_public",
-      "source": { "name": "whitehouse.gov", "url": "https://www.whitehouse.gov/administration/", "tier": 3 },
-      "citations": ["https://www.whitehouse.gov/administration/"]
-    },
-    {
-      "claim": "The president of the United States is Peter Thiel.",
-      "canonical": "Peter Thiel is the president of the United States",
-      "verdict": "False",
-      "confidence": 0.99,
-      "correction": "The president of the United States is Donald Trump.",
-      "harm_class": "person_public",
-      "source": { "name": "AP", "url": "https://apnews.com/hub/donald-trump", "tier": 3 },
-      "citations": ["https://apnews.com/hub/donald-trump", "https://www.whitehouse.gov/administration/"]
-    },
-    {
-      "claim": "Muhammad Ali is the president of Kenya.",
-      "canonical": "Muhammad Ali is the president of Kenya",
-      "verdict": "False",
-      "confidence": 0.99,
-      "correction": "Kenya's president is William Ruto.",
-      "harm_class": "person_public",
-      "source": { "name": "State House Kenya", "url": "https://www.president.go.ke/", "tier": 3 },
-      "citations": ["https://www.president.go.ke/"]
-    },
-    {
-      "claim": "GDP growth in the US in 2023 was 4%.",
-      "canonical": "GDP growth in the US in 2023 was 4%",
-      "verdict": "False",
-      "confidence": 0.99,
-      "correction": "U.S. real GDP grew about 2.9% in 2023, not 4% (BEA).",
+      "correction": "Correct — gold has traded above silver per ounce for centuries.",
       "harm_class": "none",
-      "source": { "name": "Bureau of Economic Analysis", "url": "https://www.bea.gov/data/gdp/gross-domestic-product", "tier": 3 },
-      "citations": ["https://www.bea.gov/data/gdp/gross-domestic-product"]
+      "source": { "name": "LBMA", "url": "https://www.lbma.org.uk/prices-and-data/precious-metal-prices", "tier": 3 },
+      "citations": ["https://www.lbma.org.uk/prices-and-data/precious-metal-prices"],
+      "demo": { "mode": "operator", "era": "first field test · 2026-08-08 — operator on the AIR button" }
+    },
+    {
+      "claim": "Smoking increases the risk of lung cancer.",
+      "canonical": "Smoking increases the risk of lung cancer.",
+      "verdict": "True",
+      "confidence": 0.99,
+      "correction": "Correct — settled since the 1964 Surgeon General's report.",
+      "harm_class": "none",
+      "source": { "name": "CDC", "url": "https://www.cdc.gov/tobacco/", "tier": 3 },
+      "citations": ["https://www.cdc.gov/tobacco/"],
+      "demo": { "mode": "auto", "era": "D18 pilot session 1 · 2026-08-12 — machine-aired under a 4s operator veto window (10 auto-airs, 0 wrong)" }
+    },
+    {
+      "claim": "Lightning can strike the same place twice.",
+      "canonical": "Lightning can strike the same place twice.",
+      "verdict": "True",
+      "confidence": 0.99,
+      "correction": "Correct — tall structures are struck repeatedly; the Empire State Building takes ~20–25 strikes a year.",
+      "harm_class": "none",
+      "source": { "name": "National Weather Service", "url": "https://www.weather.gov/safety/lightning-myths", "tier": 3 },
+      "citations": ["https://www.weather.gov/safety/lightning-myths"],
+      "demo": { "mode": "auto", "era": "D18 pilot session 1 · 2026-08-12 — machine-aired under a 4s operator veto window" }
+    },
+    {
+      "claim": "Measles vaccine does not cause autism.",
+      "canonical": "Measles vaccine causes autism",
+      "verdict": "True",
+      "confidence": 0.99,
+      "correction": "Correct as spoken — large studies find no vaccine–autism link; the 1998 study claiming one was retracted.",
+      "harm_class": "none",
+      "source": { "name": "CDC", "url": "https://www.cdc.gov/vaccine-safety/about/autism.html", "tier": 3 },
+      "citations": ["https://www.cdc.gov/vaccine-safety/about/autism.html"],
+      "demo": { "mode": "auto", "era": "D18 pilot session 1 · 2026-08-12 — first machine-aired polarity-applied verdict: the speaker DENIED a false claim, so the card affirms the speaker in the speaker's own framing (D17)" }
     },
     {
       "claim": "GDP growth in the United States in 2019 was 4%.",
@@ -50,7 +54,30 @@
       "correction": "2019 U.S. real GDP growth was about 2.3% (BEA).",
       "harm_class": "none",
       "source": { "name": "Bureau of Economic Analysis", "url": "https://www.bea.gov/data/gdp/gross-domestic-product", "tier": 3 },
-      "citations": ["https://www.bea.gov/data/gdp/gross-domestic-product"]
+      "citations": ["https://www.bea.gov/data/gdp/gross-domestic-product"],
+      "demo": { "mode": "testair", "era": "PASS-2 test-air session · 2026-08-09 — every settled verdict aired immediately with the TEST watermark (9/9 correct)" }
+    },
+    {
+      "claim": "Donald Trump is the president of the United States.",
+      "canonical": "Donald Trump is the president of the United States",
+      "verdict": "True",
+      "confidence": 0.98,
+      "correction": "Correct as spoken.",
+      "harm_class": "person_public",
+      "source": { "name": "whitehouse.gov", "url": "https://www.whitehouse.gov/administration/", "tier": 3 },
+      "citations": ["https://www.whitehouse.gov/administration/"],
+      "demo": { "mode": "operator", "era": "street session · 2026-08-10 — person claims are MANUAL-only (D4): the machine may never air them, a human may" }
+    },
+    {
+      "claim": "The president of the United States is Peter Thiel.",
+      "canonical": "Peter Thiel is the president of the United States",
+      "verdict": "False",
+      "confidence": 0.99,
+      "correction": "The president of the United States is Donald Trump.",
+      "harm_class": "person_public",
+      "source": { "name": "AP", "url": "https://apnews.com/hub/donald-trump", "tier": 3 },
+      "citations": ["https://apnews.com/hub/donald-trump", "https://www.whitehouse.gov/administration/"],
+      "demo": { "mode": "hold", "era": "first field test · 2026-08-08 — replayed as the D4 person-hold: MANUAL tag on /op, auto-air never touches it, held for a human" }
     },
     {
       "claim": "Kinshasa is the capital of Pakistan.",
@@ -60,17 +87,8 @@
       "correction": "Kinshasa is the capital of the Democratic Republic of the Congo; Pakistan's capital is Islamabad.",
       "harm_class": "none",
       "source": { "name": "CIA World Factbook", "url": "https://www.cia.gov/the-world-factbook/countries/pakistan/", "tier": 3 },
-      "citations": ["https://www.cia.gov/the-world-factbook/countries/pakistan/"]
-    },
-    {
-      "claim": "Gold is worth more than silver.",
-      "canonical": "Gold is worth more than silver.",
-      "verdict": "True",
-      "confidence": 0.98,
-      "correction": "Correct — gold has traded above silver per ounce for centuries.",
-      "harm_class": "none",
-      "source": { "name": "LBMA", "url": "https://www.lbma.org.uk/prices-and-data/precious-metal-prices", "tier": 3 },
-      "citations": ["https://www.lbma.org.uk/prices-and-data/precious-metal-prices"]
+      "citations": ["https://www.cia.gov/the-world-factbook/countries/pakistan/"],
+      "demo": { "mode": "operator", "era": "street session · 2026-08-10" }
     },
     {
       "claim": "Crime is up in every major American city this year.",
@@ -80,7 +98,8 @@
       "correction": "Trends vary by city and offense; the U.S. violent crime rate is roughly half its early-1990s peak (FBI UCR).",
       "harm_class": "none",
       "source": { "name": "FBI Crime Data Explorer", "url": "https://cde.ucr.cjis.gov/", "tier": 3 },
-      "citations": ["https://cde.ucr.cjis.gov/"]
+      "citations": ["https://cde.ucr.cjis.gov/"],
+      "demo": { "mode": "operator", "era": "street session · 2026-08-10" }
     },
     {
       "claim": "No woman has run a mile faster than four minutes.",
@@ -90,7 +109,8 @@
       "correction": "Correct as spoken — no woman has yet broken the four-minute mile.",
       "harm_class": "none",
       "source": { "name": "World Athletics", "url": "https://worldathletics.org/records/by-category/world-records", "tier": 3 },
-      "citations": ["https://worldathletics.org/records/by-category/world-records"]
+      "citations": ["https://worldathletics.org/records/by-category/world-records"],
+      "demo": { "mode": "operator", "era": "street session · 2026-08-10 — FS-1 shown correctly: speaker's negation preserved, verdict of the claim as spoken (D17)" }
     },
     {
       "claim": "AI data centers have already been built in 40 states in America.",
@@ -100,7 +120,8 @@
       "correction": "No authority publishes a canonical per-state count of AI data centers.",
       "harm_class": "none",
       "source": null,
-      "citations": []
+      "citations": [],
+      "demo": { "mode": "skip", "era": "street session · 2026-08-10 — the R41 street norm: don't air what we couldn't verify" }
     }
   ]
 }

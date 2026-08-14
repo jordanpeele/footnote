@@ -6,9 +6,13 @@
 
 Footnote listens to a live conversation, pulls out the checkable claims, verifies them against trust-tiered sources, and puts a broadcast lower-third verdict on the stream — with a human operator holding the AIR button. It runs as one Node process with zero npm dependencies, works in OBS on a desktop or from two phones on a sidewalk, and writes down everything it airs. Verdicts are **True / False / Misleading / Needs Context / Unverifiable**, each with a one-line correction and a cited source.
 
-<!-- demo.gif lands from G4 -->
+<p align="center">
+  <img src="media/demo.gif" alt="npm run demo: a replayed field check lands in the /op operator queue, the operator taps AIR, the lower-third renders on the program feed — then the D18 pilot's science cards machine-air under their veto windows, paced by the display choreography" width="100%">
+</p>
 
-Just want to see it? `npm run demo`, then open http://localhost:3000/overlay?room=demo.
+*`npm run demo` — real cards from the field record replaying through the real surfaces: a check lands in the `/op` queue, the operator taps AIR, the lower-third renders; then the D18 pilot's science cards machine-air under their 4s veto windows, paced on screen.*
+
+Just want to see it? `npm run demo`, then open the URLs it prints.
 
 ## The record so far
 
