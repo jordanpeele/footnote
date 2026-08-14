@@ -18,6 +18,21 @@
   <span class="room-chip" id="roomChip">—</span>
   <span class="conn-dot" id="connDot" title="connection"></span>
 </header>
+<!-- STREET GLANCE STRIP: the only things an operator needs at arm's length mid-conversation —
+     AUTO state, MUTE state (the chip IS the toggle), the last card that went to air, and a
+     STALL warning when the overlay hasn't confirmed a paint. Everything else on the page is
+     visually demoted below it. operator.js fills the slots. -->
+<section class="glance" id="glance">
+  <div class="g-chips">
+    <span class="aa-chip" id="gAuto" hidden></span>
+    <button class="g-mute" id="gMute" type="button">MUTE</button>
+  </div>
+  <div class="g-last">
+    <span class="g-verdict v-gray" id="gLastV">—</span>
+    <span class="g-claim g-none" id="gLastC">nothing aired yet</span>
+  </div>
+  <div class="g-stall" id="gStall" hidden>⚠ NOT ON SCREEN — check home base</div>
+</section>
 <div class="banner" id="banner" hidden></div>
 <section class="onair-strip" id="onairStrip" hidden>
   <div class="oa-body">

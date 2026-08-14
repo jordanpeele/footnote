@@ -76,7 +76,7 @@ const REWRITES = { "/": "/index.html", "/control": "/index.html", "/overlay": "/
   // — no dedicated endpoint, no state channel. Mirrors how /control maps to a static page.
   "/adjudicate": "/tools/adjudicate/adjudicate.html" };
 // vercel.json marks the app shell no-cache so OBS/browsers pick up deploys immediately.
-const NO_CACHE = new Set(["/app.js", "/app.css", "/index.html", "/overlay.html", "/overlay.js", "/overlay.css",
+const NO_CACHE = new Set(["/app.js", "/app.css", "/pacer.js", "/index.html", "/overlay.html", "/overlay.js", "/overlay.css",
   "/receipts.html", "/receipts.js", "/receipts.css", "/operator.html", "/operator.js", "/operator.css"]);
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",

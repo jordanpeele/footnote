@@ -61,8 +61,33 @@
     } catch { return null; }
   }
 
-  // remainingMs: undefined → default window; null → hold (stay until pulled); number → count down that long
+  /* STREET AUTO-AIR UX — display-layer pacing for consecutive airs (/pacer.js, shared with
+     the control view's local lower-third). A burst of publishes no longer flash-replaces
+     the chyron: the current card holds MIN_DWELL, then the next queued card takes over
+     with an exit→entrance beat. showOnAir is the paced entry; renderOnAirNow paints.
+     Falls back to the legacy immediate swap if /pacer.js didn't load. */
+  let onPaint = null;   // set in the room block: paint-time render-ack (R39 — ack pixels, not the poll decision)
+  const pacer = globalThis.FootnotePacer ? globalThis.FootnotePacer.createPacer({
+    render: (card, remainingMs, waitedMs) => {
+      // a card that waited in the pacing queue burned display budget on the shelf — it
+      // still gets at least MIN_DWELL on screen (server expiry never force-hides mid-card;
+      // the poll only acts on seq changes)
+      if (typeof remainingMs === "number" && waitedMs > 0)
+        remainingMs = Math.max(remainingMs - waitedMs, globalThis.FootnotePacer.MIN_DWELL_MS);
+      renderOnAirNow(card, remainingMs);
+    },
+    exitStart: () => { cancelAnimationFrame(raf); onAir.classList.remove("show"); },
+    onEvent: (action, d) => ftLog("pace", { action, queued: d.queued,
+      waited_ms: d.waitedMs != null ? d.waitedMs : undefined,
+      claim: d.card ? String(d.card.claim || "").slice(0, 80) : null }),
+  }) : null;
   function showOnAir(card, remainingMs) {
+    if (!card) return;
+    if (pacer) pacer.air(card, remainingMs);
+    else renderOnAirNow(card, remainingMs);
+  }
+  // remainingMs: undefined → default window; null → hold (stay until pulled); number → count down that long
+  function renderOnAirNow(card, remainingMs) {
     if (!card) return;
     if (remainingMs === undefined) remainingMs = DUR;
     cancelAnimationFrame(raf); clearTimeout(hideT);
@@ -101,6 +126,7 @@
     }
     onAir.hidden = false; onAir.classList.remove("show"); void onAir.offsetWidth; onAir.classList.add("show");
     showing = true;
+    if (onPaint) onPaint(card);   // R39: the ack fires when pixels actually change, even for paced (queued) cards
     /* A-8: after the card is laid out, check whether the clamped text overflowed and log
        it (field-test/local only via ftLog). Deferred to the next frame so the browser has
        applied the -webkit-line-clamp box; `tok` guards against a newer card having already
@@ -123,11 +149,14 @@
       if (p < 1) raf = requestAnimationFrame(tick); else hideOnAir();
     })(start);
   }
-  // exit is a ~200ms fade-down (overlay.css .onair base transition) — the hidden flip waits just past it
-  function hideOnAir() { cancelAnimationFrame(raf); showing = false; onAir.classList.remove("show"); hideT = setTimeout(() => { onAir.hidden = true; }, 220); }
+  // exit is a ~200ms fade-down (overlay.css .onair base transition) — the hidden flip waits just past it.
+  // Natural countdown end: retire lets the pacer promote a queued card immediately (no-op otherwise).
+  function hideOnAir() { cancelAnimationFrame(raf); showing = false; onAir.classList.remove("show"); hideT = setTimeout(() => { onAir.hidden = true; }, 220); if (pacer) pacer.retire(); }
+  // pull / expiry: EVERYTHING comes down, including queued (never-shown) cards
+  function clearOnAir() { if (pacer) pacer.clear(); hideOnAir(); }
 
-  // programmatic API — P1 bridge (and manual testing) call these
-  window.footnoteOverlay = { air: showOnAir, clear: hideOnAir };
+  // programmatic API — P1 bridge (and manual testing) call these (air is the PACED entry)
+  window.footnoteOverlay = { air: showOnAir, clear: clearOnAir };
 
   const qs = new URLSearchParams(location.search);
 
@@ -193,6 +222,12 @@
         }).catch(() => {});
       } catch {}
     };
+    /* Pacing keeps the ack honest: a card can WAIT behind the current one, so the ack
+       must fire at paint time (renderOnAirNow's onPaint hook), not when the poll decides
+       to show. The aired id rides the card (_ackId). A card superseded before it paints
+       acks a stale id and the server 409s — fire-and-forget, cosmetic stakes only. */
+    onPaint = (card) => { if (card && card._ackId) ackRender(card._ackId); };
+    const withAck = (d) => { try { d.card._ackId = d.id; } catch {} return d.card; };
     (async function poll() {
       let ok = false;
       try {
@@ -204,10 +239,10 @@
             && (d.serverNow - d.activeAt) < ACTIVE_WINDOW;
           if (lastSeq === null) {                        // on connect: RESUME an in-flight check (survives OBS restart/refresh)
             lastSeq = d.seq || 0;
-            if (isLive(d)) { lastChange = performance.now(); showOnAir(d.card, remaining(d)); ackRender(d.id); }
+            if (isLive(d)) { lastChange = performance.now(); showOnAir(withAck(d), remaining(d)); }
           } else if ((d.seq || 0) !== lastSeq) {         // a new air, a pull, or state expiry (seq resets → treat as pull; red-team M4)
             lastSeq = d.seq || 0; lastChange = performance.now();
-            if (isLive(d)) { showOnAir(d.card, remaining(d)); ackRender(d.id); } else hideOnAir();
+            if (isLive(d)) showOnAir(withAck(d), remaining(d)); else clearOnAir();
           }
         }
       } catch {}

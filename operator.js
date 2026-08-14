@@ -38,6 +38,9 @@
 
   const queueEl = byId("queue"), emptyEl = byId("empty"), bannerEl = byId("banner");
   const stripEl = byId("onairStrip"), connDot = byId("connDot");
+  // STREET GLANCE STRIP (markup in operator.html): AUTO chip + MUTE toggle + last-aired
+  // line + aggregated STALL warning — the arm's-length surface; everything else demoted.
+  const gLastV = byId("gLastV"), gLastC = byId("gLastC"), gStall = byId("gStall");
   byId("roomChip").textContent = room || "no room";
 
   // tiny DOM helper — className is ours, text goes through textContent (never markup)
@@ -151,7 +154,12 @@
        STALL    — >5s since air with no matching ack → amber pulsing
                   "NOT ON SCREEN — check home base"; clears if the ack arrives late. */
   const airs = new Map();   // cardId -> { airedId, at, rendered, lastLbl }
-  const STALL_MS = 5000;
+  /* STALL_MS budgets for the overlay's display-layer pacing queue: a fresh air can
+     legitimately wait MIN_DWELL (6s) + the exit beat behind the current card before it
+     paints and acks — the pre-pacing 5s would false-alarm on every paced takeover.
+     8s ≈ dwell + exit + one poll tick + margin; a deeper machine burst can still show a
+     transient STALL, which clears when the late ack arrives (handled below). */
+  const STALL_MS = 8000;
   function airLabel(a) {
     if (!a) return null;                               // cmd still in flight
     if (a.rendered) return "onair";
@@ -200,12 +208,11 @@
      the source of truth here. Optimistic flip on tap, reconciled against the snapshot
      (adopt on agreement, revert if control hasn't confirmed within the window). DOM is
      built here: operator.html is owned by the parent shard this round. */
-  /* W4 (walkable rig): auto-air cap state in the header — on the street /op is the ONLY
-     console, so arm state and the session cap can't live on a screen the operator can't
-     see. Rides the queue snapshot (autoair.on/count/cap); absent → chip hidden. */
-  const aaChip = el("span", "aa-chip");
-  aaChip.hidden = true;
-  connDot.parentNode.insertBefore(aaChip, connDot);
+  /* W4 (walkable rig): auto-air cap state — on the street /op is the ONLY console, so arm
+     state and the session cap can't live on a screen the operator can't see. Rides the
+     queue snapshot (autoair.on/count/cap); absent → chip hidden. Lives in the glance
+     strip now (glanceability pass) — same chip, arm's-length sizing via .glance CSS. */
+  const aaChip = byId("gAuto");
   function renderAutoair(aa) {
     if (!aa || typeof aa !== "object") { aaChip.hidden = true; return; }
     aaChip.hidden = false;
@@ -213,20 +220,17 @@
     else if (aa.count >= aa.cap) { aaChip.textContent = `AUTO CAP ${aa.count}/${aa.cap}`; aaChip.className = "aa-chip cap"; }
     else { aaChip.textContent = `AUTO ${aa.count}/${aa.cap}`; aaChip.className = "aa-chip on"; }
   }
-  const muteBtn = el("button", "btn-mute", "MUTE");
-  muteBtn.type = "button";
-  connDot.parentNode.insertBefore(muteBtn, connDot);
-  const muteBanner = el("div", "mute-banner", "MIC MUTED");
-  muteBanner.hidden = true;
-  bannerEl.parentNode.insertBefore(muteBanner, bannerEl.nextSibling);
+  /* Glanceability pass: the mute toggle IS the glance strip's MUTE state chip — one
+     element carries both the latched state (amber when muted) and the big-thumb control,
+     so there's no separate banner to scan past. */
+  const muteBtn = byId("gMute");
   let muted = false;        // last snapshot value (control's latch)
   let muteWish = null;      // optimistic flip awaiting confirmation: { val, at }
   const MUTE_RECONCILE_MS = 8000;
   function renderMute() {
     const on = muteWish ? muteWish.val : muted;
-    muteBtn.textContent = on ? "MUTED" : "MUTE";
+    muteBtn.textContent = on ? "MIC MUTED" : "MUTE";
     muteBtn.classList.toggle("on", on);
-    muteBanner.hidden = !on;
   }
   muteBtn.addEventListener("click", () => {
     if (stopped) return;
@@ -246,6 +250,23 @@
     setBanner("403 — wrong key for this room. Re-copy the OPERATOR URL from /control.");
     connDot.className = "conn-dot down";
     queueEl.hidden = true; stripEl.hidden = true;
+    byId("glance").hidden = true;   // a dead session has no glanceable state
+  }
+
+  /* ---- glance strip: last-aired line + aggregated STALL ---- */
+  function setLastAired(card) {
+    const corr = card.kind === "correction";
+    const m = corr ? { cls: "v-corr", label: "↺ CORRECTION" } : vmeta(card.verdict);
+    gLastV.className = "g-verdict " + m.cls; gLastV.textContent = m.label;
+    gLastC.classList.remove("g-none");
+    gLastC.textContent = corr ? (card.correction || "") : "“" + (card.claim || "") + "”";
+  }
+  // any tracked air past its ack budget → one strip-level warning (the per-card tag stays
+  // for detail; the strip is what the arm's-length glance actually reads)
+  function updateGlance() {
+    let stalled = false;
+    for (const a of airs.values()) if (airLabel(a) === "stall") { stalled = true; break; }
+    gStall.hidden = !stalled;
   }
 
   /* ---- render ---- */
@@ -316,11 +337,13 @@
       }
       queueEl.appendChild(card);
     }
+    updateGlance();
   }
 
   function renderOnAir(d) {
     const live = d && d.card && (d.durationMs == null || (d.serverNow - d.airedAt) < d.durationMs);
     onAirLive = !!live;
+    if (live) setLastAired(d.card);   // glance strip: persists after the card retires (last thing that went out)
     if (!live) { stripEl.hidden = true; return; }
     const corr = d.card.kind === "correction";
     const m = corr ? { cls: "v-corr", label: "↺ CORRECTION" } : vmeta(d.card.verdict);
