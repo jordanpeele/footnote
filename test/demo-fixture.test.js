@@ -54,6 +54,40 @@ test("demo fixture: every card has the required fields and valid verdict", () =>
   }
 });
 
+test("demo fixture: demo.mode vocabulary + era annotations", () => {
+  const MODES = ["operator", "auto", "testair", "hold", "skip"];
+  for (const c of fixture.cards) {
+    if (c.demo === undefined) continue;   // absent → operator default in run.js
+    assert.ok(MODES.includes(c.demo.mode), `demo.mode ${c.demo.mode} for ${c.claim}`);
+    assert.ok(typeof c.demo.era === "string" && c.demo.era.trim(), `demo.era for ${c.claim}`);
+  }
+});
+
+test("demo fixture: covers the pilot eras (AUTO science, D17 denial, person-hold, TESTAIR)", () => {
+  // ≥1 AUTO machine-aired science card, D18-eligible on the demo's own gate
+  // (harm none, conf ≥ 0.9, tier 3, definitive verdict) — session-1 style
+  const autos = fixture.cards.filter((c) => c.demo && c.demo.mode === "auto");
+  assert.ok(autos.length >= 1, "needs an AUTO machine-aired card");
+  for (const c of autos) {
+    assert.equal(c.harm_class, "none", `auto card must be harm none: ${c.claim}`);
+    assert.ok(c.confidence >= 0.9, `auto card conf >= 0.9: ${c.claim}`);
+    assert.equal(c.source.tier, 3, `auto card tier 3: ${c.claim}`);
+    assert.ok(c.verdict === "True" || c.verdict === "False", `auto card definitive verdict: ${c.claim}`);
+  }
+  // ≥1 denial with D17 speaker framing among the machine airs: displayed claim keeps
+  // the speaker's negation, canonical is the positive form (the polarity-applied case)
+  const denial = autos.find((c) => hasNegation(c.claim) && !hasNegation(c.canonical));
+  assert.ok(denial, "needs a machine-aired denial with D17 speaker framing");
+  assert.notEqual(denial.claim, denial.canonical, "denial display ≠ canonical");
+  // ≥1 person-hold — the MANUAL tag card the machine may never air (D4)
+  const hold = fixture.cards.find((c) => c.demo && c.demo.mode === "hold");
+  assert.ok(hold, "needs a person-hold card");
+  assert.ok(hold.harm_class === "person_public" || hold.harm_class === "person_private",
+    "hold card carries a person harm_class (that's what draws the MANUAL tag)");
+  // ≥1 TESTAIR-watermarked card (PASS-2 era)
+  assert.ok(fixture.cards.some((c) => c.demo && c.demo.mode === "testair"), "needs a TESTAIR card");
+});
+
 test("demo fixture: spans the verdict palette", () => {
   const verdicts = new Set(fixture.cards.map((c) => c.verdict));
   assert.ok(verdicts.has("True"), "needs a True card");
