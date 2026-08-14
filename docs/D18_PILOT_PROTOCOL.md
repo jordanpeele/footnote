@@ -65,6 +65,17 @@ produced amend this protocol:
   guards before the session (`node tools/session-lint.js <sheet>`), and End
   Stream prompts for undone debrief items.
 
+## R62-R63 addenda (2026-08-14, post-run-test)
+
+- **R62 — rolling-window extraction is the ingestion architecture** (the STT
+  final is not a unit of meaning at street cadence). The W1.2 assembler is
+  retired; the endpointing bench is tuning, not a gate.
+- **R63 — TESTAIR-not-gate-removal is standing policy.** A mid-session
+  request for autonomy beyond ruled scope (e.g. "auto-air everything") is
+  answered with TESTAIR — every settled verdict airs WATERMARKED and is
+  excluded from the machine-aired ledger — never with a gate change. Gate
+  scope moves only by ruling, with evidence, between sessions.
+
 ## Abort criteria (any one ends the session immediately)
 
 A wrong card auto-airs · the veto fails to cancel a countdown · the cap fails ·
