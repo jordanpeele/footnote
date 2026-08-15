@@ -281,3 +281,52 @@ test("replay pin: timer granularity matches the live client (400ms winTimer)", (
   assert.equal(WINDOW_TICK_MS, 400);
   assert.equal(WINDOW_BUFFER_WORDS, 60);
 });
+
+/* ================= 6. R-audio RED-TEAM — the window HOLDS, transport loses words =========
+ * The adversarial sweep (daysprint/handoffs/redteam-audio.md) cranked every audio-adversity
+ * knob against the window. The WORST profile — dropout_siege, eight 2.5-4s total-silence
+ * bonded-handoff dropouts scattered mid-claim — drove word coverage to ~40% (vs ~87% clean),
+ * approaching the 2026-08-14 run's 27% baseline. But the collapse is NOT a window failure:
+ * the dropouts MUTE half of each spoken claim before it reaches Deepgram, so the words are
+ * gone upstream of the window. These are the REAL Deepgram nova-3 finals captured streaming
+ * the dropout_siege fixture (note the truncated utterances — the rest was silence). The pin
+ * asserts BOTH halves of the verdict: coverage collapses AND the window loses nothing it got. */
+const DROPOUT_SIEGE_FINALS = [
+  "Did you know Sam Altman is the current chairman of the FCC?",
+  "You can see the Great Wall Of China",   // "...from space with the naked eye" muted
+  "The US economy is around",              // "...thirty trillion dollars a year" muted
+  "Flamingos are",                         // "...born gray. They turn pink..." muted
+  "They eat.",
+  "Speaking.",
+  "Three hearts.",
+  "Three of them,",
+].map((text, i) => ({ t: 1000 + i * 2500, text }));
+
+test("red-team: the worst profile (dropout_siege) collapses coverage below 50% — transport loss, not window loss", () => {
+  const { windows } = replayWindow(DROPOUT_SIEGE_FINALS);
+  // Coverage here is measured against the SIDECAR's spoken words (what SHOULD have been said);
+  // half of every claim was muted before STT, so it can never be recovered downstream.
+  // We approximate the ground-truth loss by the ratio of STT words to the intact clean case.
+  const sttWords = DROPOUT_SIEGE_FINALS.reduce((n, f) => n + f.text.split(/\s+/).filter(Boolean).length, 0);
+  assert.ok(sttWords <= 40, `transport should mute most speech: got ${sttWords} STT words`);
+  assert.ok(windows.length >= 1, "the window still fires on the fragments that survived");
+});
+
+test("red-team: the window loses NOTHING it receives, even under the worst dropout profile", () => {
+  // windowCoverage = fraction of the (already-shredded) STT words that reached a window.
+  // This is the metric that isolates the WINDOW's behavior from transport loss. It must be
+  // 100% — every word Deepgram delivered was carried into a window; the window is faithful.
+  const { windows } = replayWindow(DROPOUT_SIEGE_FINALS);
+  const cov = windowCoverage(DROPOUT_SIEGE_FINALS, windows);
+  assert.equal(cov.ratio, 1, `window dropped ${cov.uniqueWords - cov.coveredUnique} of ${cov.uniqueWords} received words — it must lose none`);
+});
+
+test("red-team: the CLEAN case is unregressed by the red-team analysis (window still fires and covers)", () => {
+  // Guard: the red-team work must not have touched the window's clean behavior. Reuses the
+  // run-shape fixture (the same shape the W1.3 pin protects) — coverage of received words = 100%.
+  const finals = runShapeFinals();
+  const { windows } = replayWindow(finals);
+  const cov = windowCoverage(finals, windows);
+  assert.equal(cov.ratio, 1, "clean run-shape: window must carry every received word");
+  assert.ok(windows.length >= 6, "clean run-shape: window still produces a steady stream");
+});

@@ -1,0 +1,113 @@
+{
+  "profile": "dropout_siege",
+  "autoAir": false,
+  "_note": "R-audio RED-TEAM FAILING FIXTURE. Real Deepgram nova-3 finals captured streaming the dropout_siege wav (8 mid-claim 2.5-4s total-silence dropouts). Word coverage collapses to ~40% because half of every claim was MUTED before reaching STT — e.g. \"You can see the Great Wall Of China\" (rest gone), \"The US economy is around\" (number gone). The W1.3 window is faithful: it loses ZERO words it receives (see redteam-audio.md). This fixture PROVES coverage can be driven well below the ~100% clean case by transport loss upstream of the window; it is a capture/transport failure, NOT a window failure. Regenerate the wav: npm run synth:fixtures; recapture: node tools/synthetic/redteam-sweep.js --wav daysprint/synthetic/fixtures/dropout_siege.wav --sidecar daysprint/synthetic/fixtures/dropout_siege.sidecar.json.",
+  "_observed": {
+    "word_coverage_pct": 39.7,
+    "stt_words": 35,
+    "finals": 8,
+    "windows": 5
+  },
+  "finals": [
+    {
+      "t": 1000,
+      "text": "Did you know Sam Altman is the current chairman of the FCC?"
+    },
+    {
+      "t": 3500,
+      "text": "You can see the Great Wall Of China"
+    },
+    {
+      "t": 6000,
+      "text": "The US economy is around"
+    },
+    {
+      "t": 8500,
+      "text": "Flamingos are"
+    },
+    {
+      "t": 11000,
+      "text": "They eat."
+    },
+    {
+      "t": 13500,
+      "text": "Speaking."
+    },
+    {
+      "t": 16000,
+      "text": "Three hearts."
+    },
+    {
+      "t": 18500,
+      "text": "Three of them,"
+    }
+  ],
+  "extract": {},
+  "verify": {},
+  "claims": [
+    {
+      "utterance": "Did you know Sam Altman is the current chairman of the FCC?",
+      "claim": "Sam Altman is the current chairman of the FCC.",
+      "expected_polarity": "asserts",
+      "category": "person_claims",
+      "expected_verdict": "False",
+      "expected_gate": "air"
+    },
+    {
+      "utterance": "Everyone knows you can see the Great Wall of China from space with the naked eye.",
+      "claim": "The Great Wall of China is visible from space with the naked eye.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "False",
+      "expected_gate": "air"
+    },
+    {
+      "utterance": "The US economy is around thirty trillion dollars a year now.",
+      "claim": "The US economy is around thirty trillion dollars a year.",
+      "expected_polarity": "asserts",
+      "category": "statistics",
+      "expected_verdict": "True",
+      "expected_gate": "air"
+    },
+    {
+      "utterance": "Flamingos are actually born gray. They turn pink from the shrimp they eat.",
+      "claim": "Flamingos are born gray and turn pink from their diet.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "True",
+      "expected_gate": "air"
+    },
+    {
+      "utterance": "You know humans only use ten percent of their brains.",
+      "claim": "Humans only use ten percent of their brains.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "False",
+      "expected_gate": "air"
+    },
+    {
+      "utterance": "Japan has a population of about two hundred million people.",
+      "claim": "Japan has a population of about two hundred million people.",
+      "expected_polarity": "asserts",
+      "category": "statistics",
+      "expected_verdict": "False",
+      "expected_gate": "air"
+    },
+    {
+      "utterance": "Bananas are berries. Strawberries are not berries. Botanically speaking.",
+      "claim": "Bananas are botanically berries and strawberries are not.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "True",
+      "expected_gate": "air"
+    },
+    {
+      "utterance": "Octopuses have three hearts. Three of them.",
+      "claim": "Octopuses have three hearts.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "True",
+      "expected_gate": "air"
+    }
+  ]
+}
