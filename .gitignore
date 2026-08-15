@@ -11,3 +11,7 @@ tools/street/scratch-audio/
 docs/STATUS_*
 tools/adjudicate/queue.json
 tools/adjudicate/graduations.json
+# Synthetic fixtures: sidecars (ground truth) are committed; the .wav audio is
+# large and deterministically regenerable from the claim script + profile + seed
+# (npm run synth:fixtures). Do not commit the audio.
+daysprint/synthetic/fixtures/*.wav
