@@ -133,8 +133,8 @@ function parseArgs(argv) {
 }
 
 // Exported so the test suite can pin the drafts-exclusion contract (drafts-*.jsonl —
-// including AUTHORED candidate files like drafts-authored-*.jsonl — must never ride
-// along in a run). See test/golden-drafts-exclusion.test.js.
+// including AUTHORED candidate files like drafts-authored-*.jsonl and the sci-033-class
+// corpus — must never ride along in a run). See test/golden-drafts-exclusion.test.js.
 export function loadGolden(categoryFilter) {
   // drafts-*.jsonl are UNADJUDICATED ingest staging (no ground truth) — they burned ~$2 of
   // spend in calibration #4 by riding along. Runs score goldens only.
