@@ -106,9 +106,13 @@ function gatherIngestAuth() {
   // relay is the packet-2a-sec handoff. It records the fix as committed-but-NOT-applied
   // (the vulnerable config is still live). If a future apply flips a marker in that doc
   // (or a sibling APPLIED note appears), detect it here; otherwise report unauthenticated.
-  const notePath =
-    resolveRepoFile("daysprint/handoffs/daysprint-handoff-2a-sec.md") ||
-    resolveRepoFile("daysprint/handoffs/daysprint-handoff-2a-sec-APPLIED.md");
+  // A dedicated *-APPLIED attestation is authoritative — it records a verified apply to
+  // the live relay and is written ONLY after verify-ingest-auth.sh passes. Check it first.
+  const appliedPath = resolveRepoFile("daysprint/handoffs/daysprint-handoff-2a-sec-APPLIED.md");
+  if (appliedPath && /verify-ingest-auth\.sh:\s*6\/6\s*PASS/i.test(fs.readFileSync(appliedPath, "utf8"))) {
+    return { applied: true, evidence: "per daysprint-handoff-2a-sec-APPLIED.md (verify 6/6 PASS)" };
+  }
+  const notePath = resolveRepoFile("daysprint/handoffs/daysprint-handoff-2a-sec.md");
   if (!notePath) {
     return { applied: false, evidence: "no packet-2a-sec handoff found; assume unauthenticated" };
   }
