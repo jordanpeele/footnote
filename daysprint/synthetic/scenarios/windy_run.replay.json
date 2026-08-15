@@ -1,0 +1,191 @@
+{
+  "profile": "windy_run",
+  "scenario": "windy_run",
+  "status": "known-degraded",
+  "autoAir": true,
+  "_generated": "COMPILED from windy_run.scenario.json by tools/synthetic/author-scenario.js — do not hand-edit; edit the manifest and recompile.",
+  "finals": [
+    {
+      "t": 0,
+      "text": "Okay"
+    },
+    {
+      "t": 700,
+      "text": "rolling."
+    },
+    {
+      "t": 3000,
+      "text": "Octopuses have three hearts."
+    },
+    {
+      "t": 8000,
+      "text": "The Great"
+    },
+    {
+      "t": 9200,
+      "text": "space naked eye."
+    },
+    {
+      "t": 14000,
+      "text": "Honey"
+    },
+    {
+      "t": 15100,
+      "text": "never spoils."
+    },
+    {
+      "t": 20000,
+      "text": "Vikings"
+    },
+    {
+      "t": 21000,
+      "text": "horned helmets."
+    },
+    {
+      "t": 26000,
+      "text": "Flamingos"
+    },
+    {
+      "t": 27200,
+      "text": "born gray."
+    },
+    {
+      "t": 33000,
+      "text": "Mount"
+    },
+    {
+      "t": 35300,
+      "text": "four millimeters."
+    },
+    {
+      "t": 40000,
+      "text": "that's the tape."
+    }
+  ],
+  "extract": {
+    "Okay rolling. Octopuses have three hearts.": {
+      "claim": "Octopuses have three hearts.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    },
+    "Okay rolling. Octopuses have three hearts. The Great space naked eye.": {
+      "claim": null,
+      "ms": 200
+    },
+    "Okay rolling. Octopuses have three hearts. The Great space naked eye. Honey never spoils.": {
+      "claim": null,
+      "ms": 200
+    },
+    "Okay rolling. Octopuses have three hearts. The Great space naked eye. Honey never spoils. Vikings horned helmets. Flamingos born gray.": {
+      "claim": null,
+      "ms": 200
+    }
+  },
+  "verify": {
+    "Octopuses have three hearts.": {
+      "verdict": "True",
+      "confidence": 0.92,
+      "source": {
+        "name": "National Geographic",
+        "url": "https://www.nationalgeographic.com/octopus",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "The Great Wall of China is visible from space with the naked eye.": {
+      "verdict": "False",
+      "confidence": 0.9,
+      "source": {
+        "name": "Scientific American",
+        "url": "https://www.scientificamerican.com/great-wall",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "Honey never spoils.": {
+      "verdict": "True",
+      "confidence": 0.88,
+      "source": {
+        "name": "Smithsonian",
+        "url": "https://www.smithsonianmag.com/honey",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "Flamingos are born gray and turn pink from their diet.": {
+      "verdict": "True",
+      "confidence": 0.9,
+      "source": {
+        "name": "Audubon",
+        "url": "https://www.audubon.org/flamingo",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    }
+  },
+  "claims": [
+    {
+      "utterance": "Octopuses have three hearts.",
+      "claim": "Octopuses have three hearts.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "True",
+      "expected_gate": "checked",
+      "expected_air": true,
+      "note": "the ONE claim that survived the wind intact (arrived as a clean final) → airs"
+    },
+    {
+      "utterance": "The Great Wall of China is visible from space with the naked eye.",
+      "claim": "The Great Wall of China is visible from space with the naked eye.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "False",
+      "expected_gate": "checked",
+      "expected_air": true,
+      "note": "SHOULD air; mid-claim words ('Wall of China ... visible from ... with the') dropped by packet loss → window is a fragment → extractor recovers no claim → recall MISS (the degradation)"
+    },
+    {
+      "utterance": "Honey basically never spoils; edible honey has been found in ancient Egyptian tombs.",
+      "claim": "Honey never spoils.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "True",
+      "expected_gate": "checked",
+      "expected_air": true,
+      "note": "the tomb half was lost to a 2s handoff dropout; the surviving fragment split a word-min window → recall MISS"
+    },
+    {
+      "utterance": "Flamingos are born gray and turn pink from the shrimp they eat.",
+      "claim": "Flamingos are born gray and turn pink from their diet.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "True",
+      "expected_gate": "checked",
+      "expected_air": true,
+      "note": "'turn pink from their diet' half dropped under a gust → recall MISS"
+    }
+  ],
+  "expected_scorecard": {
+    "status_note": "known-degraded: assert the FAILURE is still present. These are CEILINGS — if a metric rises above its ceiling the capture chain improved and this fixture must be re-recorded (delete the ceiling and re-baseline). Floors that must hold (some capture always survives) keep the suite honest.",
+    "word_coverage_pct": {
+      "max": 60
+    },
+    "claim_recall_pct": {
+      "max": 40
+    },
+    "aired": {
+      "max": 1,
+      "min": 1
+    }
+  }
+}

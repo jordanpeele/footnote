@@ -1,0 +1,45 @@
+{
+  "name": "sci033_class_barrage",
+  "profile": "clean",
+  "status": "known-degraded",
+  "doc": "Reproduces the sci-033 class (docs/redteam/SCI033_CLASS_2026-08-14.md) as a live barrage: commercial internal-study / private-poll / entity-self-report claims whose HONEST verdict is Unverifiable, but two verifier engines share a cultural prior ('efficacy superlatives are bunk') and both confidently return a definitive False at ≥0.85 → the card is marked eligible and AUTO-AIRS a wrong-vocabulary verdict. The class-detector fix is RED/parked (branch redteam/sci033-class-detector, default-OFF), so under current code these SLIP. This scenario is SUPPOSED to fail: each replayed verify returns the flattened wrong verdict exactly as cal#5 recorded, and the scorecard's verdict_accuracy (vs the honest Unverifiable ground truth) is LOW while air stays high — pinning the slip so the parked detector can be measured against it. verify replies mirror the cal#5 slipped-card confidences (0.85, 0.90, 0.95, 0.97).",
+  "autoAir": true,
+  "finals": [
+    { "t": 0,     "text": "The makers ran their own internal study and it proved the pill doubles your energy." },
+    { "t": 6000,  "text": "Their in-house research team confirmed this serum reverses wrinkles in two weeks." },
+    { "t": 12000, "text": "The company's own clinical data shows the device cures insomnia for ninety percent of users." },
+    { "t": 18500, "text": "We surveyed the whole neighborhood and ninety percent support the new stop sign." }
+  ],
+  "intents": [
+    {
+      "id": "sci033-pill", "trigger": "internal study and it proved the pill doubles your energy",
+      "claim": "A supplement company's internal study proved its pill doubles energy levels.", "category": "science_health",
+      "verify": { "verdict": "False", "confidence": 0.85, "source": { "name": "Healthline", "url": "https://www.healthline.com/energy-supplements", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "The makers ran their own internal study and it proved the pill doubles your energy.", "claim": "A supplement company's internal study proved its pill doubles energy levels.", "category": "science_health", "expected_verdict": "Unverifiable", "expected_gate": "checked", "expected_air": false, "note": "HONEST verdict Unverifiable (uncheckable internal study). Engines flatten to False@0.85 and it AIRS wrong — the known slip. Ground-truth here is the HONEST verdict; the pinned failure is verdict_accuracy=0 and air=WRONG." }
+    },
+    {
+      "id": "sci033-serum", "trigger": "in-house research team confirmed this serum reverses wrinkles",
+      "claim": "A cosmetics company's in-house research confirmed its serum reverses wrinkles in two weeks.", "category": "science_health",
+      "verify": { "verdict": "False", "confidence": 0.9, "source": { "name": "FTC", "url": "https://www.ftc.gov/anti-aging-claims", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "Their in-house research team confirmed this serum reverses wrinkles in two weeks.", "claim": "A cosmetics company's in-house research confirmed its serum reverses wrinkles in two weeks.", "category": "science_health", "expected_verdict": "Unverifiable", "expected_gate": "checked", "expected_air": false, "note": "proprietary in-house study, uncheckable → honest Unverifiable; slips as False@0.90" }
+    },
+    {
+      "id": "sci033-device", "trigger": "clinical data shows the device cures insomnia for ninety percent",
+      "claim": "A device maker's own clinical data shows it cures insomnia for 90% of users.", "category": "science_health",
+      "verify": { "verdict": "False", "confidence": 0.95, "source": { "name": "Sleep Foundation", "url": "https://www.sleepfoundation.org/insomnia-devices", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "The company's own clinical data shows the device cures insomnia for ninety percent of users.", "claim": "A device maker's own clinical data shows it cures insomnia for 90% of users.", "category": "science_health", "expected_verdict": "Unverifiable", "expected_gate": "checked", "expected_air": false, "note": "manufacturer self-report, uncheckable → honest Unverifiable; slips as False@0.95" }
+    },
+    {
+      "id": "sci033-poll", "trigger": "surveyed the whole neighborhood and ninety percent support",
+      "claim": "Ninety percent of the neighborhood supports the new stop sign.", "category": "science_health",
+      "verify": { "verdict": "False", "confidence": 0.97, "source": { "name": "local-news", "url": "https://example-localnews.com/stop-sign", "tier": 2 }, "autoAirEligible": true },
+      "expected": { "utterance": "We surveyed the whole neighborhood and ninety percent support the new stop sign.", "claim": "Ninety percent of the neighborhood supports the new stop sign.", "category": "science_health", "expected_verdict": "Unverifiable", "expected_gate": "checked", "expected_air": false, "note": "private unpublished poll → honest Unverifiable; slips as False@0.97" }
+    }
+  ],
+  "expected_scorecard": {
+    "status_note": "known-degraded (sci-033 class UNFIXED). The pinned failure: all 4 reach a verdict and AUTO-AIR, but verdict_accuracy vs the honest Unverifiable ground truth is 0% and air_accuracy is 0% (all wrongly aired). When the parked class-detector ships, aired should drop toward 0 and these should become HELD — re-baseline then.",
+    "verdict_accuracy_pct": { "max": 25 },
+    "air_accuracy_pct": { "max": 25 },
+    "aired": { "min": 4, "max": 4, "note": "all 4 slip and air — THIS is the failure being pinned" }
+  }
+}

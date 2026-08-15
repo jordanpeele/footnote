@@ -1,0 +1,165 @@
+{
+  "profile": "clean",
+  "scenario": "polarity_minefield",
+  "status": "should-pass-clean",
+  "autoAir": true,
+  "_generated": "COMPILED from polarity_minefield.scenario.json by tools/synthetic/author-scenario.js — do not hand-edit; edit the manifest and recompile.",
+  "finals": [
+    {
+      "t": 0,
+      "text": "The Great Wall of China is visible from space with the naked eye."
+    },
+    {
+      "t": 6500,
+      "text": "By the way Marie Antoinette never actually said let them eat cake, she never said it."
+    },
+    {
+      "t": 12500,
+      "text": "And lightning never strikes the same place twice, everyone knows that."
+    },
+    {
+      "t": 18500,
+      "text": "Octopuses have three hearts, three of them."
+    }
+  ],
+  "extract": {
+    "The Great Wall of China is visible from space with the naked eye. By the way Marie Antoinette never actually said let them eat cake, she never said it.": {
+      "claim": "Marie Antoinette said 'let them eat cake.'",
+      "polarity": "denies",
+      "category": "attributed_quotes",
+      "harm_class": "none",
+      "ms": 380
+    },
+    "the naked eye. By the way Marie Antoinette never actually said let them eat cake, she never said it. And lightning never strikes the same place twice, everyone knows that.": {
+      "claim": "Lightning never strikes the same place twice.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    },
+    "The Great Wall of China is visible from space with the naked eye.": {
+      "claim": "The Great Wall of China is visible from space with the naked eye.",
+      "polarity": "denies",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    },
+    "Antoinette never actually said let them eat cake, she never said it. And lightning never strikes the same place twice, everyone knows that. Octopuses have three hearts, three of them.": {
+      "claim": "Octopuses have three hearts.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    }
+  },
+  "verify": {
+    "Marie Antoinette said 'let them eat cake.'": {
+      "verdict": "True",
+      "confidence": 0.9,
+      "source": {
+        "name": "Britannica",
+        "url": "https://www.britannica.com/marie-antoinette-cake",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "Lightning never strikes the same place twice.": {
+      "verdict": "False",
+      "confidence": 0.92,
+      "source": {
+        "name": "NOAA",
+        "url": "https://www.weather.gov/lightning-myths",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "The Great Wall of China is visible from space with the naked eye.": {
+      "verdict": "False",
+      "confidence": 0.95,
+      "source": {
+        "name": "Scientific American",
+        "url": "https://www.scientificamerican.com/great-wall",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "Octopuses have three hearts.": {
+      "verdict": "True",
+      "confidence": 0.93,
+      "source": {
+        "name": "National Geographic",
+        "url": "https://www.nationalgeographic.com/octopus",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    }
+  },
+  "claims": [
+    {
+      "utterance": "By the way Marie Antoinette never actually said let them eat cake, she never said it.",
+      "claim": "Marie Antoinette said 'let them eat cake.'",
+      "expected_polarity": "denies",
+      "category": "attributed_quotes",
+      "expected_verdict": "True",
+      "expected_gate": "checked",
+      "expected_air": false,
+      "note": "TRUE denial: negation survives (utterance HAS 'never'), so polarity stays denies (not suspect). Reaches a verdict but attributed_quotes is off the allowlist → category-hold, does not auto-air. The point: the negation was NOT dropped."
+    },
+    {
+      "utterance": "And lightning never strikes the same place twice, everyone knows that.",
+      "claim": "Lightning never strikes the same place twice.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "False",
+      "expected_gate": "checked",
+      "expected_air": true,
+      "note": "mirror case: 'never' is part of the ASSERTED myth, not a denial of a prior claim → polarity asserts, airs False"
+    },
+    {
+      "utterance": "The Great Wall of China is visible from space with the naked eye.",
+      "claim": "The Great Wall of China is visible from space with the naked eye.",
+      "expected_polarity": "denies",
+      "category": "science_health",
+      "expected_verdict": "False",
+      "expected_gate": "polarity-conflict",
+      "expected_air": false,
+      "note": "SUSPECT denial: extractor labeled it 'denies' but the utterance carries NO negation token → R46 tripwire flips polarity to suspect_denies → polarity-conflict HOLD, must NOT auto-air even though verdict is settled False"
+    },
+    {
+      "utterance": "Octopuses have three hearts, three of them.",
+      "claim": "Octopuses have three hearts.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "True",
+      "expected_gate": "checked",
+      "expected_air": true,
+      "note": "clean positive control → airs"
+    }
+  ],
+  "expected_scorecard": {
+    "status_note": "should-pass-clean: tripwire fires on exactly one case (suspect-denial → polarity-conflict hold). Two claims air (lightning False, octopus True); antoinette held on category, suspect-denial held on polarity.",
+    "claim_recall_pct": {
+      "min": 100
+    },
+    "gate_correctness_pct": {
+      "min": 100
+    },
+    "aired": {
+      "min": 2,
+      "max": 2
+    },
+    "gate_distribution_required": {
+      "polarity-conflict": {
+        "min": 1
+      }
+    }
+  }
+}

@@ -1,0 +1,130 @@
+{
+  "profile": "busy_street",
+  "scenario": "two_speaker_overlap",
+  "status": "known-degraded",
+  "autoAir": true,
+  "_generated": "COMPILED from two_speaker_overlap.scenario.json by tools/synthetic/author-scenario.js — do not hand-edit; edit the manifest and recompile.",
+  "finals": [
+    {
+      "t": 0,
+      "text": "Okay so I want to tell you something wild."
+    },
+    {
+      "t": 4000,
+      "text": "Octopuses have three hearts did you get the parking validated."
+    },
+    {
+      "t": 9500,
+      "text": "The Great Wall of China is visible from space with the naked eye."
+    },
+    {
+      "t": 15500,
+      "text": "no I did not sorry keep going."
+    },
+    {
+      "t": 19000,
+      "text": "Honey basically never spoils they found edible honey in Egyptian tombs."
+    }
+  ],
+  "extract": {
+    "Okay so I want to tell you something wild. Octopuses have three hearts did you get the parking validated.": {
+      "claim": null,
+      "ms": 200
+    },
+    "I want to tell you something wild. Octopuses have three hearts did you get the parking validated. The Great Wall of China is visible from space with the naked eye.": {
+      "claim": "The Great Wall of China is visible from space with the naked eye.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    },
+    "Great Wall of China is visible from space with the naked eye. no I did not sorry keep going. Honey basically never spoils they found edible honey in Egyptian tombs.": {
+      "claim": "Honey never spoils.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    }
+  },
+  "verify": {
+    "Octopuses have three hearts.": {
+      "verdict": "True",
+      "confidence": 0.92,
+      "source": {
+        "name": "National Geographic",
+        "url": "https://www.nationalgeographic.com/octopus",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "The Great Wall of China is visible from space with the naked eye.": {
+      "verdict": "False",
+      "confidence": 0.9,
+      "source": {
+        "name": "Scientific American",
+        "url": "https://www.scientificamerican.com/great-wall",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "Honey never spoils.": {
+      "verdict": "True",
+      "confidence": 0.88,
+      "source": {
+        "name": "Smithsonian",
+        "url": "https://www.smithsonianmag.com/honey",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    }
+  },
+  "claims": [
+    {
+      "utterance": "Octopuses have three hearts.",
+      "claim": "Octopuses have three hearts.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "True",
+      "expected_gate": "checked",
+      "expected_air": true,
+      "note": "SHOULD air; bystander crosstalk fused into the final ('did you get the parking validated') contaminates the window → extractor cannot cleanly recover → recall MISS (the degradation)"
+    },
+    {
+      "utterance": "The Great Wall of China is visible from space with the naked eye.",
+      "claim": "The Great Wall of China is visible from space with the naked eye.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "False",
+      "expected_gate": "checked",
+      "expected_air": true,
+      "note": "arrived in a clean single-speaker final → recovers and airs"
+    },
+    {
+      "utterance": "Honey basically never spoils; they found edible honey in Egyptian tombs.",
+      "claim": "Honey never spoils.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "True",
+      "expected_gate": "checked",
+      "expected_air": true,
+      "note": "clean final → recovers and airs"
+    }
+  ],
+  "expected_scorecard": {
+    "status_note": "known-degraded: crosstalk contamination costs one claim's recall. Clean-window claims still air. If recall reaches 100% single-mic separation shipped — re-baseline.",
+    "claim_recall_pct": {
+      "min": 50,
+      "max": 75
+    },
+    "aired": {
+      "min": 2,
+      "max": 2
+    }
+  }
+}

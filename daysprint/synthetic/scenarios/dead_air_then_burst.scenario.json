@@ -1,0 +1,52 @@
+{
+  "name": "dead_air_then_burst",
+  "profile": "clean",
+  "status": "should-pass-clean",
+  "doc": "A long stretch of dead air (the speaker is quiet / off-mic) followed by a burst of well-separated claims. Tests that (a) the trailing-silence window flush fires cleanly on the last pre-silence thought, (b) the rolling buffer does not carry stale words across the dead-air gap into the burst (no cross-gap window contamination), and (c) every claim in the burst is recovered once speech resumes. Should-pass-clean: the pre-silence claim airs, the gap produces nothing, and all burst claims air. The gap is >WINDOW_TRAIL_SILENCE_MS so the last thought flushes; the burst claims are spaced >3.6s so they never fuse.",
+  "autoAir": true,
+  "finals": [
+    { "t": 0,      "text": "Quick one before we go quiet. Octopuses have three hearts." },
+    { "t": 45000,  "text": "Okay we are back." },
+    { "t": 49000,  "text": "Honey never spoils, they found edible honey in ancient tombs." },
+    { "t": 55000,  "text": "Goldfish have a three second memory." },
+    { "t": 61000,  "text": "And the Great Wall of China is visible from space with the naked eye." }
+  ],
+  "intents": [
+    {
+      "id": "pre-octopus", "trigger": "Octopuses have three hearts.",
+      "claim": "Octopuses have three hearts.", "category": "science_health",
+      "verify": { "verdict": "True", "confidence": 0.93, "source": { "name": "National Geographic", "url": "https://www.nationalgeographic.com/octopus", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "Quick one before we go quiet. Octopuses have three hearts.", "claim": "Octopuses have three hearts.", "category": "science_health", "expected_verdict": "True", "expected_gate": "checked", "expected_air": true, "note": "last thought before dead air → trailing-silence flush → airs" }
+    },
+    {
+      "id": "back", "trigger": "Okay we are back.", "claim": null,
+      "expected": { "utterance": "Okay we are back.", "expected_gate": "no-claim", "note": "resume filler → no card" }
+    },
+    {
+      "id": "honey", "trigger": "Honey never spoils",
+      "claim": "Honey never spoils.", "category": "science_health",
+      "verify": { "verdict": "True", "confidence": 0.88, "source": { "name": "Smithsonian", "url": "https://www.smithsonianmag.com/honey", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "Honey never spoils, they found edible honey in ancient tombs.", "claim": "Honey never spoils.", "category": "science_health", "expected_verdict": "True", "expected_gate": "checked", "expected_air": true, "note": "first claim of the burst, after the gap → airs" }
+    },
+    {
+      "id": "goldfish", "trigger": "Goldfish have a three second memory.",
+      "claim": "Goldfish have a three-second memory.", "category": "science_health",
+      "verify": { "verdict": "False", "confidence": 0.91, "source": { "name": "Scientific American", "url": "https://www.scientificamerican.com/goldfish-memory", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "Goldfish have a three second memory.", "claim": "Goldfish have a three-second memory.", "category": "science_health", "expected_verdict": "False", "expected_gate": "checked", "expected_air": true }
+    },
+    {
+      "id": "greatwall", "trigger": "Great Wall of China is visible from space",
+      "claim": "The Great Wall of China is visible from space with the naked eye.", "category": "science_health",
+      "verify": { "verdict": "False", "confidence": 0.9, "source": { "name": "Scientific American", "url": "https://www.scientificamerican.com/great-wall", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "And the Great Wall of China is visible from space with the naked eye.", "claim": "The Great Wall of China is visible from space with the naked eye.", "category": "science_health", "expected_verdict": "False", "expected_gate": "checked", "expected_air": true }
+    }
+  ],
+  "expected_scorecard": {
+    "status_note": "should-pass-clean: pre-silence claim + all 3 burst claims recover, verify and air (4 aired); the resume filler ('Okay we are back') produces a no-claim check and airs nothing; dead air produces no phantom cards (checked==4, exactly the real claims). (claim_recall_pct/gate_correctness_pct unbounded: the generic filler 'Okay we are back' falls below the scorecard's fuzzy-match threshold so it scores as 'missed' rather than 'no-claim' — a matcher artifact; the pipeline emitted the no-claim check, asserted via no-claim>=1.)",
+    "word_coverage_pct": { "min": 90 },
+    "verdict_accuracy_pct": { "min": 100 },
+    "air_accuracy_pct": { "min": 100 },
+    "aired": { "min": 4, "max": 4 },
+    "gate_distribution_required": { "checked": { "min": 4, "max": 4 }, "no-claim": { "min": 1 } }
+  }
+}

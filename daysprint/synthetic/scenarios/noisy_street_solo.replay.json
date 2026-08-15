@@ -1,0 +1,191 @@
+{
+  "profile": "busy_street",
+  "scenario": "noisy_street_solo",
+  "status": "should-pass-clean",
+  "autoAir": true,
+  "_generated": "COMPILED from noisy_street_solo.scenario.json by tools/synthetic/author-scenario.js — do not hand-edit; edit the manifest and recompile.",
+  "finals": [
+    {
+      "t": 0,
+      "text": "Alright walking and talking here."
+    },
+    {
+      "t": 3400,
+      "text": "Flamingos are born gray and turn pink from the shrimp they eat."
+    },
+    {
+      "t": 9000,
+      "text": "Honestly this is the best walking route in the whole neighborhood."
+    },
+    {
+      "t": 14500,
+      "text": "Here is a number for you. The US economy is around thirty trillion dollars a year."
+    },
+    {
+      "t": 21000,
+      "text": "Mount Everest grows about four millimeters every single year."
+    },
+    {
+      "t": 27000,
+      "text": "Lightning never strikes the same place twice, that is just physics."
+    }
+  ],
+  "extract": {
+    "Alright walking and talking here. Flamingos are born gray and turn pink from the shrimp they eat.": {
+      "claim": "Flamingos are born gray and turn pink from their diet.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    },
+    "Alright walking and talking here. Flamingos are born gray and turn pink from the shrimp they eat. Honestly this is the best walking route in the whole neighborhood.": {
+      "claim": null,
+      "ms": 120
+    },
+    "shrimp they eat. Honestly this is the best walking route in the whole neighborhood. Here is a number for you. The US economy is around thirty trillion dollars a year.": {
+      "claim": "The US economy is around thirty trillion dollars a year.",
+      "polarity": "asserts",
+      "category": "statistics",
+      "harm_class": "none",
+      "ms": 380
+    },
+    "route in the whole neighborhood. Here is a number for you. The US economy is around thirty trillion dollars a year. Mount Everest grows about four millimeters every single year.": {
+      "claim": "Mount Everest grows about four millimeters per year.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    },
+    "The US economy is around thirty trillion dollars a year. Mount Everest grows about four millimeters every single year. Lightning never strikes the same place twice, that is just physics.": {
+      "claim": "Lightning never strikes the same place twice.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    }
+  },
+  "verify": {
+    "Flamingos are born gray and turn pink from their diet.": {
+      "verdict": "True",
+      "confidence": 0.9,
+      "source": {
+        "name": "Audubon",
+        "url": "https://www.audubon.org/flamingo",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "The US economy is around thirty trillion dollars a year.": {
+      "verdict": "True",
+      "confidence": 0.9,
+      "source": {
+        "name": "BEA",
+        "url": "https://www.bea.gov/gdp",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "Mount Everest grows about four millimeters per year.": {
+      "verdict": "True",
+      "confidence": 0.88,
+      "source": {
+        "name": "USGS",
+        "url": "https://www.usgs.gov/everest",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "Lightning never strikes the same place twice.": {
+      "verdict": "False",
+      "confidence": 0.92,
+      "source": {
+        "name": "NOAA",
+        "url": "https://www.weather.gov/lightning-myths",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    }
+  },
+  "claims": [
+    {
+      "utterance": "Flamingos are born gray and turn pink from the shrimp they eat.",
+      "claim": "Flamingos are born gray and turn pink from their diet.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "True",
+      "expected_gate": "checked",
+      "expected_air": true
+    },
+    {
+      "utterance": "Honestly this is the best walking route in the whole neighborhood.",
+      "claim": null,
+      "expected_polarity": "asserts",
+      "category": null,
+      "expected_verdict": null,
+      "expected_gate": "no-claim",
+      "note": "opinion → no card"
+    },
+    {
+      "utterance": "The US economy is around thirty trillion dollars a year.",
+      "claim": "The US economy is around thirty trillion dollars a year.",
+      "expected_polarity": "asserts",
+      "category": "statistics",
+      "expected_verdict": "True",
+      "expected_gate": "checked",
+      "expected_air": false,
+      "note": "checkable + verified True, but `statistics` is NOT on the pilot auto-air allowlist → category-hold, must not auto-air"
+    },
+    {
+      "utterance": "Mount Everest grows about four millimeters every single year.",
+      "claim": "Mount Everest grows about four millimeters per year.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "True",
+      "expected_gate": "checked",
+      "expected_air": true
+    },
+    {
+      "utterance": "Lightning never strikes the same place twice, that is just physics.",
+      "claim": "Lightning never strikes the same place twice.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "False",
+      "expected_gate": "checked",
+      "expected_air": true,
+      "note": "'never' is an assertion here (the myth), not a denial of a prior claim — polarity stays asserts"
+    }
+  ],
+  "expected_scorecard": {
+    "status_note": "should-pass-clean with a category-hold: the statistics claim verifies True but is HELD from auto-air (not on the science_health allowlist), so 4 claims reach a verdict but only 3 air. (gate_correctness_pct/claim_recall_pct unbounded — the one opinion row is a scorecard fuzzy-match artifact against a dense cumulative window; the pipeline gates it correctly, asserted via no-claim>=1.) The category-hold is the load-bearing assertion: checked=4 but aired=3.",
+    "word_coverage_pct": {
+      "min": 90
+    },
+    "verdict_accuracy_pct": {
+      "min": 100
+    },
+    "air_accuracy_pct": {
+      "min": 100
+    },
+    "aired": {
+      "min": 3,
+      "max": 3
+    },
+    "gate_distribution_required": {
+      "checked": {
+        "min": 4,
+        "max": 4
+      },
+      "no-claim": {
+        "min": 1
+      }
+    }
+  }
+}

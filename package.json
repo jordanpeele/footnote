@@ -11,6 +11,8 @@
     "demo": "node tools/demo/run.js",
     "synth": "node tools/synthetic/gen-audio.js",
     "synth:fixtures": "node tools/synthetic/gen-fixtures.js",
+    "synth:scenarios": "node tools/synthetic/run-scenarios.js",
+    "synth:scenarios:compile": "node tools/synthetic/author-scenario.js compile-all",
     "test": "node --test \"test/**/*.test.js\""
   },
   "engines": {

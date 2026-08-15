@@ -1,0 +1,187 @@
+{
+  "profile": "clean",
+  "scenario": "dead_air_then_burst",
+  "status": "should-pass-clean",
+  "autoAir": true,
+  "_generated": "COMPILED from dead_air_then_burst.scenario.json by tools/synthetic/author-scenario.js — do not hand-edit; edit the manifest and recompile.",
+  "finals": [
+    {
+      "t": 0,
+      "text": "Quick one before we go quiet. Octopuses have three hearts."
+    },
+    {
+      "t": 45000,
+      "text": "Okay we are back."
+    },
+    {
+      "t": 49000,
+      "text": "Honey never spoils, they found edible honey in ancient tombs."
+    },
+    {
+      "t": 55000,
+      "text": "Goldfish have a three second memory."
+    },
+    {
+      "t": 61000,
+      "text": "And the Great Wall of China is visible from space with the naked eye."
+    }
+  ],
+  "extract": {
+    "Quick one before we go quiet. Octopuses have three hearts.": {
+      "claim": "Octopuses have three hearts.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    },
+    "Quick one before we go quiet. Octopuses have three hearts. Okay we are back.": {
+      "claim": null,
+      "ms": 120
+    },
+    "Quick one before we go quiet. Octopuses have three hearts. Okay we are back. Honey never spoils, they found edible honey in ancient tombs.": {
+      "claim": "Honey never spoils.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    },
+    "Quick one before we go quiet. Octopuses have three hearts. Okay we are back. Honey never spoils, they found edible honey in ancient tombs. Goldfish have a three second memory.": {
+      "claim": "Goldfish have a three-second memory.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    },
+    "Honey never spoils, they found edible honey in ancient tombs. Goldfish have a three second memory. And the Great Wall of China is visible from space with the naked eye.": {
+      "claim": "The Great Wall of China is visible from space with the naked eye.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    }
+  },
+  "verify": {
+    "Octopuses have three hearts.": {
+      "verdict": "True",
+      "confidence": 0.93,
+      "source": {
+        "name": "National Geographic",
+        "url": "https://www.nationalgeographic.com/octopus",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "Honey never spoils.": {
+      "verdict": "True",
+      "confidence": 0.88,
+      "source": {
+        "name": "Smithsonian",
+        "url": "https://www.smithsonianmag.com/honey",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "Goldfish have a three-second memory.": {
+      "verdict": "False",
+      "confidence": 0.91,
+      "source": {
+        "name": "Scientific American",
+        "url": "https://www.scientificamerican.com/goldfish-memory",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "The Great Wall of China is visible from space with the naked eye.": {
+      "verdict": "False",
+      "confidence": 0.9,
+      "source": {
+        "name": "Scientific American",
+        "url": "https://www.scientificamerican.com/great-wall",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    }
+  },
+  "claims": [
+    {
+      "utterance": "Quick one before we go quiet. Octopuses have three hearts.",
+      "claim": "Octopuses have three hearts.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "True",
+      "expected_gate": "checked",
+      "expected_air": true,
+      "note": "last thought before dead air → trailing-silence flush → airs"
+    },
+    {
+      "utterance": "Okay we are back.",
+      "claim": null,
+      "expected_polarity": "asserts",
+      "category": null,
+      "expected_verdict": null,
+      "expected_gate": "no-claim",
+      "note": "resume filler → no card"
+    },
+    {
+      "utterance": "Honey never spoils, they found edible honey in ancient tombs.",
+      "claim": "Honey never spoils.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "True",
+      "expected_gate": "checked",
+      "expected_air": true,
+      "note": "first claim of the burst, after the gap → airs"
+    },
+    {
+      "utterance": "Goldfish have a three second memory.",
+      "claim": "Goldfish have a three-second memory.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "False",
+      "expected_gate": "checked",
+      "expected_air": true
+    },
+    {
+      "utterance": "And the Great Wall of China is visible from space with the naked eye.",
+      "claim": "The Great Wall of China is visible from space with the naked eye.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "False",
+      "expected_gate": "checked",
+      "expected_air": true
+    }
+  ],
+  "expected_scorecard": {
+    "status_note": "should-pass-clean: pre-silence claim + all 3 burst claims recover, verify and air (4 aired); the resume filler ('Okay we are back') produces a no-claim check and airs nothing; dead air produces no phantom cards (checked==4, exactly the real claims). (claim_recall_pct/gate_correctness_pct unbounded: the generic filler 'Okay we are back' falls below the scorecard's fuzzy-match threshold so it scores as 'missed' rather than 'no-claim' — a matcher artifact; the pipeline emitted the no-claim check, asserted via no-claim>=1.)",
+    "word_coverage_pct": {
+      "min": 90
+    },
+    "verdict_accuracy_pct": {
+      "min": 100
+    },
+    "air_accuracy_pct": {
+      "min": 100
+    },
+    "aired": {
+      "min": 4,
+      "max": 4
+    },
+    "gate_distribution_required": {
+      "checked": {
+        "min": 4,
+        "max": 4
+      },
+      "no-claim": {
+        "min": 1
+      }
+    }
+  }
+}

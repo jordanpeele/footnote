@@ -1,0 +1,227 @@
+{
+  "profile": "busy_street",
+  "scenario": "cafe_interview",
+  "status": "should-pass-clean",
+  "autoAir": true,
+  "_generated": "COMPILED from cafe_interview.scenario.json by tools/synthetic/author-scenario.js — do not hand-edit; edit the manifest and recompile.",
+  "finals": [
+    {
+      "t": 0,
+      "text": "Thanks for sitting down with me."
+    },
+    {
+      "t": 3200,
+      "text": "Of course, happy to be here."
+    },
+    {
+      "t": 6800,
+      "text": "So people always say we only use ten percent of our brains."
+    },
+    {
+      "t": 12000,
+      "text": "Right, and honestly I think coffee is the best drink ever invented."
+    },
+    {
+      "t": 17500,
+      "text": "Here is a real one though. Octopuses have three hearts."
+    },
+    {
+      "t": 23000,
+      "text": "And bananas are botanically berries while strawberries are not."
+    },
+    {
+      "t": 29000,
+      "text": "That whole place has the best pastries in the city, no contest."
+    },
+    {
+      "t": 34500,
+      "text": "Last thing. Goldfish have a three second memory."
+    }
+  ],
+  "extract": {
+    "Thanks for sitting down with me. Of course, happy to be here.": {
+      "claim": null,
+      "ms": 120
+    },
+    "Thanks for sitting down with me. Of course, happy to be here. So people always say we only use ten percent of our brains.": {
+      "claim": "Humans only use ten percent of their brains.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    },
+    "Of course, happy to be here. So people always say we only use ten percent of our brains. Right, and honestly I think coffee is the best drink ever invented.": {
+      "claim": null,
+      "ms": 120
+    },
+    "we only use ten percent of our brains. Right, and honestly I think coffee is the best drink ever invented. Here is a real one though. Octopuses have three hearts.": {
+      "claim": "Octopuses have three hearts.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    },
+    "and honestly I think coffee is the best drink ever invented. Here is a real one though. Octopuses have three hearts. And bananas are botanically berries while strawberries are not.": {
+      "claim": "Bananas are botanically berries and strawberries are not.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    },
+    "is a real one though. Octopuses have three hearts. And bananas are botanically berries while strawberries are not. That whole place has the best pastries in the city, no contest.": {
+      "claim": null,
+      "ms": 120
+    },
+    "hearts. And bananas are botanically berries while strawberries are not. That whole place has the best pastries in the city, no contest. Last thing. Goldfish have a three second memory.": {
+      "claim": "Goldfish have a three-second memory.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    }
+  },
+  "verify": {
+    "Humans only use ten percent of their brains.": {
+      "verdict": "False",
+      "confidence": 0.95,
+      "source": {
+        "name": "BBC Science Focus",
+        "url": "https://www.sciencefocus.com/ten-percent-brain",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "Octopuses have three hearts.": {
+      "verdict": "True",
+      "confidence": 0.93,
+      "source": {
+        "name": "National Geographic",
+        "url": "https://www.nationalgeographic.com/octopus",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "Bananas are botanically berries and strawberries are not.": {
+      "verdict": "True",
+      "confidence": 0.9,
+      "source": {
+        "name": "Britannica",
+        "url": "https://www.britannica.com/banana-berry",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "Goldfish have a three-second memory.": {
+      "verdict": "False",
+      "confidence": 0.91,
+      "source": {
+        "name": "Scientific American",
+        "url": "https://www.scientificamerican.com/goldfish-memory",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    }
+  },
+  "claims": [
+    {
+      "utterance": "Of course, happy to be here.",
+      "claim": null,
+      "expected_polarity": "asserts",
+      "category": null,
+      "expected_verdict": null,
+      "expected_gate": "no-claim",
+      "note": "pleasantry, no claim"
+    },
+    {
+      "utterance": "So people always say we only use ten percent of our brains.",
+      "claim": "Humans only use ten percent of their brains.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "False",
+      "expected_gate": "checked",
+      "expected_air": true,
+      "note": "zombie fact → airs"
+    },
+    {
+      "utterance": "Right, and honestly I think coffee is the best drink ever invented.",
+      "claim": null,
+      "expected_polarity": "asserts",
+      "category": null,
+      "expected_verdict": null,
+      "expected_gate": "no-claim",
+      "note": "opinion → no card"
+    },
+    {
+      "utterance": "Octopuses have three hearts.",
+      "claim": "Octopuses have three hearts.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "True",
+      "expected_gate": "checked",
+      "expected_air": true
+    },
+    {
+      "utterance": "And bananas are botanically berries while strawberries are not.",
+      "claim": "Bananas are botanically berries and strawberries are not.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "True",
+      "expected_gate": "checked",
+      "expected_air": true
+    },
+    {
+      "utterance": "That whole place has the best pastries in the city, no contest.",
+      "claim": null,
+      "expected_polarity": "asserts",
+      "category": null,
+      "expected_verdict": null,
+      "expected_gate": "no-claim",
+      "note": "opinion → no card"
+    },
+    {
+      "utterance": "Goldfish have a three second memory.",
+      "claim": "Goldfish have a three-second memory.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "False",
+      "expected_gate": "checked",
+      "expected_air": true
+    }
+  ],
+  "expected_scorecard": {
+    "status_note": "should-pass-clean: all 4 real claims verify + air; the 3 opinions/pleasantries produce no-claim checks. (claim_recall_pct and gate_correctness_pct are NOT bounded here: the scorecard's recall denominator includes the 3 null-claim rows, and its fuzzy per-row matcher can bind a null-claim row to a neighbouring cumulative window — both are metric artifacts, not pipeline behaviour. The pipeline's actual opinion-drop is asserted via gate_distribution no-claim>=3.) Robust signals bounded: category/verdict/air accuracy on the recalled claims + the aired count + the no-claim check count.",
+    "word_coverage_pct": {
+      "min": 90
+    },
+    "category_accuracy_pct": {
+      "min": 100
+    },
+    "verdict_accuracy_pct": {
+      "min": 100
+    },
+    "air_accuracy_pct": {
+      "min": 100
+    },
+    "aired": {
+      "min": 4,
+      "max": 4
+    },
+    "gate_distribution_required": {
+      "checked": {
+        "min": 4,
+        "max": 4
+      },
+      "no-claim": {
+        "min": 3
+      }
+    }
+  }
+}
