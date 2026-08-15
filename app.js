@@ -1052,7 +1052,7 @@
       if (typeof j.dg_ms === "number" && typeof rec.roundtrip_ms === "number") rec.network_ms = +(rec.roundtrip_ms - j.dg_ms).toFixed(1);
       const txt = (j.transcript || "").trim();
       rec.transcript = txt;
-      if (txt.length > 2 && (j.confidence == null || j.confidence >= 0.3)) { ssTranscript.textContent = txt; checkUtterance(txt); }   // chunked fallback → fact-check
+      if (txt.length > 2 && (j.confidence == null || j.confidence >= 0.3)) { noteFinalHeard(); ssTranscript.textContent = txt; checkUtterance(txt); }   // chunked fallback → fact-check (+ R-transport dead-air clear)
       rec.ok = true; DBG.push(rec);
       if (micOn) setStatus("● LIVE · listening — talk like an anchor", "live");
     } catch (e) { if (g === gen) { rec.error = String(e && e.message || e); DBG.err(); DBG.push(rec); setStatus("network error — you can still type to drive it", "err"); } }
@@ -1083,6 +1083,41 @@
     checkUtterance(text, { merged: true });   // merged: word-min bypass only — F2 + grounding still gate
   }
   let dgEverWorked = false, dgRetryN = 0, dgRetryT = 0;   // mid-session drop → auto-reconnect (unattended/auto-air safe)
+  /* ---- R-transport: dead-air detector (FS-2 lineage — make silent transport failure LOUD).
+     The whole STT/audio chain lives here on /control; the ONLY signal that crosses to /op is
+     the queue snapshot, and that snapshot is pushed on card MUTATIONS. When the transport
+     fails mid-session — a bonded leg dies, the relay drops OBS's source, the Deepgram WS
+     wedges between reconnects, or bandwidth saturates into pure silence — no finals arrive,
+     no cards mutate, and nothing is pushed. /op keeps rendering the last snapshot with a
+     green conn dot (it can still reach the SERVER), indistinguishable from a quiet speaker.
+     This watchdog stamps every real STT final and, while streaming+unmuted, flips a `sttStale`
+     flag when no final has arrived for DEADAIR_MS — forcing a snapshot push so the street
+     operator sees "NO AUDIO REACHING PIPELINE" instead of a frozen-but-healthy-looking queue.
+     Observability only: it never touches audio, auth, or the relay — it makes dead-air legible.
+     Muting zeroes the bus ON PURPOSE (no finals expected) so the watchdog pauses while muted. */
+  const DEADAIR_MS = 12000;   // no STT final for this long while live+unmuted = the pipeline has gone deaf
+  let lastFinalAt = 0, sttStale = false, deadairTimer = 0;
+  function noteFinalHeard() {   // a real transcript reached the pipeline — the audio path is alive
+    lastFinalAt = Date.now();
+    if (sttStale) { sttStale = false; DBG.event("info", "audio restored — finals flowing again"); if (opBridge && opBridge.pushNow) opBridge.pushNow(); }
+  }
+  function deadairCheck() {
+    // only meaningful while we SHOULD be hearing audio: live, unmuted, not paused by the kill-switch
+    const shouldHear = streaming && !muted && !pipelinePaused;
+    const stale = shouldHear && lastFinalAt > 0 && (Date.now() - lastFinalAt) >= DEADAIR_MS;
+    if (stale === sttStale) return;
+    sttStale = stale;
+    if (stale) {
+      DBG.event("warn", `no audio reaching pipeline — ${Math.round((Date.now() - lastFinalAt) / 1000)}s since last transcript (transport dead-air?)`);
+      FT.log("deadair", { sinceMs: Date.now() - lastFinalAt });
+      setStatus("⚠ NO AUDIO REACHING PIPELINE — check the feed/relay (dead air)", "err");
+    } else if (streaming) {
+      setStatus("● LIVE · listening — talk like an anchor", "live");
+    }
+    if (opBridge && opBridge.pushNow) opBridge.pushNow();   // cross the signal to /op even with no card mutation
+  }
+  function startDeadairWatch() { lastFinalAt = Date.now(); sttStale = false; clearInterval(deadairTimer); deadairTimer = setInterval(deadairCheck, 2000); }
+  function stopDeadairWatch() { clearInterval(deadairTimer); deadairTimer = 0; sttStale = false; lastFinalAt = 0; }
   /* L2 (sprint-02): STT finalization wait measured ≤~0.55s p50 — endpointing is the lever,
      but faster finals ⇄ more split-finals is a live-audio tradeoff that can't be benched
      without a speaker (ledger rule: no unmeasured defaults). ?ep=<ms> exposes Deepgram's
@@ -1151,6 +1186,7 @@
       const tr = (alt && alt.transcript || "").trim();
       if (!tr) return;
       dgGotResult = true; dgEverWorked = true; dgRetryN = 0;
+      if (d.is_final) noteFinalHeard();   // R-transport: audio is reaching STT — clears any dead-air flag
       if (d.is_final) FT.log("stt_final", { transcript: tr, words: tr.split(/\s+/).length });
       else if (Date.now() - ftLastInterim > 400) { ftLastInterim = Date.now(); FT.log("stt_interim", { transcript: tr.slice(-120) }); }
       // live transcript on every result; fact-check each COMPLETED (final) sentence
@@ -1199,6 +1235,7 @@
     autoAirCount = 0; autoAirCapNoted = false;   // D18: cap is per-session
     if (applyKeyterms) applyKeyterms();   // R40: keyterms snapshot for this stream
     if (opBridge) opBridge.streamStarted();   // P3-J: start the operator command poll + baseline the queue snapshot
+    startDeadairWatch();   // R-transport: watch for the pipeline going deaf (transport dead-air)
     dgEverWorked = false; dgRetryN = 0; clearTimeout(dgRetryT);
     streamBtn.textContent = "■ End Stream"; streamBtn.classList.add("live");
     player.classList.add("live");
@@ -1313,6 +1350,7 @@
       if (untagged.length && !confirm(`${untagged.length} auto-aired card(s) have no attention tag (W/T/A).\n\nEnd Stream anyway? They will export as "uncaptured".`)) return;
     }
     streaming = false; micOn = false; gen++;
+    stopDeadairWatch();   // R-transport: stop the dead-air watchdog with the stream
     if (opBridge) opBridge.streamEnded();   // P3-J: stop the command poll; clear the operator queue snapshot
     clearTimeout(dgRetryT);
     if (strideTimer) { clearInterval(strideTimer); strideTimer = 0; }
@@ -1695,6 +1733,7 @@
       try {
         await fetch("/api/onair", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ room: s.room, writeKey: s.writeKey, op: "queue", cards, onAirId: SESSION.currentOnAir, muted, attn,
+            sttStale: clear ? false : sttStale,   // R-transport: dead-air flag — surfaces transport failure on /op even with no card mutation
             autoair: { on: !!byId("autoAir").checked, count: autoAirCount, cap: AUTO_AIR_CAP } }) });   // R43 latch + W4: cap state visible from the street
       } catch {}   // best-effort — next mutation re-pushes; /op's 180s TTL bounds staleness
     }

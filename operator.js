@@ -219,6 +219,24 @@
   const muteBanner = el("div", "mute-banner", "MIC MUTED");
   muteBanner.hidden = true;
   bannerEl.parentNode.insertBefore(muteBanner, bannerEl.nextSibling);
+
+  /* ---- R-transport: dead-air banner (FS-2 lineage). The whole audio/STT chain runs at home
+     base; the ONLY thing /op sees is the queue snapshot. When the transport fails mid-session
+     (a bonded leg dies, the relay drops OBS's source, the Deepgram WS wedges, or bandwidth
+     saturates into silence) /control stops getting finals and flags sttStale on the snapshot.
+     Without this, dead air looks identical to a quiet speaker — the conn dot stays green
+     because /op can still reach the server. This banner is deliberately distinct from both the
+     MUTE banner (an intentional silence) and the offline conn state (a lost SERVER link): it
+     means the LINK is fine but no audio is reaching the pipeline. Log-only signal; nothing to
+     tap — it tells the operator to check the feed/relay, not the queue. */
+  const deadairBanner = el("div", "deadair-banner", "⚠ NO AUDIO REACHING PIPELINE — check the feed / relay");
+  deadairBanner.hidden = true;
+  muteBanner.parentNode.insertBefore(deadairBanner, muteBanner.nextSibling);
+  let sttStale = false;
+  function renderDeadair() {
+    // suppressed while muted — a muted mic is expected silence, MUTE banner already owns it
+    deadairBanner.hidden = !(sttStale && !(muteWish ? muteWish.val : muted));
+  }
   let muted = false;        // last snapshot value (control's latch)
   let muteWish = null;      // optimistic flip awaiting confirmation: { val, at }
   const MUTE_RECONCILE_MS = 8000;
@@ -227,6 +245,7 @@
     muteBtn.textContent = on ? "MUTED" : "MUTE";
     muteBtn.classList.toggle("on", on);
     muteBanner.hidden = !on;
+    renderDeadair();   // R-transport: mute owns the silence; dead-air banner defers to it
   }
   muteBtn.addEventListener("click", () => {
     if (stopped) return;
@@ -368,6 +387,10 @@
           if (muteWish && (q.muted === muteWish.val || performance.now() - muteWish.at > MUTE_RECONCILE_MS)) muteWish = null;
           renderMute();
         }
+        // R-transport: dead-air — driven every tick (like muted), not gated on qseq: when the
+        // pipeline goes deaf there are no card mutations, so qseq never advances. renderMute
+        // already calls renderDeadair when mute changes; this covers the pure-stale flip.
+        if (typeof q.sttStale === "boolean" && q.sttStale !== sttStale) { sttStale = q.sttStale; renderDeadair(); }
         // P7-B: drive the ack machines every tick (not just on qseq change — AIRED→STALL
         // and a late STALL→ON AIR flip both happen with a frozen snapshot); re-render only
         // when some card's derived label actually changed.
