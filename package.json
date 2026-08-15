@@ -9,6 +9,8 @@
   "scripts": {
     "start": "node src/server/index.js",
     "demo": "node tools/demo/run.js",
+    "synth": "node tools/synthetic/gen-audio.js",
+    "synth:fixtures": "node tools/synthetic/gen-fixtures.js",
     "test": "node --test \"test/**/*.test.js\""
   },
   "engines": {

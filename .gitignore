@@ -12,3 +12,8 @@ docs/STATUS_*
 tools/adjudicate/queue.json
 tools/adjudicate/graduations.json
 daysprint/
+# Synthetic fixture audio: sidecars (ground truth) commit; the .wav is large and
+# deterministically regenerable (npm run synth:fixtures). The daysprint/ ignore above
+# already covers this path — this line documents intent for when fixtures graduate to a
+# tracked location.
+tools/synthetic/fixtures/*.wav
