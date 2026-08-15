@@ -27,6 +27,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   evalRelayHealth,
+  evalClientVersion,
   evalIngestAuth,
   evalTailscaleServe,
   evalArmable,
@@ -95,6 +96,32 @@ function tailscale(args) {
 }
 
 // ---- gather real facts ----------------------------------------------------------------
+
+function gatherClientVersion() {
+  // served APP_VERSION from app.js; newest client_version from the active harness log
+  let served = null;
+  try {
+    const app = fs.readFileSync(resolveRepoFile("app.js"), "utf8");
+    const m = app.match(/APP_VERSION\s*=\s*"([^"]+)"/);
+    served = m ? m[1] : null;
+  } catch {}
+  // newest FOOTNOTE_FIELDTEST_LOG under eval/results — read the last client_version line
+  let client = null, logPresent = false;
+  try {
+    const dir = resolveRepoFile("eval/results");
+    const logs = fs.readdirSync(dir).filter((n) => n.startsWith("fieldtest-") && n.endsWith(".jsonl"))
+      .map((n) => ({ n, t: fs.statSync(path.join(dir, n)).mtimeMs })).sort((a, b) => b.t - a.t);
+    if (logs.length) {
+      logPresent = true;
+      const lines = fs.readFileSync(path.join(dir, logs[0].n), "utf8").split("\n");
+      for (let i = lines.length - 1; i >= 0; i--) {
+        if (!lines[i].includes("client_version")) continue;
+        try { const e = JSON.parse(lines[i]); if (e.ev === "client_version" && e.version) { client = e.version; break; } } catch {}
+      }
+    }
+  } catch {}
+  return { served, client, logPresent };
+}
 
 function gatherRelayHealth() {
   const { ok, body } = curl(RELAY_HEALTH_URL, 6);
@@ -214,6 +241,7 @@ function prettyPath(abs) {
 function runChecks() {
   return [
     evalRelayHealth(gatherRelayHealth()),
+    evalClientVersion(gatherClientVersion()),
     evalIngestAuth(gatherIngestAuth()),
     evalTailscaleServe(gatherTailscaleServe()),
     evalArmable(gatherArmable()),

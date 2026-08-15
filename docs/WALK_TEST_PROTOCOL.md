@@ -20,6 +20,11 @@ in a 10-claim read), W2 cloud relay live, R57 category code in prod.
       per-check reason (relay health, ingest auth, tailscale serve, armable,
       kill-switch, OBS preset, keyterms, kit). GO = zero FAIL; WARN items are
       confirm-before-you-walk, not blockers. Exit 0 on GO, 1 on NO-GO.
+- [ ] **RELOAD /control (Cmd-Shift-R) and confirm the dashboard echoes**
+      `⎔ CLIENT app.js version <APP_VERSION>` — it MUST match the version in
+      app.js. run2 (2026-08-15) ran STALE cached client code for 111 min and
+      the window never fired; the version gate in preflight.js now FAILs on
+      mismatch. This is the single most important pre-stream step.
 - [ ] `arm.sh` (includes relay health check once W2 lands)
 - [ ] Kill-switch cycle: status → kill → verify 503 → restore
 - [ ] caffeinate holding · unlisted sink ingest green

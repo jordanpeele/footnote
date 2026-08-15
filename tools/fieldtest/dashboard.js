@@ -36,6 +36,7 @@ function line(t, tag, msg, extra) { console.log(`${C.dim}${ts(t)}${C.r} ${tag} $
 function handle(e) {
   const t = e.t || e.srv_t;
   switch (e.ev) {
+    case "client_version": line(t, `${C.cyn}⎔ CLIENT${C.r}`, `app.js version ${e.version}  ${C.dim}(P-A: confirm this matches served APP_VERSION before streaming)${C.r}`); break;
     case "dg_open": line(t, `${C.grn}◉ STT${C.r}`, `Deepgram connected (${e.auth}, ${e.sampleRate}Hz)`); break;
     case "dg_close": line(t, `${C.yel}◌ STT${C.r}`, `Deepgram closed code=${e.code}${e.gotResult ? "" : ` ${C.red}⚑ no transcript ever arrived${C.r}`}`); break;
     case "stt_interim": interims++; break;

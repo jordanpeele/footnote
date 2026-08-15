@@ -51,6 +51,27 @@ export function evalRelayHealth({ body, ok }) {
   };
 }
 
+/* 1b. Client version gate (P-A, run2 lesson): the browser can run a STALE app.js while the
+   server serves current code — run2 executed pre-window cached client for 111 min. This gate
+   asserts the newest client_version in the harness log equals the served APP_VERSION. NO-GO
+   (FAIL) on mismatch; WARN if no client has streamed yet (reload /control to stamp one). */
+export function evalClientVersion({ served, client, logPresent }) {
+  if (!served) {
+    return { id: "client-version", name: "Client version gate",
+      status: WARN, reason: "could not read served APP_VERSION from app.js — check manually" };
+  }
+  if (!logPresent || !client) {
+    return { id: "client-version", name: "Client version gate",
+      status: WARN, reason: `no client_version stamped yet — RELOAD /control (dashboard must echo ${served}) before streaming` };
+  }
+  if (client !== served) {
+    return { id: "client-version", name: "Client version gate",
+      status: FAIL, reason: `STALE CLIENT — browser ran ${client}, server serves ${served}. Hard-reload /control (Cmd-Shift-R); confirm the dashboard echoes ${served}. (run2 was invalidated by exactly this.)` };
+  }
+  return { id: "client-version", name: "Client version gate",
+    status: PASS, reason: `client_version ${client} == served (fresh code confirmed)` };
+}
+
 /* 2. Relay ingest auth — is the parked passphrase fix applied? Read-only assessment.
    `applied` is true only if we have positive evidence the live relay enforces a
    passphrase. Absent that, WARN (never FAIL — the rig still functions, just open). */

@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import {
   aggregate,
   evalRelayHealth,
+  evalClientVersion,
   evalIngestAuth,
   evalTailscaleServe,
   evalKillSwitch,
@@ -117,4 +118,12 @@ test("obs preset: present -> WARN-to-confirm (OBS state isn't readable)", () => 
 test("obs preset: missing -> FAIL", () => {
   const c = evalObsPreset({ presetExists: false });
   assert.equal(c.status, FAIL);
+});
+
+/* P-A — client version gate (run2 lesson: a stale cached client invalidated a 111-min run) */
+test("client version gate: PASS on match, FAIL on mismatch, WARN when unstamped", () => {
+  assert.equal(evalClientVersion({ served: "v2", client: "v2", logPresent: true }).status, PASS);
+  assert.equal(evalClientVersion({ served: "v2", client: "v1", logPresent: true }).status, FAIL);
+  assert.equal(evalClientVersion({ served: "v2", client: null, logPresent: false }).status, WARN);
+  assert.equal(evalClientVersion({ served: null, client: null, logPresent: false }).status, WARN);
 });
