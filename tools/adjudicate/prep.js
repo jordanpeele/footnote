@@ -55,7 +55,12 @@ function readJsonl(file) {
 // is tangled with how we decide to handle the class, so it does not belong in the routine
 // graduation sitting. It stays excluded from eval runs (drafts- prefix) and lives in
 // docs/redteam/SCI033_CLASS for the disposition. Everything else drafts-* is graduation fodder.
-const draftFiles = readdirSync(GOLDEN).filter((n) => /^drafts-.*\.jsonl$/.test(n) && !/^drafts-sci033-class-/.test(n)).sort();
+// Red-team disposition corpora (drafts-sci033-class-*, drafts-rconcurrence-*) are evidence
+// for RED disposition decisions (the sci-033 class handling; the concurrence-independence
+// question), NOT graduation candidates — ratifying class probes is entangled with those
+// rulings. They stay excluded from eval runs (drafts- prefix) and live in docs/redteam/.
+const REDTEAM_CORPUS = /^drafts-(sci033-class|rconcurrence)-/;
+const draftFiles = readdirSync(GOLDEN).filter((n) => /^drafts-.*\.jsonl$/.test(n) && !REDTEAM_CORPUS.test(n)).sort();
 if (!draftFiles.length) console.error("note: no drafts-*.jsonl present under eval/golden — empty queue");
 
 const allRows = [];
