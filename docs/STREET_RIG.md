@@ -119,7 +119,21 @@ and `srtla_rec` on the Mac reassembles them into plain SRT for the existing OBS 
   hardcodes `INADDR_ANY`), so the port is open at the UDP level even inside the tailnet
   posture. The SRT stream itself must carry a passphrase — set the same one in the OBS
   listener and in Moblin. srtla relays SRT payloads untouched, so the passphrase and
-  encryption survive the bonding hop end-to-end.
+  encryption survive the bonding hop end-to-end (confirmed in the pinned `BELABOX/srtla`
+  source: `srtla_send.c`/`srtla_rec.c` never touch the SRT handshake — crypto is
+  transparent to the bond).
+- **NEVER apply ingest-auth in the same window as a session.** The relay ingest-auth fix
+  (parked on `daysprint/2a-sec-ingest-auth-PARKED` — it declares the passphrase at the
+  internal `:4000` SRT termination so passphrase-less pushers are rejected) was once
+  applied and **rolled back at arm time** because the operator's Moblin build sent no
+  passphrase and got rejected. Sequencing lesson: **first verify a Moblin passphrase form
+  against the bench port** (`tools/relay/moblin-passphrase-bench.md` — a throwaway
+  passphrase'd `:4010` listener, NOT the live relay), **then apply between sessions**
+  (a ~2 s `srt-out` restart), **then re-run preflight** (`verify-ingest-auth.sh` 6/6 +
+  `node tools/street/preflight.js`). Applying blind, or right before rolling, breaks
+  ingest for the whole session. The crux is a *Moblin client* capability question
+  (does its "Moblin"-implementation SRTLA sender put a passphrase on the wire?), not an
+  srtla-protocol one — the bench settles it before anything touches the live box.
 - **The operator's deployment (example — the generic pattern above is what forks copy):**
   a dedicated `t4g.nano` in the operator's ops account (us-west-2) with an Elastic IP, so
   the Moblin URL never changes: `srtla://<elastic-ip>:5000`, OBS media source dials OUT
