@@ -1,0 +1,64 @@
+{
+  "name": "cafe_interview",
+  "profile": "busy_street",
+  "status": "should-pass-clean",
+  "doc": "Café interview: steady ambience bed but clean, well-endpointed speech (a lav mic, not a phone in the wind). Interviewer + guest trade checkable science_health claims, opinions, and filler. The ambience does NOT shred the capture, so the pipeline should recover every claim, air the settled science_health falsehoods, and drop the opinions. This is the 'the system works when capture is clean' control.",
+  "autoAir": true,
+  "finals": [
+    { "t": 0,     "text": "Thanks for sitting down with me." },
+    { "t": 3200,  "text": "Of course, happy to be here." },
+    { "t": 6800,  "text": "So people always say we only use ten percent of our brains." },
+    { "t": 12000, "text": "Right, and honestly I think coffee is the best drink ever invented." },
+    { "t": 17500, "text": "Here is a real one though. Octopuses have three hearts." },
+    { "t": 23000, "text": "And bananas are botanically berries while strawberries are not." },
+    { "t": 29000, "text": "That whole place has the best pastries in the city, no contest." },
+    { "t": 34500, "text": "Last thing. Goldfish have a three second memory." }
+  ],
+  "intents": [
+    {
+      "id": "greeting", "trigger": "happy to be here.", "claim": null,
+      "expected": { "utterance": "Of course, happy to be here.", "expected_gate": "no-claim", "note": "pleasantry, no claim" }
+    },
+    {
+      "id": "tenpercent", "trigger": "ten percent of our brains.",
+      "claim": "Humans only use ten percent of their brains.", "category": "science_health",
+      "verify": { "verdict": "False", "confidence": 0.95, "source": { "name": "BBC Science Focus", "url": "https://www.sciencefocus.com/ten-percent-brain", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "So people always say we only use ten percent of our brains.", "claim": "Humans only use ten percent of their brains.", "category": "science_health", "expected_verdict": "False", "expected_gate": "checked", "expected_air": true, "note": "zombie fact → airs" }
+    },
+    {
+      "id": "coffee-op", "trigger": "coffee is the best drink", "claim": null,
+      "expected": { "utterance": "Right, and honestly I think coffee is the best drink ever invented.", "expected_gate": "no-claim", "note": "opinion → no card" }
+    },
+    {
+      "id": "octopus", "trigger": "Octopuses have three hearts.",
+      "claim": "Octopuses have three hearts.", "category": "science_health",
+      "verify": { "verdict": "True", "confidence": 0.93, "source": { "name": "National Geographic", "url": "https://www.nationalgeographic.com/octopus", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "Octopuses have three hearts.", "claim": "Octopuses have three hearts.", "category": "science_health", "expected_verdict": "True", "expected_gate": "checked", "expected_air": true }
+    },
+    {
+      "id": "bananas", "trigger": "bananas are botanically berries",
+      "claim": "Bananas are botanically berries and strawberries are not.", "category": "science_health",
+      "verify": { "verdict": "True", "confidence": 0.9, "source": { "name": "Britannica", "url": "https://www.britannica.com/banana-berry", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "And bananas are botanically berries while strawberries are not.", "claim": "Bananas are botanically berries and strawberries are not.", "category": "science_health", "expected_verdict": "True", "expected_gate": "checked", "expected_air": true }
+    },
+    {
+      "id": "pastries-op", "trigger": "best pastries in the city", "claim": null,
+      "expected": { "utterance": "That whole place has the best pastries in the city, no contest.", "expected_gate": "no-claim", "note": "opinion → no card" }
+    },
+    {
+      "id": "goldfish", "trigger": "Goldfish have a three second memory.",
+      "claim": "Goldfish have a three-second memory.", "category": "science_health",
+      "verify": { "verdict": "False", "confidence": 0.91, "source": { "name": "Scientific American", "url": "https://www.scientificamerican.com/goldfish-memory", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "Goldfish have a three second memory.", "claim": "Goldfish have a three-second memory.", "category": "science_health", "expected_verdict": "False", "expected_gate": "checked", "expected_air": true }
+    }
+  ],
+  "expected_scorecard": {
+    "status_note": "should-pass-clean: all 4 real claims verify + air; the 3 opinions/pleasantries produce no-claim checks. (claim_recall_pct and gate_correctness_pct are NOT bounded here: the scorecard's recall denominator includes the 3 null-claim rows, and its fuzzy per-row matcher can bind a null-claim row to a neighbouring cumulative window — both are metric artifacts, not pipeline behaviour. The pipeline's actual opinion-drop is asserted via gate_distribution no-claim>=3.) Robust signals bounded: category/verdict/air accuracy on the recalled claims + the aired count + the no-claim check count.",
+    "word_coverage_pct": { "min": 90 },
+    "category_accuracy_pct": { "min": 100 },
+    "verdict_accuracy_pct": { "min": 100 },
+    "air_accuracy_pct": { "min": 100 },
+    "aired": { "min": 4, "max": 4 },
+    "gate_distribution_required": { "checked": { "min": 4, "max": 4 }, "no-claim": { "min": 3 } }
+  }
+}

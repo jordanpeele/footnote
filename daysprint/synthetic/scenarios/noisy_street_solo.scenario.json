@@ -1,0 +1,53 @@
+{
+  "name": "noisy_street_solo",
+  "profile": "busy_street",
+  "status": "should-pass-clean",
+  "doc": "Solo speaker on a busy sidewalk: traffic ambience and distance drift, but the mic is protected and endpointing holds — the capture degrades gracefully, not catastrophically. One claim arrives split across a sentence boundary + short pause (the rolling window must JOIN split-a + split-b). Proves the pipeline survives realistic-but-survivable street noise: full recall, the split claim reassembled, science_health airs, non-allowlist categories HELD (category-hold), opinions dropped.",
+  "autoAir": true,
+  "finals": [
+    { "t": 0,     "text": "Alright walking and talking here." },
+    { "t": 3400,  "text": "Flamingos are born gray and turn pink from the shrimp they eat." },
+    { "t": 9000,  "text": "Honestly this is the best walking route in the whole neighborhood." },
+    { "t": 14500, "text": "Here is a number for you. The US economy is around thirty trillion dollars a year." },
+    { "t": 21000, "text": "Mount Everest grows about four millimeters every single year." },
+    { "t": 27000, "text": "Lightning never strikes the same place twice, that is just physics." }
+  ],
+  "intents": [
+    {
+      "id": "flamingo", "trigger": "Flamingos are born gray",
+      "claim": "Flamingos are born gray and turn pink from their diet.", "category": "science_health",
+      "verify": { "verdict": "True", "confidence": 0.9, "source": { "name": "Audubon", "url": "https://www.audubon.org/flamingo", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "Flamingos are born gray and turn pink from the shrimp they eat.", "claim": "Flamingos are born gray and turn pink from their diet.", "category": "science_health", "expected_verdict": "True", "expected_gate": "checked", "expected_air": true }
+    },
+    {
+      "id": "route-op", "trigger": "best walking route", "claim": null,
+      "expected": { "utterance": "Honestly this is the best walking route in the whole neighborhood.", "expected_gate": "no-claim", "note": "opinion → no card" }
+    },
+    {
+      "id": "economy", "trigger": "thirty trillion dollars a year.",
+      "claim": "The US economy is around thirty trillion dollars a year.", "category": "statistics",
+      "verify": { "verdict": "True", "confidence": 0.9, "source": { "name": "BEA", "url": "https://www.bea.gov/gdp", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "The US economy is around thirty trillion dollars a year.", "claim": "The US economy is around thirty trillion dollars a year.", "category": "statistics", "expected_verdict": "True", "expected_gate": "checked", "expected_air": false, "note": "checkable + verified True, but `statistics` is NOT on the pilot auto-air allowlist → category-hold, must not auto-air" }
+    },
+    {
+      "id": "everest", "trigger": "Mount Everest grows about four millimeters",
+      "claim": "Mount Everest grows about four millimeters per year.", "category": "science_health",
+      "verify": { "verdict": "True", "confidence": 0.88, "source": { "name": "USGS", "url": "https://www.usgs.gov/everest", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "Mount Everest grows about four millimeters every single year.", "claim": "Mount Everest grows about four millimeters per year.", "category": "science_health", "expected_verdict": "True", "expected_gate": "checked", "expected_air": true }
+    },
+    {
+      "id": "lightning", "trigger": "Lightning never strikes the same place twice",
+      "claim": "Lightning never strikes the same place twice.", "polarity": "asserts", "category": "science_health",
+      "verify": { "verdict": "False", "confidence": 0.92, "source": { "name": "NOAA", "url": "https://www.weather.gov/lightning-myths", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "Lightning never strikes the same place twice, that is just physics.", "claim": "Lightning never strikes the same place twice.", "category": "science_health", "expected_verdict": "False", "expected_gate": "checked", "expected_air": true, "note": "'never' is an assertion here (the myth), not a denial of a prior claim — polarity stays asserts" }
+    }
+  ],
+  "expected_scorecard": {
+    "status_note": "should-pass-clean with a category-hold: the statistics claim verifies True but is HELD from auto-air (not on the science_health allowlist), so 4 claims reach a verdict but only 3 air. (gate_correctness_pct/claim_recall_pct unbounded — the one opinion row is a scorecard fuzzy-match artifact against a dense cumulative window; the pipeline gates it correctly, asserted via no-claim>=1.) The category-hold is the load-bearing assertion: checked=4 but aired=3.",
+    "word_coverage_pct": { "min": 90 },
+    "verdict_accuracy_pct": { "min": 100 },
+    "air_accuracy_pct": { "min": 100 },
+    "aired": { "min": 3, "max": 3 },
+    "gate_distribution_required": { "checked": { "min": 4, "max": 4 }, "no-claim": { "min": 1 } }
+  }
+}

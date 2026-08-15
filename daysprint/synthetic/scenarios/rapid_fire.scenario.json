@@ -1,0 +1,48 @@
+{
+  "name": "rapid_fire",
+  "profile": "clean",
+  "status": "known-degraded",
+  "doc": "Claims arriving FASTER than verify can clear — the one-window-dedupe failure the S2 --real run surfaced. Five distinct science_health claims land ~1.2s apart while a verify takes ~2.6s. The rolling window is cumulative, so every terminal window still LEADS with the first claim; the extractor keys off that leading claim and re-returns it, F2 claim-level dedupe (60s window) drops the repeats, and the four genuinely-new claims that share those windows never get their own extract → they are LOST. Only the first claim airs. This is SUPPOSED to fail: it pins the rapid-fire recall collapse so a per-claim windowing / verify-queue fix can be measured against it (expected: recall rises from ~20% toward 100%, aired from 1 toward 5).",
+  "autoAir": true,
+  "extract_prefix": [
+    {
+      "prefix": "Octopuses have three hearts.",
+      "claim": "Octopuses have three hearts.", "category": "science_health",
+      "verify": { "verdict": "True", "confidence": 0.92, "source": { "name": "National Geographic", "url": "https://www.nationalgeographic.com/octopus", "tier": 3 }, "autoAirEligible": true }
+    }
+  ],
+  "finals": [
+    { "t": 0,    "text": "Octopuses have three hearts." },
+    { "t": 1200, "text": "Goldfish have a three second memory." },
+    { "t": 2400, "text": "Honey never spoils." },
+    { "t": 3600, "text": "Flamingos are born gray." },
+    { "t": 4800, "text": "The Great Wall is visible from space." }
+  ],
+  "intents": [
+    {
+      "id": "octopus", "no_extract": true,
+      "expected": { "utterance": "Octopuses have three hearts.", "claim": "Octopuses have three hearts.", "category": "science_health", "expected_verdict": "True", "expected_gate": "checked", "expected_air": true, "note": "the first claim — the only one that gets its own extract before the cumulative window fills → airs" }
+    },
+    {
+      "id": "goldfish", "no_extract": true,
+      "expected": { "utterance": "Goldfish have a three second memory.", "claim": "Goldfish have a three-second memory.", "category": "science_health", "expected_verdict": "False", "expected_gate": "checked", "expected_air": true, "note": "SHOULD air; lost — its window led with the octopus claim, extractor re-returned octopus, F2 deduped → recall MISS" }
+    },
+    {
+      "id": "honey", "no_extract": true,
+      "expected": { "utterance": "Honey never spoils.", "claim": "Honey never spoils.", "category": "science_health", "expected_verdict": "True", "expected_gate": "checked", "expected_air": true, "note": "SHOULD air; lost to the same one-window-dedupe collision" }
+    },
+    {
+      "id": "flamingo", "no_extract": true,
+      "expected": { "utterance": "Flamingos are born gray.", "claim": "Flamingos are born gray.", "category": "science_health", "expected_verdict": "True", "expected_gate": "checked", "expected_air": true, "note": "SHOULD air; lost" }
+    },
+    {
+      "id": "greatwall", "no_extract": true,
+      "expected": { "utterance": "The Great Wall is visible from space.", "claim": "The Great Wall of China is visible from space with the naked eye.", "category": "science_health", "expected_verdict": "False", "expected_gate": "checked", "expected_air": true, "note": "SHOULD air; lost" }
+    }
+  ],
+  "expected_scorecard": {
+    "status_note": "known-degraded: rapid-fire one-window-dedupe collision. The honest failure signal is the GATE DISTRIBUTION — 4 of 5 distinct claims collapse to 'dedupe' (the extractor re-returns the leading claim of the cumulative window) and only 1 airs. NOTE: word_coverage and claim_recall both read HIGH here — the cumulative window physically contains every utterance's words, and each deduped check still carries *a* claim, so the coverage/recall metrics do NOT see this failure. That is exactly why the bound is on dedupe-count + aired, not recall. When per-claim windowing / a verify queue ships, dedupe should fall toward 0 and aired rise toward 5 — re-baseline then.",
+    "aired": { "min": 1, "max": 1 },
+    "gate_distribution_required": { "dedupe": { "min": 4 }, "checked": { "max": 1 } }
+  }
+}

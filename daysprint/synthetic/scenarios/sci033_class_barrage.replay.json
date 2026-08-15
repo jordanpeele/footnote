@@ -1,0 +1,161 @@
+{
+  "profile": "clean",
+  "scenario": "sci033_class_barrage",
+  "status": "known-degraded",
+  "autoAir": true,
+  "_generated": "COMPILED from sci033_class_barrage.scenario.json by tools/synthetic/author-scenario.js — do not hand-edit; edit the manifest and recompile.",
+  "finals": [
+    {
+      "t": 0,
+      "text": "The makers ran their own internal study and it proved the pill doubles your energy."
+    },
+    {
+      "t": 6000,
+      "text": "Their in-house research team confirmed this serum reverses wrinkles in two weeks."
+    },
+    {
+      "t": 12000,
+      "text": "The company's own clinical data shows the device cures insomnia for ninety percent of users."
+    },
+    {
+      "t": 18500,
+      "text": "We surveyed the whole neighborhood and ninety percent support the new stop sign."
+    }
+  ],
+  "extract": {
+    "The makers ran their own internal study and it proved the pill doubles your energy.": {
+      "claim": "A supplement company's internal study proved its pill doubles energy levels.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    },
+    "The makers ran their own internal study and it proved the pill doubles your energy. Their in-house research team confirmed this serum reverses wrinkles in two weeks.": {
+      "claim": "A cosmetics company's in-house research confirmed its serum reverses wrinkles in two weeks.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    },
+    "doubles your energy. Their in-house research team confirmed this serum reverses wrinkles in two weeks. The company's own clinical data shows the device cures insomnia for ninety percent of users.": {
+      "claim": "A device maker's own clinical data shows it cures insomnia for 90% of users.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    },
+    "two weeks. The company's own clinical data shows the device cures insomnia for ninety percent of users. We surveyed the whole neighborhood and ninety percent support the new stop sign.": {
+      "claim": "Ninety percent of the neighborhood supports the new stop sign.",
+      "polarity": "asserts",
+      "category": "science_health",
+      "harm_class": "none",
+      "ms": 380
+    }
+  },
+  "verify": {
+    "A supplement company's internal study proved its pill doubles energy levels.": {
+      "verdict": "False",
+      "confidence": 0.85,
+      "source": {
+        "name": "Healthline",
+        "url": "https://www.healthline.com/energy-supplements",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "A cosmetics company's in-house research confirmed its serum reverses wrinkles in two weeks.": {
+      "verdict": "False",
+      "confidence": 0.9,
+      "source": {
+        "name": "FTC",
+        "url": "https://www.ftc.gov/anti-aging-claims",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "A device maker's own clinical data shows it cures insomnia for 90% of users.": {
+      "verdict": "False",
+      "confidence": 0.95,
+      "source": {
+        "name": "Sleep Foundation",
+        "url": "https://www.sleepfoundation.org/insomnia-devices",
+        "tier": 3
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    },
+    "Ninety percent of the neighborhood supports the new stop sign.": {
+      "verdict": "False",
+      "confidence": 0.97,
+      "source": {
+        "name": "local-news",
+        "url": "https://example-localnews.com/stop-sign",
+        "tier": 2
+      },
+      "autoAirEligible": true,
+      "polarity_conflict": false,
+      "ms": 2200
+    }
+  },
+  "claims": [
+    {
+      "utterance": "The makers ran their own internal study and it proved the pill doubles your energy.",
+      "claim": "A supplement company's internal study proved its pill doubles energy levels.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "Unverifiable",
+      "expected_gate": "checked",
+      "expected_air": false,
+      "note": "HONEST verdict Unverifiable (uncheckable internal study). Engines flatten to False@0.85 and it AIRS wrong — the known slip. Ground-truth here is the HONEST verdict; the pinned failure is verdict_accuracy=0 and air=WRONG."
+    },
+    {
+      "utterance": "Their in-house research team confirmed this serum reverses wrinkles in two weeks.",
+      "claim": "A cosmetics company's in-house research confirmed its serum reverses wrinkles in two weeks.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "Unverifiable",
+      "expected_gate": "checked",
+      "expected_air": false,
+      "note": "proprietary in-house study, uncheckable → honest Unverifiable; slips as False@0.90"
+    },
+    {
+      "utterance": "The company's own clinical data shows the device cures insomnia for ninety percent of users.",
+      "claim": "A device maker's own clinical data shows it cures insomnia for 90% of users.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "Unverifiable",
+      "expected_gate": "checked",
+      "expected_air": false,
+      "note": "manufacturer self-report, uncheckable → honest Unverifiable; slips as False@0.95"
+    },
+    {
+      "utterance": "We surveyed the whole neighborhood and ninety percent support the new stop sign.",
+      "claim": "Ninety percent of the neighborhood supports the new stop sign.",
+      "expected_polarity": "asserts",
+      "category": "science_health",
+      "expected_verdict": "Unverifiable",
+      "expected_gate": "checked",
+      "expected_air": false,
+      "note": "private unpublished poll → honest Unverifiable; slips as False@0.97"
+    }
+  ],
+  "expected_scorecard": {
+    "status_note": "known-degraded (sci-033 class UNFIXED). The pinned failure: all 4 reach a verdict and AUTO-AIR, but verdict_accuracy vs the honest Unverifiable ground truth is 0% and air_accuracy is 0% (all wrongly aired). When the parked class-detector ships, aired should drop toward 0 and these should become HELD — re-baseline then.",
+    "verdict_accuracy_pct": {
+      "max": 25
+    },
+    "air_accuracy_pct": {
+      "max": 25
+    },
+    "aired": {
+      "min": 4,
+      "max": 4,
+      "note": "all 4 slip and air — THIS is the failure being pinned"
+    }
+  }
+}

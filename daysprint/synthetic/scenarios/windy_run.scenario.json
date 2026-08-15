@@ -1,0 +1,55 @@
+{
+  "name": "windy_run",
+  "profile": "windy_run",
+  "status": "known-degraded",
+  "doc": "KEYSTONE — reproduces the 2026-08-14 Los Feliz morning run. Wind gusts bury words and packet-loss/handoff mutes DROP audio the relay never recovered, so Deepgram only ever received a shredded subset of what was said. The `finals` are the degraded transcript the capture actually delivered; the sidecar `utterance` fields are ground truth of what was SPOKEN. Word-coverage falls out of that gap, and shredded windows no longer carry a recoverable claim so most claims are LOST (extract returns null → recall miss). This scenario is SUPPOSED to fail: it pins the morning's low word-coverage and low claim-recall as the current-truth baseline a capture-chain fix must beat. Do NOT 'fix' by inflating the finals — fix the capture, then re-record the fixture.",
+  "autoAir": true,
+  "finals": [
+    { "t": 0,     "text": "Okay" },
+    { "t": 700,   "text": "rolling." },
+    { "t": 3000,  "text": "Octopuses have three hearts." },
+    { "t": 8000,  "text": "The Great" },
+    { "t": 9200,  "text": "space naked eye." },
+    { "t": 14000, "text": "Honey" },
+    { "t": 15100, "text": "never spoils." },
+    { "t": 20000, "text": "Vikings" },
+    { "t": 21000, "text": "horned helmets." },
+    { "t": 26000, "text": "Flamingos" },
+    { "t": 27200, "text": "born gray." },
+    { "t": 33000, "text": "Mount" },
+    { "t": 35300, "text": "four millimeters." },
+    { "t": 40000, "text": "that's the tape." }
+  ],
+  "intents": [
+    {
+      "id": "octopus", "trigger": "Octopuses have three hearts.",
+      "claim": "Octopuses have three hearts.", "category": "science_health",
+      "verify": { "verdict": "True", "confidence": 0.92, "source": { "name": "National Geographic", "url": "https://www.nationalgeographic.com/octopus", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "Octopuses have three hearts.", "claim": "Octopuses have three hearts.", "category": "science_health", "expected_verdict": "True", "expected_gate": "checked", "expected_air": true, "note": "the ONE claim that survived the wind intact (arrived as a clean final) → airs" }
+    },
+    {
+      "id": "greatwall", "lost": true, "trigger": "Great space naked eye.",
+      "claim": "The Great Wall of China is visible from space with the naked eye.", "category": "science_health",
+      "verify": { "verdict": "False", "confidence": 0.9, "source": { "name": "Scientific American", "url": "https://www.scientificamerican.com/great-wall", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "The Great Wall of China is visible from space with the naked eye.", "claim": "The Great Wall of China is visible from space with the naked eye.", "category": "science_health", "expected_verdict": "False", "expected_gate": "checked", "expected_air": true, "note": "SHOULD air; mid-claim words ('Wall of China ... visible from ... with the') dropped by packet loss → window is a fragment → extractor recovers no claim → recall MISS (the degradation)" }
+    },
+    {
+      "id": "honey", "lost": true, "trigger": "Honey never spoils.",
+      "claim": "Honey never spoils.", "category": "science_health",
+      "verify": { "verdict": "True", "confidence": 0.88, "source": { "name": "Smithsonian", "url": "https://www.smithsonianmag.com/honey", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "Honey basically never spoils; edible honey has been found in ancient Egyptian tombs.", "claim": "Honey never spoils.", "category": "science_health", "expected_verdict": "True", "expected_gate": "checked", "expected_air": true, "note": "the tomb half was lost to a 2s handoff dropout; the surviving fragment split a word-min window → recall MISS" }
+    },
+    {
+      "id": "flamingo", "lost": true, "trigger": "Flamingos born gray.",
+      "claim": "Flamingos are born gray and turn pink from their diet.", "category": "science_health",
+      "verify": { "verdict": "True", "confidence": 0.9, "source": { "name": "Audubon", "url": "https://www.audubon.org/flamingo", "tier": 3 }, "autoAirEligible": true },
+      "expected": { "utterance": "Flamingos are born gray and turn pink from the shrimp they eat.", "claim": "Flamingos are born gray and turn pink from their diet.", "category": "science_health", "expected_verdict": "True", "expected_gate": "checked", "expected_air": true, "note": "'turn pink from their diet' half dropped under a gust → recall MISS" }
+    }
+  ],
+  "expected_scorecard": {
+    "status_note": "known-degraded: assert the FAILURE is still present. These are CEILINGS — if a metric rises above its ceiling the capture chain improved and this fixture must be re-recorded (delete the ceiling and re-baseline). Floors that must hold (some capture always survives) keep the suite honest.",
+    "word_coverage_pct": { "max": 60 },
+    "claim_recall_pct": { "max": 40 },
+    "aired": { "max": 1, "min": 1 }
+  }
+}
