@@ -1,0 +1,128 @@
+{
+  "generated_at": "2026-08-15T05:25:46.517Z",
+  "mode": "replay",
+  "scorecard": {
+    "profile": "mixed-gates-selftest",
+    "totals": {
+      "finals": 8,
+      "windows_extracted": 7,
+      "checks": 7,
+      "expected_claims": 4,
+      "cards_reached_verdict": 3,
+      "aired": 2
+    },
+    "metrics": {
+      "word_coverage_pct": 100,
+      "claim_recall_pct": 75,
+      "category_accuracy_pct": 100,
+      "gate_correctness_pct": 100,
+      "verdict_accuracy_pct": 100,
+      "air_accuracy_pct": 100
+    },
+    "scored_counts": {
+      "recall": "3/4",
+      "category": "3/3",
+      "gate": "4/4",
+      "verdict": "3/3",
+      "air": "3/3"
+    },
+    "latency_waterfall_ms": {
+      "extract": {
+        "n": 7,
+        "p50": 470,
+        "p90": 500,
+        "max": 520
+      },
+      "verify": {
+        "n": 3,
+        "p50": 2400,
+        "p90": 2400,
+        "max": 2600
+      },
+      "relay": {
+        "n": 0,
+        "p50": null,
+        "p90": null,
+        "max": null,
+        "note": "PLACEHOLDER — relay/on-air stage not exercised offline; wire when the relay bench lands"
+      }
+    },
+    "gate_distribution": {
+      "no-claim": 2,
+      "checked": 2,
+      "dedupe": 2,
+      "person-hold": 1
+    },
+    "per_claim": [
+      {
+        "claim": "Vitamin C prevents the common cold in healthy adults",
+        "expected_gate": "checked",
+        "matched": true,
+        "check_text": "So here is something people get wrong all the time. Vitamin C prevents the common cold in healthy adults.",
+        "got_claim": "Vitamin C prevents the common cold in healthy adults",
+        "got_gate": "checked",
+        "got_category": "science_health",
+        "got_verdict": "False",
+        "got_aired": true,
+        "air_reason": "aired",
+        "recalled": true,
+        "category_ok": true,
+        "gate_result": "checked",
+        "gate_ok": true,
+        "verdict_ok": true,
+        "air_ok": true
+      },
+      {
+        "claim": "The Great Wall of China is visible from space with the naked eye",
+        "expected_gate": "checked",
+        "matched": true,
+        "check_text": "think that is just obvious to everyone. Vitamin C prevents the common cold in healthy adults. Um. The Great Wall of China is visible from space with the naked eye.",
+        "got_claim": "The Great Wall of China is visible from space with the naked eye",
+        "got_gate": "checked",
+        "got_category": "science_health",
+        "got_verdict": "False",
+        "got_aired": true,
+        "air_reason": "aired",
+        "recalled": true,
+        "category_ok": true,
+        "gate_result": "checked",
+        "gate_ok": true,
+        "verdict_ok": true,
+        "air_ok": true
+      },
+      {
+        "claim": "Dave was fired from his job last week",
+        "expected_gate": "person-hold",
+        "matched": true,
+        "check_text": "in healthy adults. Um. The Great Wall of China is visible from space with the naked eye. My neighbor Dave got fired from his job last week for no reason.",
+        "got_claim": "Dave was fired from his job last week",
+        "got_gate": "checked",
+        "got_category": "other",
+        "got_verdict": "Unverifiable",
+        "got_aired": false,
+        "air_reason": "person-hold",
+        "recalled": true,
+        "category_ok": true,
+        "gate_result": "person-hold",
+        "gate_ok": true,
+        "verdict_ok": true,
+        "air_ok": true
+      },
+      {
+        "claim": null,
+        "expected_gate": "no-claim",
+        "matched": true,
+        "check_text": "visible from space with the naked eye. My neighbor Dave got fired from his job last week for no reason. What do you all think about that whole situation anyway?",
+        "got_claim": null,
+        "got_gate": "no-claim",
+        "got_category": null,
+        "got_verdict": null,
+        "got_aired": false,
+        "air_reason": null,
+        "recalled": false,
+        "gate_result": "no-claim",
+        "gate_ok": true
+      }
+    ]
+  }
+}
