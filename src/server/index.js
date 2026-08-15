@@ -100,7 +100,9 @@ async function serveStatic(pathname, res) {
     data = await fsp.readFile(file);
   } catch { return notFound(res); }
   res.setHeader("content-type", MIME[path.extname(file).toLowerCase()] || "application/octet-stream");
-  if (NO_CACHE.has(rel)) res.setHeader("cache-control", "no-cache, must-revalidate");
+  // no-store (not just no-cache): a stale run test proved no-cache can 304 and reuse an old
+  // app.js body, running pre-fix client code. no-store forces a fresh fetch on every reload.
+  if (NO_CACHE.has(rel)) res.setHeader("cache-control", "no-store, must-revalidate");
   res.statusCode = 200;
   res.end(data);
 }

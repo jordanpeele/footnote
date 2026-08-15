@@ -106,6 +106,11 @@
      until the operator rules on it (see daysprint-handoff-4a.md). */
   const ATTN_PUBLIC = new URLSearchParams(location.search).has("attn");
   let ftSeq = 0, ftUid = 0, ftLastInterim = 0;
+  /* CLIENT VERSION STAMP: logged once at harness init so every session log self-identifies
+     which app.js actually ran in the browser — a stale run test (2026-08-15) executed
+     pre-window cached code for 111 min and we could only prove it forensically. Bump on any
+     change whose presence a run must be able to confirm. */
+  const APP_VERSION = "2026-08-15-w13-window+deadair";
   const FT = {
     log(ev, data) {
       if (!FT_LOCAL) return;
@@ -116,6 +121,7 @@
       } catch {}
     },
   };
+  FT.log("client_version", { version: APP_VERSION, href: location.href });
 
   /* W1.3 hard lesson (run test: the assembler was in the served file and never executed,
      with NOTHING logged): any uncaught client error now lands in the harness, so silent
