@@ -13,6 +13,7 @@
     "synth:fixtures": "node tools/synthetic/gen-fixtures.js",
     "synth:scenarios": "node tools/synthetic/run-scenarios.js",
     "synth:scenarios:compile": "node tools/synthetic/author-scenario.js compile-all",
+    "synth:volume": "node tools/synthetic/volume-run.js --catalog daysprint/synthetic/FAILURE_CATALOG.md",
     "test": "node --test \"test/**/*.test.js\""
   },
   "engines": {
