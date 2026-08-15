@@ -1,0 +1,16 @@
+[Unit]
+Description=Footnote relay health endpoint
+Documentation=file:///usr/local/bin/relay-health.sh
+After=network-online.target
+
+[Service]
+# Runs the script form (NOT an inline one-liner) so the JSON body — including the P-D
+# recent_unknown_sources field — lives in a versioned, testable file. Root so it can read
+# the tripwire hit log; it opens no media sockets and only reports systemctl state.
+ExecStart=/usr/local/bin/relay-health.sh
+Restart=always
+RestartSec=2
+User=root
+
+[Install]
+WantedBy=multi-user.target

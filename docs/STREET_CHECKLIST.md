@@ -13,6 +13,14 @@ fallback if any bonded piece is down.
 - [ ] `bash tools/street/arm.sh` — all reachability lines green AND
       `srtla_rec: UP` printed. If it prints `not built`, run
       `bash tools/street/build-srtla.sh` first.
+- [ ] **Front-door tripwire clean (P-D):** `node tools/street/preflight.js` — the
+      "Front-door tripwire" check must be PASS (or run
+      `bash tools/relay/check-tripwire.sh` directly, exit 0). While the ingest stays
+      UNAUTHENTICATED, this is how we hear the open :5000 door. A WARN means an
+      off-allowlist source registered against the relay: if it's you on a new carrier,
+      add its IP to `/etc/footnote/relay-allowlist.conf` on the relay and re-check; if
+      you don't recognize it, someone found the open front door — investigate before
+      arming. (WARN never blocks GO, but the operator must clear it consciously.)
 - [ ] **caffeinate check (FS-2):** `pgrep caffeinate` returns a pid. A locked
       display throttles the OBS browser source and aired cards miss their
       on-air window — this burned 8 of 11 airs on 8/10. Display must stay awake

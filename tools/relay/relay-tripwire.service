@@ -1,0 +1,20 @@
+[Unit]
+Description=Footnote front-door tripwire (unknown-source SRTLA registrations)
+Documentation=file:///usr/local/bin/relay-tripwire.sh
+# Observability only — NOT ordered against srtla-rec/srt-out so it can never gate the
+# media path. If srtla-rec restarts, journalctl -f reattaches on the tripwire's own
+# Restart cycle.
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/relay-tripwire.sh
+Restart=always
+RestartSec=3
+# Needs root to read the systemd journal and write /var/log/footnote-tripwire.jsonl.
+# This process only READS the journal + WRITES its own log; it opens no media sockets.
+User=root
+Environment=FOOTNOTE_TRIPWIRE_ALLOWLIST=/etc/footnote/relay-allowlist.conf
+Environment=FOOTNOTE_TRIPWIRE_LOG=/var/log/footnote-tripwire.jsonl
+
+[Install]
+WantedBy=multi-user.target
