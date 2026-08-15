@@ -129,8 +129,20 @@ function gatherClientVersion() {
 // relay-health check and the tripwire check read this endpoint, so we fetch it ONCE and
 // share the body (two racing curls would collide and one would be dropped).
 let _cachedHealth;
+/* The relay :8080 is a single-shot nc server — between one GET closing and nc re-listening
+   there's a gap where a fetch gets connection-refused. Retry a few times so that gap can
+   never trip a false FAIL/NO-GO (a spurious NO-GO nearly blocked a run). */
+function curlRetry(url, tries = 4) {
+  let last = { ok: false, code: 0, body: "" };
+  for (let i = 0; i < tries; i++) {
+    last = curl(url, 5);
+    if (last.ok && last.body) return last;
+    try { execFileSync("sleep", ["0.4"]); } catch {}
+  }
+  return last;
+}
 function gatherRelayHealthRaw() {
-  if (_cachedHealth === undefined) _cachedHealth = curl(RELAY_HEALTH_URL, 6);
+  if (_cachedHealth === undefined) _cachedHealth = curlRetry(RELAY_HEALTH_URL);
   return _cachedHealth;
 }
 
