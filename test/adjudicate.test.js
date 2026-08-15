@@ -228,7 +228,7 @@ test("prep.js produces a clustered, hinted, gap-annotated queue.json", () => {
   try {
     execFileSync("node", [path.join(TOOLDIR, "prep.js"), "--out", out], { cwd: ROOT });
     const q = JSON.parse(readFileSync(out, "utf8"));
-    assert.equal(q.draft_count, 141, "all six drafts files ingested (99 field + 8 d18pilot2 + 4 runtest + 30 authored)");
+    assert.equal(q.draft_count, 141, "six graduation drafts files ingested (99 field + 8 d18pilot2 + 4 runtest + 30 authored); sci-033-class corpus excluded — it is disposition fodder, not graduation");
     assert.ok(q.unique_count < q.draft_count, "dedup shrinks the list");
     assert.ok(q.unique_count >= 90 && q.unique_count <= 105, `~98 unique claims, got ${q.unique_count}`);
     const thiel = q.entries.find((e) => (e.claim || "").toLowerCase().startsWith("peter thiel"));
@@ -255,7 +255,7 @@ test("prep.js produces a clustered, hinted, gap-annotated queue.json", () => {
     // cards, and clustered under AUTHORED-prefixed labels with their evidence note +
     // cited source + polarity riding along for the operator to ratify.
     const authored = q.entries.filter((e) => e.authored);
-    assert.equal(authored.length, 30, "12 attributed_quotes + 18 polarity_traps authored candidates");
+    assert.equal(authored.length, 30, "12 attributed_quotes + 18 polarity_traps authored candidates (sci-033 corpus excluded from the sitting)");
     assert.equal(q.authored_count, 30, "queue-level authored count");
     for (const e of authored) {
       assert.ok(e.cluster.startsWith("AUTHORED · "), `${e.sourceDrafts[0]} clustered as AUTHORED`);
