@@ -16,6 +16,10 @@ in a 10-claim read), W2 cloud relay live, R57 category code in prod.
 
 ## Pre-flight (at home, before leaving)
 
+- [ ] `node tools/street/preflight.js` — the one command: single GO / NO-GO with a
+      per-check reason (relay health, ingest auth, tailscale serve, armable,
+      kill-switch, OBS preset, keyterms, kit). GO = zero FAIL; WARN items are
+      confirm-before-you-walk, not blockers. Exit 0 on GO, 1 on NO-GO.
 - [ ] `arm.sh` (includes relay health check once W2 lands)
 - [ ] Kill-switch cycle: status → kill → verify 503 → restore
 - [ ] caffeinate holding · unlisted sink ingest green
