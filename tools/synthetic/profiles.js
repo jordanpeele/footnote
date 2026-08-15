@@ -150,6 +150,85 @@ export const PROFILES = {
     wind: { gust_amp: 9.0, gust_sharpness: 18, floor: 0.03 },
     distance: true,
   },
+
+  // ===== R-audio RED-TEAM PROFILES (NIGHTSPRINT) ================================
+  // Adversarial sweep against the W1.3 window. Each cranks one knob past the
+  // keystone or stacks them, to hunt for the setting where word-coverage collapses
+  // toward the 27% run-test baseline. See daysprint/handoffs/redteam-audio.md.
+
+  // Extreme sustained wind: a high floor (constant rumble, no lulls) + tall dense
+  // gusts. The floor is the weapon — a between-gust rumble ~0.35 pre-limiter sits
+  // ON TOP of speech for the whole file, not just in gust windows, so Deepgram sees
+  // sub-200Hz energy above voice continuously (the run report's "sub-band within
+  // 2 dB of full band", made permanent). Tests: does STT drop words when rumble
+  // never lets up?
+  wind_extreme: {
+    description: "RED-TEAM: sustained near-full-scale wind — high constant rumble floor plus dense tall gusts. No quiet windows. Hunts the level where wind rumble masks speech into Deepgram dropping words.",
+    wind: { floor: 0.38, gust_amp: 34.0, gust_sharpness: 10, gust_periods_s: [7.0, 11.0, 17.0], limit: 0.995 },
+  },
+
+  // Dense micro-gaps BELOW the window's silence threshold. rate_per_10s cranked so
+  // Deepgram finalizes constantly (1-word finals), but every gap < WINDOW_TRAIL_SILENCE
+  // (1500ms) so the trailing-silence flush never fires early — the window must ride on
+  // cadence + min-new-words alone. Directly attacks the shred the window claims to fix.
+  microgap_storm: {
+    description: "RED-TEAM: dense micro-gaps (rate 12/10s, 150-380ms, all below the 1500ms window silence threshold). Maximal endpointing shred that never trips the silence flush. The window's home-turf attack.",
+    microgaps: { rate_per_10s: 12, min_ms: 150, max_ms: 380 },
+  },
+
+  // Long bonded dropouts placed MID-CLAIM: many multi-second total-silence mutes
+  // scattered across the file (not just at 0.55). Each can bisect a spoken claim so
+  // half the words never reach STT. Tests window survival of transport black holes.
+  dropout_siege: {
+    description: "RED-TEAM: eight 2.5-4s bonded-handoff total-silence dropouts scattered across the file, each able to bisect a claim. Transport black holes vs the window.",
+    handoff: {
+      count: 8,
+      dur_s: [2.5, 3.0, 4.0, 2.5, 3.5, 3.0, 4.0, 2.5],
+      at_fraction: [0.08, 0.18, 0.30, 0.42, 0.54, 0.66, 0.78, 0.90],
+    },
+  },
+
+  // Packet-loss burst storm: frequent long mutes (un-recovered SRT). Distinct from
+  // handoff — many short-to-mid bursts riddling every second of speech.
+  packet_storm: {
+    description: "RED-TEAM: heavy packet-loss burst storm (20/min, 80-320ms) riddling all speech with un-recovered dropouts.",
+    packet_loss: { burst_min_ms: 80, burst_max_ms: 320, bursts_per_min: 20 },
+  },
+
+  // Very low level / far mic: speaker mostly off-mic. gain floored near 0.12 so most
+  // speech sits near the STT noise floor. Tests whether quiet speech simply isn't
+  // transcribed.
+  faint: {
+    description: "RED-TEAM: very low capture level (gain 0.10-0.30, far-mic drift). Speech near the STT floor — tests words simply not transcribed.",
+    distance: { min_gain: 0.10, max_gain: 0.30, period_s: 19.0 },
+  },
+
+  // Breaking-point ladder for the dropout attack: 2 / 4 / 6 mid-claim total-silence
+  // dropouts (dropout_siege is the 8-rung). Used to locate the knob setting where
+  // coverage crosses below the 50% / 27% lines. All 3s mutes on the redteam script.
+  dropout_2: {
+    description: "RED-TEAM ladder: 2 mid-claim 3s dropouts.",
+    handoff: { count: 2, dur_s: [3.0, 3.0], at_fraction: [0.30, 0.66] },
+  },
+  dropout_4: {
+    description: "RED-TEAM ladder: 4 mid-claim 3s dropouts.",
+    handoff: { count: 4, dur_s: [3.0, 3.0, 3.0, 3.0], at_fraction: [0.18, 0.40, 0.62, 0.84] },
+  },
+  dropout_6: {
+    description: "RED-TEAM ladder: 6 mid-claim 3s dropouts.",
+    handoff: { count: 6, dur_s: [3.0, 3.0, 3.0, 3.0, 3.0, 3.0], at_fraction: [0.12, 0.28, 0.44, 0.58, 0.72, 0.86] },
+  },
+
+  // THE KITCHEN SINK — everything cranked at once. If any single profile breaks the
+  // window this stack should break it hardest. The worst-case adversarial ceiling.
+  worst_case: {
+    description: "RED-TEAM: all knobs cranked — sustained wind + micro-gap storm + dropout siege + packet storm + faint level. The maximum-adversity ceiling.",
+    wind: { floor: 0.30, gust_amp: 28.0, gust_sharpness: 12, gust_periods_s: [7.0, 11.0, 17.0], limit: 0.995 },
+    microgaps: { rate_per_10s: 10, min_ms: 150, max_ms: 380 },
+    handoff: { count: 6, dur_s: [3.0, 3.5, 4.0, 3.0, 3.5, 4.0], at_fraction: [0.12, 0.26, 0.40, 0.55, 0.70, 0.85] },
+    packet_loss: { burst_min_ms: 80, burst_max_ms: 300, bursts_per_min: 14 },
+    distance: { min_gain: 0.28, max_gain: 0.7, period_s: 23.0 },
+  },
 };
 
 export const KNOB_DEFAULTS = {

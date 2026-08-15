@@ -16,9 +16,13 @@ const OUTDIR = "daysprint/synthetic/fixtures";
 
 // [profile, seed] — seed pinned so regeneration is reproducible.
 const FIXTURES = [
-  ["clean", 1337],       // control
-  ["windy_run", 1337],   // KEYSTONE — reproduces 2026-08-14 Los Feliz
-  ["shred_only", 1337],  // micro-gap shred, no wind
+  ["clean", 1337],          // control
+  ["windy_run", 1337],      // KEYSTONE — reproduces 2026-08-14 Los Feliz
+  ["shred_only", 1337],     // micro-gap shred, no wind
+  ["dropout_siege", 1337],  // R-audio RED-TEAM: the WORST profile found — 8 mid-claim
+                            // total-silence dropouts collapse word coverage to ~40%
+                            // (words never reach STT; the window loses nothing it gets).
+                            // See daysprint/handoffs/redteam-audio.md.
 ];
 
 for (const [profile, seed] of FIXTURES) {
