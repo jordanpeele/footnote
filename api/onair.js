@@ -212,6 +212,7 @@ export default async function handler(req, res) {
             cards: (q && Array.isArray(q.cards)) ? q.cards : [], qseq: (q && q.qseq) || 0,
             onAirId: q && q.onAirId != null ? q.onAirId : null,
             muted: !!(q && q.muted),
+            sttStale: !!(q && q.sttStale),   // R-transport: dead-air — no audio reaching the pipeline while live
             attn: (q && Array.isArray(q.attn)) ? q.attn : [],   // R54: untagged auto-airs for the attention strip
             autoair: (q && q.autoair && typeof q.autoair === "object") ? q.autoair : null,   // W4: cap state
             renderedId: cur && cur.renderedId != null ? cur.renderedId : null,
@@ -328,7 +329,10 @@ export default async function handler(req, res) {
         // ONLY console, so mid-session state can't require seeing the Mac.
         const aa = req.body.autoair && typeof req.body.autoair === "object" ? req.body.autoair : null;
         const autoair = aa ? { on: aa.on === true, count: Number.isFinite(Number(aa.count)) ? Number(aa.count) : 0, cap: Number.isFinite(Number(aa.cap)) ? Number(aa.cap) : 0 } : null;
-        await state.publish(qRoom(room), { cards, qseq, onAirId, muted, attn, autoair }, { ttlSec: QUEUE_SNAPSHOT_TTL_SEC });
+        // R-transport: dead-air flag — /control reports "no STT finals while live+unmuted" so /op
+        // can distinguish a dead feed/relay from a quiet speaker. Strict boolean like `muted`.
+        const sttStale = req.body.sttStale === true;
+        await state.publish(qRoom(room), { cards, qseq, onAirId, muted, attn, autoair, sttStale }, { ttlSec: QUEUE_SNAPSHOT_TTL_SEC });
         /* P4-F2 (field F5): a non-empty queue means an air is likely soon, but an idle
            overlay is on its 2.5s cadence — the first air after a quiet stretch eats up to
            a full slow poll. Stamp activeAt onto the room's MAIN record so the overlay's

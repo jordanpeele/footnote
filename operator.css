@@ -159,6 +159,14 @@ body{background:var(--bg);color:var(--txt);font-family:var(--disp);min-height:10
    (glanceability pass) — the old header button and the separate MIC MUTED banner are gone;
    the amber latched chip carries both jobs. */
 
+/* R-transport dead-air banner: deliberately distinct from MUTE (solid amber, intentional)
+   and from the offline conn dot (lost server) — this is a live LINK carrying no audio.
+   Red + slow pulse so it reads as "something is wrong with the feed", not "you muted it". */
+.deadair-banner{position:sticky;top:0;z-index:8;font:800 12px var(--mono);letter-spacing:.1em;
+  text-align:center;color:#fff;background:#7a1512;border-bottom:1px solid #b3231e;
+  padding:7px 14px;animation:deadair-pulse 1.4s ease-in-out infinite}
+@keyframes deadair-pulse{0%,100%{background:#7a1512}50%{background:#b3231e}}
+
 /* P4-F3 new-card cue: full-screen flash paired with the vibrate/beep — visible even
    with the phone at arm's length in daylight */
 body.cue{animation:cue-flash .6s ease-out}
