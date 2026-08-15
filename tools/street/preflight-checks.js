@@ -94,6 +94,42 @@ export function evalIngestAuth({ applied, evidence }) {
   };
 }
 
+/* 2b. Front-door tripwire (packet P-D) — while the ingest is unauthenticated, the relay
+   listens for SRTLA registrations from sources NOT on the operator's allowlist and records
+   them. This surfaces the relay's `recent_unknown_sources` on /op's GO/NO-GO: any unknown
+   source seen since setup = WARN (never FAIL — it's a heads-up, not a blocker; the rig still
+   works). `unknownCount` = number of unknown-source hits the relay reported (0 = clean).
+   `reachable` = did we read the field at all (false when the endpoint is down OR predates
+   the field — either way, informational WARN, not a block). */
+export function evalTripwire({ reachable, unknownCount, latest }) {
+  if (!reachable) {
+    return {
+      id: "tripwire",
+      name: "Front-door tripwire (unknown ingest sources)",
+      status: WARN,
+      reason:
+        "could not read recent_unknown_sources from the relay health endpoint — tripwire status unknown; confirm tools/relay/check-tripwire.sh manually before arming",
+    };
+  }
+  if (unknownCount > 0) {
+    const where = latest ? ` (latest: ${latest})` : "";
+    return {
+      id: "tripwire",
+      name: "Front-door tripwire (unknown ingest sources)",
+      status: WARN,
+      reason:
+        `${unknownCount} UNKNOWN-source SRTLA registration(s) recorded${where} — someone off-allowlist hit the open :5000 ingest. ` +
+        "If it's you on a new carrier, add it to /etc/footnote/relay-allowlist.conf; otherwise INVESTIGATE before arming (run tools/relay/check-tripwire.sh)",
+    };
+  }
+  return {
+    id: "tripwire",
+    name: "Front-door tripwire (unknown ingest sources)",
+    status: PASS,
+    reason: "0 unknown-source registrations — all recent ingest matched the operator allowlist",
+  };
+}
+
 /* 3. tailscale serve on + /op reachable over the tailnet URL.
    serveOn: is `tailscale serve` proxying :3000?  code: HTTP status hitting the tailnet
    /op URL (0 = no answer). A 502/000 means serve is configured but the loopback server

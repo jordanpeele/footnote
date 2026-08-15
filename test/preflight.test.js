@@ -11,6 +11,7 @@ import {
   evalRelayHealth,
   evalClientVersion,
   evalIngestAuth,
+  evalTripwire,
   evalTailscaleServe,
   evalKillSwitch,
   evalObsPreset,
@@ -82,6 +83,29 @@ test("ingest auth: parked/not-applied -> WARN with the branch name", () => {
 test("ingest auth: applied -> PASS", () => {
   const c = evalIngestAuth({ applied: true, evidence: "enforced" });
   assert.equal(c.status, PASS);
+});
+
+/* P-D — front-door tripwire: unknown ingest sources = WARN (never blocks), clean = PASS,
+   unreadable field/endpoint = WARN (informational). */
+test("tripwire: unknown source seen -> WARN (non-blocking), names the source", () => {
+  const c = evalTripwire({ reachable: true, unknownCount: 2, latest: "203.0.113.99:5555 @ 2026-08-15T16:55:00Z" });
+  assert.equal(c.status, WARN);
+  assert.match(c.reason, /UNKNOWN-source/);
+  assert.match(c.reason, /203\.0\.113\.99/);
+  // a WARN must ride along without flipping the verdict
+  assert.equal(aggregate([chk("a", PASS), c]).decision, "GO");
+});
+
+test("tripwire: zero unknown sources -> PASS", () => {
+  const c = evalTripwire({ reachable: true, unknownCount: 0, latest: null });
+  assert.equal(c.status, PASS);
+});
+
+test("tripwire: endpoint/field unreadable -> WARN (informational, not a block)", () => {
+  const c = evalTripwire({ reachable: false, unknownCount: 0, latest: null });
+  assert.equal(c.status, WARN);
+  assert.match(c.reason, /check-tripwire\.sh/);
+  assert.equal(aggregate([chk("a", PASS), c]).decision, "GO");
 });
 
 test("tailscale serve: OFF -> FAIL", () => {

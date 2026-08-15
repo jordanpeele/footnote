@@ -13,6 +13,7 @@
    The checks (each -> PASS/WARN/FAIL, see tools/street/preflight-checks.js for the rules):
      1 Relay health (:8080, both services)         FAIL if down
      2 Relay ingest auth (parked fix applied?)      WARN if the front door is open
+     2b Front-door tripwire (unknown sources P-D)   WARN if an off-allowlist source registered
      3 tailscale serve ON + /op reachable
      4 Local server armable (arm.sh --check)
      5 Kill-switch (ADMIN_TOKEN in .env.local)
@@ -29,6 +30,7 @@ import {
   evalRelayHealth,
   evalClientVersion,
   evalIngestAuth,
+  evalTripwire,
   evalTailscaleServe,
   evalArmable,
   evalKillSwitch,
@@ -123,8 +125,17 @@ function gatherClientVersion() {
   return { served, client, logPresent };
 }
 
+// The relay's :8080 is a single-shot `nc` server — one connection at a time. Both the
+// relay-health check and the tripwire check read this endpoint, so we fetch it ONCE and
+// share the body (two racing curls would collide and one would be dropped).
+let _cachedHealth;
+function gatherRelayHealthRaw() {
+  if (_cachedHealth === undefined) _cachedHealth = curl(RELAY_HEALTH_URL, 6);
+  return _cachedHealth;
+}
+
 function gatherRelayHealth() {
-  const { ok, body } = curl(RELAY_HEALTH_URL, 6);
+  const { ok, body } = gatherRelayHealthRaw();
   return { ok, body };
 }
 
@@ -155,6 +166,30 @@ function gatherIngestAuth() {
     applied: false,
     evidence: "committed but NOT applied; vulnerable config still live per packet-2a-sec handoff",
   };
+}
+
+function gatherTripwire() {
+  // Read the relay health endpoint's recent_unknown_sources (packet P-D). SHARES the one
+  // cached :8080 fetch with gatherRelayHealth (the nc server is single-shot — a second GET
+  // would race the first). Never throws.
+  const { ok, body } = gatherRelayHealthRaw();
+  if (!ok || !body) return { reachable: false, unknownCount: 0, latest: null };
+  let json = null;
+  try { json = JSON.parse(body); } catch { return { reachable: false, unknownCount: 0, latest: null }; }
+  // Field may be absent on an older relay-health that predates P-D → treat as unreachable
+  // (informational WARN), not as "clean".
+  if (!Array.isArray(json.recent_unknown_sources) && json.unknown_sources_total == null) {
+    return { reachable: false, unknownCount: 0, latest: null };
+  }
+  const total = Number.isInteger(json.unknown_sources_total)
+    ? json.unknown_sources_total
+    : (Array.isArray(json.recent_unknown_sources) ? json.recent_unknown_sources.length : 0);
+  const recent = Array.isArray(json.recent_unknown_sources) ? json.recent_unknown_sources : [];
+  const last = recent.length ? recent[recent.length - 1] : null;
+  const latest = last && last.source_ip
+    ? `${last.source_ip}${last.source_port ? `:${last.source_port}` : ""}${last.ts ? ` @ ${last.ts}` : ""}`
+    : null;
+  return { reachable: true, unknownCount: total, latest };
 }
 
 function gatherTailscaleServe() {
@@ -243,6 +278,7 @@ function runChecks() {
     evalRelayHealth(gatherRelayHealth()),
     evalClientVersion(gatherClientVersion()),
     evalIngestAuth(gatherIngestAuth()),
+    evalTripwire(gatherTripwire()),
     evalTailscaleServe(gatherTailscaleServe()),
     evalArmable(gatherArmable()),
     evalKillSwitch(gatherKillSwitch()),

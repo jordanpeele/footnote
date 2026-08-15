@@ -58,15 +58,51 @@ User=nobody
 WantedBy=multi-user.target
 UNIT
 
+# --- P-D front-door tripwire: hear the (still-unauthenticated) ingest -----------------
+# While the SRTLA ingest stays open, tail srtla_rec's journal for registration source IPs
+# and record any that are NOT on the operator's allowlist. Surfaced on :8080
+# (recent_unknown_sources) and polled from the Mac via tools/relay/check-tripwire.sh.
+# ADDITIVE + observability-only — never touches the media path.
+mkdir -p /etc/footnote
+# Operator-editable allowlist (seeded from run2 forensics — do NOT clobber on re-run).
+if [ ! -f /etc/footnote/relay-allowlist.conf ]; then
+  cat > /etc/footnote/relay-allowlist.conf <<'ALLOW'
+# Footnote relay tripwire — KNOWN-EXPECTED ingest sources. One IPv4 (/32) or CIDR per line;
+# inline "# ..." comments allowed. EDIT as your carriers/home IP rotate. Seeded from run2.
+76.32.135.77          # home ISP (observed run2; rotates — update when your WAN IP changes)
+166.199.0.0/16        # Verizon cellular (166.199.x seen bonded in run2)
+ALLOW
+fi
+install -m 755 "$(dirname "$0")/relay-tripwire.sh" /usr/local/bin/relay-tripwire.sh
+install -m 755 "$(dirname "$0")/relay-health.sh"   /usr/local/bin/relay-health.sh
+touch /var/log/footnote-tripwire.jsonl
+
+cat > /etc/systemd/system/relay-tripwire.service <<'UNIT'
+[Unit]
+Description=Footnote front-door tripwire (unknown-source SRTLA registrations)
+After=network-online.target
+[Service]
+ExecStart=/usr/local/bin/relay-tripwire.sh
+Restart=always
+RestartSec=3
+User=root
+Environment=FOOTNOTE_TRIPWIRE_ALLOWLIST=/etc/footnote/relay-allowlist.conf
+Environment=FOOTNOTE_TRIPWIRE_LOG=/var/log/footnote-tripwire.jsonl
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 # --- tiny health endpoint the Mac/harness can poll (arm.sh checks it pre-session) ---
+# Runs the SCRIPT form (relay-health.sh) so the JSON body — incl. recent_unknown_sources —
+# is versioned/testable. Root so it can read the tripwire log; opens no media sockets.
 cat > /etc/systemd/system/relay-health.service <<'UNIT'
 [Unit]
 Description=Footnote relay health endpoint
 After=network-online.target
 [Service]
-ExecStart=/bin/bash -c 'while true; do { read -r _; s1=$(systemctl is-active srtla-rec); s2=$(systemctl is-active srt-out); printf "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"srtla_rec\":\"%s\",\"srt_out\":\"%s\"}\n" "$s1" "$s2"; } | nc -l -q1 -p 8080; done'
+ExecStart=/usr/local/bin/relay-health.sh
 Restart=always
-User=nobody
+User=root
 [Install]
 WantedBy=multi-user.target
 UNIT
@@ -79,7 +115,7 @@ ufw allow 8080/tcp
 ufw --force enable
 
 systemctl daemon-reload
-systemctl enable --now srt-out srtla-rec relay-health
+systemctl enable --now srt-out srtla-rec relay-health relay-tripwire
 echo "relay up:"
 echo "  Moblin:  srtla://$(curl -s https://api.ipify.org):${SRTLA_PORT}  (implementation=Moblin, passphrase set)"
 echo "  OBS:     Media Source input srt://$(curl -s https://api.ipify.org):${SRT_OUT_PORT}?passphrase=<same>  (caller — no home ports)"
