@@ -94,6 +94,20 @@ export function truncateOnAir(s, n) {
   const t = String(s || "").slice(0, n);
   return t.replace(/[\uD800-\uDBFF]$/, "");
 }
+/* Chyron fit: the correction is budgeted to ALWAYS fit the enlarged chyron without visual
+   clipping — the CSS line-clamp is a belt; this is the guarantee. The cap pairs with the
+   verifier prompt's "max 140 characters" steer, so truncation is the rare fallback, not
+   the norm. Cuts at a word boundary (unless that costs >40% of the budget), never
+   mid-word, never mid-surrogate, and marks the cut with an ellipsis. */
+export const CORRECTION_MAX_CHARS = 160;
+export function fitOnAir(s, n = CORRECTION_MAX_CHARS) {
+  const t = String(s || "").trim();
+  if (t.length <= n) return t;
+  let cut = truncateOnAir(t, n - 1);   // reserve one char for the ellipsis
+  const sp = cut.lastIndexOf(" ");
+  if (sp > (n - 1) * 0.6) cut = cut.slice(0, sp);
+  return cut.replace(/[\s.,;:!?]+$/, "") + "…";
+}
 export function hostOf(url) { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return null; } }
 /* Display-name derivation (P5F-3). Order of authority:
    1. Curated PRETTY map — exact host, then parent suffixes, so deep hosts inherit the
@@ -176,7 +190,7 @@ export function finalizeVerification(rv) {
   const rawVerdict = typeof rv.verdict === "string" ? rv.verdict.trim().toLowerCase() : "";
   return {
     verdict: VERDICTS.find((v) => v.toLowerCase() === rawVerdict) || "Unverifiable",
-    correction: truncateOnAir(cleanText(rv.correction || rv.raw || ""), 240),
+    correction: fitOnAir(cleanText(rv.correction || rv.raw || "")),
     confidence: typeof rv.confidence === "number" ? Math.max(0, Math.min(1, rv.confidence)) : 0.5,
     source: { name: sourceName, url: best ? best.url : null, tier: best ? best.tier : 0 },
     citations: ranked.slice(0, 5).map((c) => c.url),

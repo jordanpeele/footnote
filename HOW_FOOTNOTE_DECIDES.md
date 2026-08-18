@@ -1,10 +1,10 @@
 # How Footnote Decides
 
-Footnote puts fact-checks on live television. A machine hears a speaker, extracts claims, verifies them against sources, and proposes a verdict card. A human operator airs it, holds it, or kills it — or, under narrow conditions, the machine airs it itself after a veto window.
+Footnote puts fact-checks on live television. A machine hears a speaker, extracts claims, verifies them against sources, and proposes a verdict card. A human operator airs it, holds it, or kills it — or, when the operator enables Auto-air, the machine airs it itself after a veto window (Ruling R72, §5).
 
 This document is Footnote's editorial policy. It is written to be audited: every rule below is either **enforced by the running code today** or marked **[PLANNED — packet]**, meaning it is committed policy the code does not yet enforce. If you find the running system behaving differently from an unmarked rule, that is a bug — report it (see §9).
 
-The pipeline this policy governs: Deepgram speech-to-text → Claude Haiku claim extraction (`api/extract.js`) → Perplexity sonar-pro verification with trust-tiered source ranking (`api/verify.js`) → verdict card → operator decision or gated auto-air (`app.js`).
+The pipeline this policy governs: Deepgram speech-to-text → Claude Haiku claim extraction (`api/extract.js`) → Perplexity sonar-pro verification with trust-tiered source ranking (`api/verify.js`) → verdict card → operator decision or toggle-gated auto-air (`app.js`).
 
 ---
 
@@ -26,10 +26,9 @@ The extraction prompt in `api/extract.js` enforces the opinion/question/filler r
 
 Some claims are checkable but carry elevated harm if the machine gets them wrong. These are flagged at extraction and change how the rest of the pipeline may treat the card:
 
-- **`person_private`** — a claim about a named private individual (not a public figure acting in public capacity). These cards **never auto-air**, at any confidence, under any future calibration regime. A human airs them or nobody does. This is a permanent carve-out (Decision D4), not a threshold to be tuned.
-- Accusations of crime, claims about health status, and claims about minors default to `person_private` treatment.
+- **`person_private`** — a claim about a named private individual (not a public figure acting in public capacity). Accusations of crime, claims about health status, and claims about minors default to `person_private` treatment.
 
-[SHIPPED — the extractor classifies every claim (none | person_public | person_private | quote_attribution); person_private and polarity-conflicted checks are hardcoded NEVER-auto-air (D4 — no setting can override), person_public and quote_attribution are manual-only, and /op surfaces the class as a MANUAL tag. Field record: 36/36 person-claims correctly held to manual in the 2026-08-08 session.]
+[SHIPPED — the extractor classifies every claim (none | person_public | person_private | quote_attribution) and the queue surfaces the class as a warning chip. **Superseded by R72 (2026-08-18, operator ruling):** the D4 rule that person-classed and polarity-conflicted cards NEVER auto-air is removed — with Auto-air enabled, these cards air after the veto window like any other; the chip exists so the operator can veto them in that window. Historical field record under D4: 36/36 person-claims correctly held to manual in the 2026-08-08 session.]
 
 ## 2. Source hierarchy
 
@@ -73,22 +72,19 @@ These five are the entire enum; the server rejects anything else (`VERDICTS` in 
 
 ## 5. Auto-air
 
-Auto-air is off by default and operator-enabled per session. When enabled, the shipped gate (`maybeAutoAir` in `app.js`) is:
+**[Ruling R72 — 2026-08-18, operator ruling]** Auto-air is off by default and operator-enabled per session. When enabled, **the toggle is the whole gate**: every settled check auto-airs after a **2-second veto window** — the card sits in the queue with a visible countdown; the operator's Skip or Hold cancels the timer. Only a card still untouched after 2 seconds airs itself.
 
-1. Verdict is **True or False** — definitive verdicts only. Misleading, NeedsContext, and Unverifiable never auto-air.
-2. **Confidence ≥ 0.85.**
-3. A **source URL is present** on the card.
-4. A **4-second veto window**: the card sits in the queue with a visible countdown; the operator's Skip or Hold cancels the timer. Only a card still untouched after 4 seconds airs itself.
+There is no verdict restriction, no confidence floor, no source requirement, no category allowlist, no harm-class hold, and no per-session cap. R72 supersedes the pilot-era gate chain (the definitive-verdict/confidence/source conditions below the fold in git history, the D4 person-hold, the D5 evidence-tier floor, the R57 category allowlist, and the D18 10-per-session cap). The operator's veto window — and the decision to enable the toggle at all — are the only checks between the machine and the air.
 
-Every auto-aired card is flagged `autoAired: true` in the session log — the record always distinguishes machine airing from human airing.
+Every auto-aired card is flagged `autoAired: true` in the session log — the record always distinguishes machine airing from human airing. Harm-class and polarity-conflict chips still render on every card so the operator can spot sensitive checks inside the veto window.
 
-Known honesty note on the shipped gate: the confidence number is the verification model's self-report, not a calibrated probability, and the gate checks that a source URL exists but not its tier — a code-tier-1 (unknown-domain) source currently satisfies condition 3. Both gaps are why the gate is conservative and the veto window exists, and both are what the following work closes:
+Honesty note: this makes the operator's attention load-bearing in a way the pilot-era gates deliberately avoided. The measurement machinery below still runs and is still logged; under R72 it informs the operator rather than gating the machine:
 
-- [SHIPPED — Decision D3] **Calibration-gated eligibility.** Auto-air eligibility is per-claim-category, earned by measured precision against the adjudicated golden set (`eval/`). Four calibration runs have been published; the first two categories met the numeric bar in run #4 (2026-08-11). Meeting the bar is a *fact*, not a switch — enabling remains a separate, explicit decision.
-- [SHIPPED — Decision D4] **`person_private` carve-out.** Claims about named private individuals are structurally excluded from auto-air, permanently. No calibration result unlocks them.
-- **[Ruling R51] `adversarial` claims are permanently manual-only** — regardless of calibration numbers. Auto-airing verdicts on adversarial input invites gaming the fact-checker as content: a bad actor's incentive to perform outrageous claims *grows* if the machine responds autonomously. The category's calibration eligibility stands as a measurement; the policy overrides it. A human airs those cards or nobody does.
-- **[Decision D16/D18 — conditions-precedent, not active] Second-verifier concurrence before any auto-air pilot.** Any enabling requires: two *independent* verification engines agreeing at ≥95% on the category (D16/R49), an independent polarity check shipped and replay-verified (R50 — the polarity field comes from the shared extractor, so verifier agreement alone cannot catch a mislabeled denial), and a completed skepticism re-read. The pilot itself (D18, `science_health` only) would be operator-present, veto-window live, kill-switch verified at session start, auto-aired cards distinctly marked on receipts, capped at 10 auto-airs per session. None of this is enabled today.
-- **[Ruling R70/R71 — the honest limit of same-family concurrence] Correlated-prior errors are structurally invisible to concurrence.** Measured (calibration #5, R-concurrence red-team): the two current arms' errors are ~12× more correlated than independence would predict, because both draw verdicts from the same prior-laden public web. Concurrence catches *independent* errors (a disagreement to downgrade) but is blind to a *shared* wrong prior — both arms confidently agree on the same wrong definitive verdict, and the confidence floor cannot separate it (the mode's signature IS high, agreeing confidence). The seven measured would-air-wrong cards cluster in `current_events / statistics / historical_events / geography` — so **R71: R64-A-0d graduations beyond `science_health` are FROZEN until a genuinely independent (non-Claude-family) skeptic third arm (R67) is live and its correlation-break is measured.** `science_health` continues on its own record. A claim-shape detector (R66/R70) is scoped to the private-source *shape* only (commercial self-study, uncited authority); the shared-prior *myth* class has no linguistic tell and is explicitly OUT of detector scope — it belongs to the skeptic arm.
+- [Decision D3 — measurement only under R72] **Calibration-scored eligibility.** Per-category precision is measured against the adjudicated golden set (`eval/`) and `autoAirEligible` is still computed server-side and logged per card. Under R72 it no longer gates airing.
+- [Decision D4 — **SUPERSEDED by R72**] The permanent `person_private` carve-out is removed. The harm class is still extracted, logged, and surfaced as a chip; it no longer holds a card from auto-air.
+- **[Ruling R51 — SUPERSEDED by R72]** `adversarial` claims are no longer manual-only. The gaming-incentive concern R51 documented (a bad actor performing outrageous claims *because* the machine responds autonomously) stands as analysis; under R72 the countermeasure is the operator's veto window, not a structural hold.
+- **[Decision D16/D18 — historical] Second-verifier concurrence and the supervised pilot.** The concurrence bar, the science_health-only pilot, the kill-switch arming checklist, and the 10-per-session cap were the conditions under which auto-air first went live (D18 pilot, 2026-08-12). R72 retires them as gates; the pilot write-ups remain the evidence record of how the machine performed under supervision.
+- **[Ruling R70/R71 — measurement retained] Correlated-prior errors are structurally invisible to concurrence.** Measured (calibration #5, R-concurrence red-team): the two current arms' errors are ~12× more correlated than independence would predict, because both draw verdicts from the same prior-laden public web. The seven measured would-air-wrong cards cluster in `current_events / statistics / historical_events / geography`. Under R72 there is no graduation ladder left for R71 to freeze — this finding now quantifies the *error exposure the operator accepts* when enabling Auto-air, and it is the standing argument for the independent skeptic third arm (R67).
 
 ## 6. Corrections (Decision D6)
 
@@ -108,11 +104,10 @@ The commitment: **every stream gets a public receipts URL** — the complete ses
 
 ## 8. What Footnote does not do
 
-- **No auto-aired claims about private individuals.** Ever. See §1 and §5.
-- **No verdict without a source.** A card with no citable source is Unverifiable by definition. Auto-air additionally requires a source URL (enforced today).
+- **No verdict without a source.** A card with no citable source is Unverifiable by definition. (The pre-R72 rule that auto-air additionally required a source URL is gone — an Unverifiable, sourceless card auto-airs as Unverifiable when the toggle is on.)
 - **No medical or legal advice.** Footnote may check a factual claim in those domains against qualifying sources (mortality statistics, what a statute says). It never frames a verdict as guidance about what a viewer should do.
 - **No silent memory-holing.** Aired means logged; wrong means corrected on air (§6), not deleted.
-- **The human veto is load-bearing, not decorative.** The operator is part of the trust architecture: the machine proposes, and except inside the narrow §5 gate, a human disposes. Removing or shrinking the human's role is a policy change under §9, not a product optimization.
+- **The human veto is load-bearing, not decorative.** The operator is part of the trust architecture: with Auto-air off, a human disposes of every card; with it on (R72), the human's veto window is the only check on the machine. Removing or shrinking the veto window itself is a policy change under §9, not a product optimization.
 
 ## 9. Challenging a verdict or changing this policy
 

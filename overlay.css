@@ -78,26 +78,33 @@ html,body{width:100%;height:100%;background:transparent;overflow:hidden;-webkit-
    streams (OBS vertical canvas, Moblin Browser widget). Driven by body.portrait — set by
    overlay.js from viewport aspect (auto) or the ?layout= escape hatch — so OBS sources and
    odd aspect ratios behave identically to a real phone.
-   SAFE ZONES (why the numbers): vertical platforms draw UI over the video — the engagement
-   rail eats the right ~130px and captions/actions eat the bottom ~250px of a 1080×1920
-   frame. The card is a full-width lower-third placed in the 60–75% height band
-   (bottom:480px ≈ card top around y1150 at 1080×1920), clear of both zones. Type is sized
-   for phone-screen legibility at 1080-wide, not desktop. */
-body.portrait .onair{left:28px;right:132px;bottom:480px;flex-direction:column;min-height:0}
-body.portrait .onair .oa-verdict{width:100%;flex-direction:row;justify-content:center;gap:10px;padding:14px;font-size:29px}
-body.portrait .oa-mid{padding:18px 22px;gap:8px}
+   PLACEMENT: the card is CENTERED vertically (big-chyron read: the fact check is the
+   content, not a footnote strip) — top:50% + translateY(-50%), with the 26px enter slide
+   folded into the same transform so the C1 motion survives. ?y=<px> re-anchors to the
+   bottom via .y-pinned (overlay.js) for streams that need the old lower-third band.
+   SAFE ZONE: the engagement rail still eats the right ~130px of a 1080-wide frame, so
+   right:132px stays. Correction text is guaranteed to fit by the editorial layer
+   (fitOnAir, CORRECTION_MAX_CHARS=160 + the verifier's 140-char steer); the line-clamps
+   here are a belt against pathological strings, sized to never trigger on capped text. */
+body.portrait .onair{left:36px;right:132px;top:50%;bottom:auto;flex-direction:column;min-height:0;
+  transform:translateY(calc(-50% + 26px))}
+body.portrait .onair.show{transform:translateY(-50%)}
+body.portrait .onair.y-pinned{top:auto;transform:translateY(26px)}
+body.portrait .onair.y-pinned.show{transform:none}
+body.portrait .onair .oa-verdict{width:100%;flex-direction:row;justify-content:center;gap:12px;padding:18px 14px;font-size:40px}
+body.portrait .oa-mid{padding:24px 26px;gap:12px}
 body.portrait .oa-claimline{flex-wrap:wrap;gap:8px 10px}
-body.portrait .oa-kicker{font-size:14px;padding:3px 7px 2px}
+body.portrait .oa-kicker{font-size:16px;padding:4px 8px 3px}
 /* same hierarchy at phone scale: correction carries the size/weight, claim steps back */
-body.portrait .oa-claim{font-size:26px;-webkit-line-clamp:3}
-body.portrait .oa-correction{font-size:30px;-webkit-line-clamp:3}
+body.portrait .oa-claim{font-size:28px;-webkit-line-clamp:3}
+body.portrait .oa-correction{font-size:38px;line-height:1.22;-webkit-line-clamp:5}
 body.portrait .oa-right{width:100%;flex-direction:row;align-items:center;justify-content:space-between;
-  gap:12px;padding:12px 22px;border-left:0;border-top:1.5px solid rgba(255,255,255,.1);text-align:left}
-body.portrait .oa-brand{font-size:23px}
-body.portrait .oa-src{font-size:16px;text-align:right}
-body.portrait .oa-primary{font-size:12px}
-body.portrait .onair.v-corr .oa-claim{font-size:30px}
-body.portrait .onair.v-corr .oa-correction{font-size:19px}
+  gap:12px;padding:14px 26px;border-left:0;border-top:1.5px solid rgba(255,255,255,.1);text-align:left}
+body.portrait .oa-brand{font-size:26px}
+body.portrait .oa-src{font-size:18px;text-align:right}
+body.portrait .oa-primary{font-size:13px}
+body.portrait .onair.v-corr .oa-claim{font-size:36px}
+body.portrait .onair.v-corr .oa-correction{font-size:20px}
 
 /* field-test watermark — cards aired by the local TESTAIR flag carry test:true.
    INSIDE the card (top-right): .onair is overflow:hidden, so anything hung outside

@@ -208,17 +208,16 @@
      the source of truth here. Optimistic flip on tap, reconciled against the snapshot
      (adopt on agreement, revert if control hasn't confirmed within the window). DOM is
      built here: operator.html is owned by the parent shard this round. */
-  /* W4 (walkable rig): auto-air cap state — on the street /op is the ONLY console, so arm
-     state and the session cap can't live on a screen the operator can't see. Rides the
-     queue snapshot (autoair.on/count/cap); absent → chip hidden. Lives in the glance
-     strip now (glanceability pass) — same chip, arm's-length sizing via .glance CSS. */
+  /* W4 (walkable rig): auto-air arm state — on the street /op is the ONLY console, so arm
+     state can't live on a screen the operator can't see. Rides the queue snapshot
+     (autoair.on/count; R72: no session cap anymore); absent → chip hidden. Lives in the
+     glance strip now (glanceability pass) — same chip, arm's-length sizing via .glance CSS. */
   const aaChip = byId("gAuto");
   function renderAutoair(aa) {
     if (!aa || typeof aa !== "object") { aaChip.hidden = true; return; }
     aaChip.hidden = false;
     if (!aa.on) { aaChip.textContent = "AUTO OFF"; aaChip.className = "aa-chip off"; }
-    else if (aa.count >= aa.cap) { aaChip.textContent = `AUTO CAP ${aa.count}/${aa.cap}`; aaChip.className = "aa-chip cap"; }
-    else { aaChip.textContent = `AUTO ${aa.count}/${aa.cap}`; aaChip.className = "aa-chip on"; }
+    else { aaChip.textContent = `AUTO ${aa.count}`; aaChip.className = "aa-chip on"; }
   }
   /* Glanceability pass: the mute toggle IS the glance strip's MUTE state chip — one
      element carries both the latched state (amber when muted) and the big-thumb control,

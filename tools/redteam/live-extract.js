@@ -1,8 +1,9 @@
 // LIVE category-spoof quantification (NIGHTSPRINT R-inject, class 5). Hits the REAL Haiku
 // extractor with adversarial utterances that are POLITICAL / COMMERCIAL / OTHER claims
 // linguistically dressed up as science_health, and measures how often the extractor tags
-// them "science_health" -- the category the R57 gate lets auto-air. This QUANTIFIES the
-// mis-categorization rate (GREEN); it does NOT change any gate/category semantics.
+// them "science_health". Historical note (R72, 2026-08-18): the R57 category gate is gone —
+// category no longer gates auto-air — so this now measures extractor classification drift
+// only, not arming. It does NOT change any semantics.
 //
 // Also runs a batch of instruction-injection utterances through the FULL live path
 // (extract -> grounding -> R46) to confirm the gates hold on real model output, not just
@@ -15,7 +16,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { groundedClaim } from "../../src/core/grounding.js";
 import { hasNegation } from "../../src/core/utterance.js";
-import { PILOT_CATEGORY_ALLOWLIST } from "../../src/core/tunables.js";
+// R72: the pilot allowlist tunable is gone; kept locally as the spoof-detection target only.
+const SPOOF_TARGET_CATEGORIES = ["science_health"];
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // worktree -> .claude/worktrees/<name>/tools/redteam ; main tree is 4 levels up from worktree root
@@ -86,7 +88,7 @@ async function mapLimit(items, n, fn) {
 }
 
 console.log("=== LIVE CATEGORY-SPOOF (real Haiku extractor) ===");
-console.log("allowlist:", JSON.stringify(PILOT_CATEGORY_ALLOWLIST), "\n");
+console.log("spoof target:", JSON.stringify(SPOOF_TARGET_CATEGORIES), "(classification drift only — R72: category no longer gates auto-air)\n");
 let spoofScience = 0, spoofTotal = 0, spoofErr = 0;
 const spoofRows = await mapLimit(SPOOF, 4, async ([honest, utt]) => {
   const r = await callExtract(utt);
@@ -96,7 +98,7 @@ for (const row of spoofRows) {
   if (row.error) { spoofErr++; console.log("  ERR ", JSON.stringify(row)); continue; }
   if (row.claim == null) { console.log("  NONE", JSON.stringify(row)); continue; }
   spoofTotal++;
-  const armed = PILOT_CATEGORY_ALLOWLIST.includes(row.category);
+  const armed = SPOOF_TARGET_CATEGORIES.includes(row.category);
   if (armed) spoofScience++;
   console.log(`  ${armed ? "SPOOF-HIT" : "held    "} [${row.honest}->${row.category}] ${JSON.stringify(row.claim)}`);
 }

@@ -466,6 +466,43 @@
   }
   /* ===== END MIRROR BLOCK ===== */
 
+  /* Perplexity burst absorber: multi-claim windows (prompt v4) settle several verifies at
+     once, and the vendor 429s on bursts (observed live 2026-08-18, single-claim era too).
+     Two layers: (1) a concurrency gate — at most 2 verify requests in flight, extras queue;
+     (2) 429/5xx/network retries with backoff before a card errors. The slot is held THROUGH
+     the backoff sleeps on purpose — when the vendor is shedding load, slowing every lane is
+     the fix, not racing it. Cards stay "checking" while queued/retrying; a slower verdict
+     beats a dead card with a manual retry button. Kill-switch 503s are never retried. */
+  const VERIFY_MAX_CONCURRENT = 2, VERIFY_RETRIES = 2;
+  let verifyActive = 0; const verifyWaiters = [];
+  const verifySlot = () => new Promise((resolve) => { if (verifyActive < VERIFY_MAX_CONCURRENT) { verifyActive++; resolve(); } else verifyWaiters.push(resolve); });
+  const verifyRelease = () => { const next = verifyWaiters.shift(); if (next) next(); else verifyActive--; };
+  async function verifyFetch(claim, polarity, utterance) {
+    await verifySlot();
+    try {
+      for (let attempt = 0; ; attempt++) {
+        let status = 0, body = null, netErr = null;
+        try {
+          const r = await fetch("/api/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ claim, polarity, utterance, room: fcRoom || undefined }) });   // R50: raw utterance feeds the independent polarity signal
+          status = r.status; body = await r.json().catch(() => ({}));
+        } catch (e) { netErr = e; }
+        if (!netErr) {
+          if (status === 503 && body && body.paused === true) return { v: null, verifyPaused: true };   // operator kill-switch — not a failure, never retried
+          if (status >= 200 && status < 300) { noteUnpaused(); return { v: body, verifyPaused: false }; }
+        }
+        const rateLimited = status === 429 || (body && body.upstream_status === 429);
+        if ((netErr || rateLimited || status >= 500) && attempt < VERIFY_RETRIES) {
+          DBG.event("info", `verify ${rateLimited ? "rate-limited" : "failed"} — retrying (${attempt + 1}/${VERIFY_RETRIES})`, { claim: claim.slice(0, 80), status: status || null });
+          await new Promise((r2) => setTimeout(r2, 1500 * (attempt + 1) + Math.random() * 500));
+          continue;
+        }
+        if (netErr) DBG.event("err", "verify network error", { error: String(netErr && netErr.message || netErr), claim: claim.slice(0, 80) });
+        else { noteUnpaused(); DBG.event("err", `verify failed${body && body.upstream_status ? ` · Perplexity ${body.upstream_status}` : ` · HTTP ${status}`}`, { status, upstream_status: body && body.upstream_status, upstream: body && body.upstream, claim: claim.slice(0, 80) }); }
+        return { v: null, verifyPaused: false };
+      }
+    } finally { verifyRelease(); }
+  }
+
   // entry point: a spoken final (or a typed claim). Guard → Haiku extract → Perplexity verify.
   async function checkUtterance(text, opts) {
     opts = opts || {};
@@ -493,32 +530,34 @@
     FT.log("check_start", { cid, spoken: t, typed: !!opts.force, merged: !!opts.merged });
     fcInflight++; setOps();
     const t0 = performance.now();
-    let claim = null, extractFailed = false, extractPaused = false, ungrounded = false, polarity, harmClass, category;
+    let claims = [], extractFailed = false, extractPaused = false, ungrounded = false;
     try {
       const r = await fetch("/api/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: t }) });
       const j = await r.json().catch(() => ({}));
       if (r.status === 503 && j && j.paused === true) extractPaused = true;   // operator kill-switch — not a failure
       else if (!r.ok) { noteUnpaused(); extractFailed = true; DBG.event("err", `extract failed${j && j.upstream_status ? ` · Anthropic ${j.upstream_status}` : ` · HTTP ${r.status}`}`, { status: r.status, upstream_status: j && j.upstream_status, upstream: j && j.upstream, spoken: t.slice(0, 80) }); }
-      else { noteUnpaused(); claim = j.claim; polarity = j.polarity; harmClass = j.harm_class; category = j.category; ungrounded = j.rejected === "ungrounded"; }   // null claim is a legit "no checkable claim", not a failure
+      // v4 multi-claim: .claims is the contract; a stale server's single-claim shape wraps.
+      // Empty claims is a legit "no checkable claim", not a failure.
+      else { noteUnpaused(); claims = Array.isArray(j.claims) ? j.claims : (j.claim != null ? [j] : []); ungrounded = j.rejected === "ungrounded"; }
     } catch (e) { extractFailed = true; DBG.event("err", "extract network error", { error: String(e && e.message || e), spoken: t.slice(0, 80) }); }
     const extractMs = performance.now() - t0;
-    FT.log("extract_done", { cid, ms: +extractMs.toFixed(0), status: extractPaused ? "paused" : extractFailed ? "failed" : "ok", claim, polarity: polarity || null, harm_class: harmClass || null, category: category || null });
+    FT.log("extract_done", { cid, ms: +extractMs.toFixed(0), status: extractPaused ? "paused" : extractFailed ? "failed" : "ok", claims: claims.length,
+      claim: claims.length ? claims[0].claim : null, polarity: claims.length ? claims[0].polarity || null : null, harm_class: claims.length ? claims[0].harm_class || null : null, category: claims.length ? claims[0].category || null : null });
+    fcInflight--; setOps();   // extract phase settled; each claim's verify tracks its own in-flight unit below
     if (g !== gen) {   // stale at extract stage — the stream this belongs to is gone: log, never enqueue
-      fcInflight--; setOps();
       FT.log("gate", { cid, outcome: "stale_generation", stage: "extract" });
       DBG.event("info", "stale check dropped (stream ended during extract)", { spoken: t.slice(0, 60) });
-      if (claim) { const dead = { id: ++fcId, spoken: t, claim, state: "checking", spokenAt, extractMs: +extractMs.toFixed(0) }; SESSION.log(dead); SESSION.mark(dead.id, "stale_generation"); }
+      claims.forEach((it) => { const dead = { id: ++fcId, spoken: t, claim: it.claim, state: "checking", spokenAt, extractMs: +extractMs.toFixed(0) }; SESSION.log(dead); SESSION.mark(dead.id, "stale_generation"); });
       return;
     }
     if (extractPaused) {
-      fcInflight--; setOps(); notePaused();
+      notePaused();
       FT.log("gate", { cid, outcome: "paused", stage: "extract" });
       const rec = { id: ++fcId, spoken: t, claim: null, state: "checking", spokenAt };
       SESSION.log(rec); SESSION.mark(rec.id, "paused");   // honest gap in the record; no card, no error dress
       return;
     }
-    if (!claim) {
-      fcInflight--; setOps();
+    if (!claims.length) {
       // "ungrounded" = the P4-F1 grounding gate rejected the extractor's output server-side —
       // distinguished from a plain no_claim so field monitoring can watch the gate fire
       FT.log("gate", { cid, outcome: extractFailed ? "extract_error" : ungrounded ? "ungrounded" : "no_claim", words: words.length });
@@ -526,73 +565,75 @@
       DBG.push({ t: new Date().toISOString(), source: "fc", spoken: t, claim: null, extract_ms: +extractMs.toFixed(0), error: extractFailed || undefined });
       return;
     }
-    /* F2 — claim-level dedupe at card-creation time. The consecutive-utterance guard above is
-       defeated by interleaved finals (field test: same claim re-extracted 3× in 20s, two cards
-       AIRED 2s apart). Key = normalized claim text; window keys on card CREATION time, survives
-       across utterances, resets on clearFactChecks (stream boundaries). Operator retry and typed
-       input enter with force:true and bypass — a deliberate re-check is never blocked. */
-    const normClaim = normalizeClaim(claim);
-    if (!opts.force && withinDupWindow(recentClaims.get(normClaim), Date.now())) {
+    /* v4 rapid-fire: one window can carry several distinct claims — each runs the same
+       dedupe→card→verify→settle path below, concurrently. The dedupe check+register is
+       synchronous at the top of runClaim, so same-claim twins inside one batch still
+       collapse before any verify money is spent. */
+    await Promise.all(claims.map((it) => runClaim(it)));
+
+    async function runClaim(it) {
+      const claim = it.claim, polarity = it.polarity, harmClass = it.harm_class, category = it.category;
+      /* F2 — claim-level dedupe at card-creation time. The consecutive-utterance guard above is
+         defeated by interleaved finals (field test: same claim re-extracted 3× in 20s, two cards
+         AIRED 2s apart). Key = normalized claim text; window keys on card CREATION time, survives
+         across utterances, resets on clearFactChecks (stream boundaries). Operator retry and typed
+         input enter with force:true and bypass — a deliberate re-check is never blocked. */
+      const normClaim = normalizeClaim(claim);
+      if (!opts.force && withinDupWindow(recentClaims.get(normClaim), Date.now())) {
+        FT.log("gate", { cid, outcome: "duplicate_claim" });
+        DBG.event("info", "duplicate claim dropped (same claim carded moments ago)", { claim: claim.slice(0, 80), extract_ms: +extractMs.toFixed(0) });
+        const dup = { id: ++fcId, spoken: t, claim, state: "checking", spokenAt, extractMs: +extractMs.toFixed(0) };
+        SESSION.log(dup); SESSION.mark(dup.id, "duplicate");   // terminal disposition — same log-then-mark shape as stale_generation
+        return;
+      }
+      /* D17 (round 7, from FS-1): cards ALWAYS display the speaker's framing — the canonical-
+         positive form is verification substrate and never airs. For asserts, the canonical
+         claim IS a faithful restatement; for denials (and, later, polarity conflicts) the
+         spoken sentence carries the negation the canonical form strips. pickSpokenSentence
+         trims multi-sentence utterances to the claim-bearing sentence by content-word overlap. */
+      const displayClaim = (polarity === "denies" || polarity === "suspect_denies") ? pickSpokenSentence(t, claim, true) : claim;   // R46: suspect flips show speaker framing from the start
+      const card = { id: ++fcId, _gen: g, _cid: cid, spoken: t, claim, displayClaim, polarity, harm_class: harmClass, category: category || "other", state: "checking", spokenAt, extractStartedAt: spokenAt, extractMs: +extractMs.toFixed(0) };   // real claim → checking card now
+      recentClaims.set(normClaim, Date.now());   // F2: register at creation (force-created cards too — they still dedupe later voice repeats)
+      if (recentClaims.size > 200) { const nowMs = Date.now(); recentClaims.forEach((at, k) => { if (!withinDupWindow(at, nowMs)) recentClaims.delete(k); }); }
+      fcCards.unshift(card); renderQueue(); setOps();
+      fcInflight++; setOps();
+      const t1 = performance.now();
+      const { v, verifyPaused } = await verifyFetch(claim, polarity, t);   // R50 payload inside: raw utterance feeds the independent polarity signal
       fcInflight--; setOps();
-      FT.log("gate", { cid, outcome: "duplicate_claim" });
-      DBG.event("info", "duplicate claim dropped (same claim carded moments ago)", { claim: claim.slice(0, 80), extract_ms: +extractMs.toFixed(0) });
-      const dup = { id: ++fcId, spoken: t, claim, state: "checking", spokenAt, extractMs: +extractMs.toFixed(0) };
-      SESSION.log(dup); SESSION.mark(dup.id, "duplicate");   // terminal disposition — same log-then-mark shape as stale_generation
-      return;
-    }
-    /* D17 (round 7, from FS-1): cards ALWAYS display the speaker's framing — the canonical-
-       positive form is verification substrate and never airs. For asserts, the canonical
-       claim IS a faithful restatement; for denials (and, later, polarity conflicts) the
-       spoken sentence carries the negation the canonical form strips. pickSpokenSentence
-       trims multi-sentence utterances to the claim-bearing sentence by content-word overlap. */
-    const displayClaim = (polarity === "denies" || polarity === "suspect_denies") ? pickSpokenSentence(t, claim, true) : claim;   // R46: suspect flips show speaker framing from the start
-    const card = { id: ++fcId, _gen: g, _cid: cid, spoken: t, claim, displayClaim, polarity, harm_class: harmClass, category: category || "other", state: "checking", spokenAt, extractStartedAt: spokenAt, extractMs: +extractMs.toFixed(0) };   // real claim → checking card now
-    recentClaims.set(normClaim, Date.now());   // F2: register at creation (force-created cards too — they still dedupe later voice repeats)
-    if (recentClaims.size > 200) { const nowMs = Date.now(); recentClaims.forEach((at, k) => { if (!withinDupWindow(at, nowMs)) recentClaims.delete(k); }); }
-    fcCards.unshift(card); renderQueue(); setOps();
-    const t1 = performance.now();
-    let v = null, verifyPaused = false;
-    try {
-      const r = await fetch("/api/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ claim, polarity, utterance: t, room: fcRoom || undefined }) });   // R50: raw utterance feeds the independent polarity signal
-      const body = await r.json().catch(() => ({}));
-      if (r.status === 503 && body && body.paused === true) verifyPaused = true;   // operator kill-switch — not a failure
-      else if (r.ok) { noteUnpaused(); v = body; }
-      else { noteUnpaused(); DBG.event("err", `verify failed${body && body.upstream_status ? ` · Perplexity ${body.upstream_status}` : ` · HTTP ${r.status}`}`, { status: r.status, upstream_status: body && body.upstream_status, upstream: body && body.upstream, claim: claim.slice(0, 80) }); }
-    } catch (e) { DBG.event("err", "verify network error", { error: String(e && e.message || e), claim: claim.slice(0, 80) }); }
-    fcInflight--; setOps();
-    card.verifyMs = +(performance.now() - t1).toFixed(0);   // same measurement DBG gets — one clock, no double-timing
-    FT.log("verify_done", { cid, id: card.id, ms: card.verifyMs, ok: !!v, verdict: (v && v.verdict) || null, confidence: v && v.confidence != null ? v.confidence : null,
-      tier: (v && v.source && v.source.tier != null) ? v.source.tier : null, autoAirEligible: !!(v && v.autoAirEligible === true), polarity_conflict: !!(v && v.polarity_conflict), harm_class: harmClass || null });
-    if (g !== gen) {   // stale at verify stage — pull the card back out of the queue quietly, log the disposition
-      fcCards = fcCards.filter((x) => x.id !== card.id);
-      renderQueue(); setOps();
-      SESSION.log(card); SESSION.mark(card.id, "stale_generation");   // checking cards aren't logged yet → log-then-mark
-      DBG.event("info", "stale check dropped (stream ended during verify)", { claim: claim.slice(0, 60) });
-      return;
-    }
-    if (verifyPaused) {
-      fcCards = fcCards.filter((x) => x.id !== card.id);   // pause is not a failure — no error card
-      renderQueue(); setOps(); notePaused();
-      SESSION.log(card); SESSION.mark(card.id, "paused");
-      return;
-    }
-    if (!v) { card.state = "error"; card.errMsg = (DBG.events[DBG.events.length - 1] || {}).msg || "verify failed"; renderQueue(); DBG.push({ t: new Date().toISOString(), source: "fc", claim, error: true, verify_ms: card.verifyMs }); SESSION.log(card); return; }
-    Object.assign(card, { state: "pending", verdict: v.verdict, correction: v.correction, source: v.source, citations: v.citations, confidence: v.confidence,
-      autoAirEligible: v.autoAirEligible === true, polarity_conflict: !!v.polarity_conflict, pendingAt: Date.now() });
-    // D17: a polarity CONFLICT means the canonical form's relationship to the spoken claim is
-    // in doubt — fall back to the speaker's own words for display regardless of polarity field
-    if (card.polarity_conflict) card.displayClaim = pickSpokenSentence(card.spoken, card.claim, true);
-    renderQueue(); setOps(); SESSION.log(card);
-    DBG.push({ t: new Date().toISOString(), source: "fc", claim, verdict: v.verdict, confidence: v.confidence, extract_ms: card.extractMs, verify_ms: card.verifyMs, sourceUrl: v.source && v.source.url });
-    maybeAutoAir(card);
-    /* PASS-2 TESTAIR (local field test only — see FT block): air every settled verdict
-       immediately with the TEST watermark. Supersedes a real auto-air timer if one armed;
-       does not consult or alter any real gate. */
-    if (TESTAIR && card.state === "pending") {
-      if (card._auto) { clearTimeout(card._auto); card._auto = null; }
-      card.test = true; card._autoAired = true;
-      FT.log("testair_fire", { cid, id: card.id });
-      airCard(card);
+      card.verifyMs = +(performance.now() - t1).toFixed(0);   // same measurement DBG gets — one clock, no double-timing
+      FT.log("verify_done", { cid, id: card.id, ms: card.verifyMs, ok: !!v, verdict: (v && v.verdict) || null, confidence: v && v.confidence != null ? v.confidence : null,
+        tier: (v && v.source && v.source.tier != null) ? v.source.tier : null, autoAirEligible: !!(v && v.autoAirEligible === true), polarity_conflict: !!(v && v.polarity_conflict), harm_class: harmClass || null });
+      if (g !== gen) {   // stale at verify stage — pull the card back out of the queue quietly, log the disposition
+        fcCards = fcCards.filter((x) => x.id !== card.id);
+        renderQueue(); setOps();
+        SESSION.log(card); SESSION.mark(card.id, "stale_generation");   // checking cards aren't logged yet → log-then-mark
+        DBG.event("info", "stale check dropped (stream ended during verify)", { claim: claim.slice(0, 60) });
+        return;
+      }
+      if (verifyPaused) {
+        fcCards = fcCards.filter((x) => x.id !== card.id);   // pause is not a failure — no error card
+        renderQueue(); setOps(); notePaused();
+        SESSION.log(card); SESSION.mark(card.id, "paused");
+        return;
+      }
+      if (!v) { card.state = "error"; card.errMsg = (DBG.events[DBG.events.length - 1] || {}).msg || "verify failed"; renderQueue(); DBG.push({ t: new Date().toISOString(), source: "fc", claim, error: true, verify_ms: card.verifyMs }); SESSION.log(card); return; }
+      Object.assign(card, { state: "pending", verdict: v.verdict, correction: v.correction, source: v.source, citations: v.citations, confidence: v.confidence,
+        autoAirEligible: v.autoAirEligible === true, polarity_conflict: !!v.polarity_conflict, pendingAt: Date.now() });
+      // D17: a polarity CONFLICT means the canonical form's relationship to the spoken claim is
+      // in doubt — fall back to the speaker's own words for display regardless of polarity field
+      if (card.polarity_conflict) card.displayClaim = pickSpokenSentence(card.spoken, card.claim, true);
+      renderQueue(); setOps(); SESSION.log(card);
+      DBG.push({ t: new Date().toISOString(), source: "fc", claim, verdict: v.verdict, confidence: v.confidence, extract_ms: card.extractMs, verify_ms: card.verifyMs, sourceUrl: v.source && v.source.url });
+      maybeAutoAir(card);
+      /* PASS-2 TESTAIR (local field test only — see FT block): air every settled verdict
+         immediately with the TEST watermark. Supersedes a real auto-air timer if one armed;
+         does not consult or alter any real gate. */
+      if (TESTAIR && card.state === "pending") {
+        if (card._auto) { clearTimeout(card._auto); card._auto = null; }
+        card.test = true; card._autoAired = true;
+        FT.log("testair_fire", { cid, id: card.id });
+        airCard(card);
+      }
     }
   }
 
@@ -626,10 +667,11 @@
       const src = srcUrl
         ? `<a class="fc-src" href="${esc(srcUrl)}" target="_blank" rel="noopener">${esc(c.source.name)} ↗</a>`
         : `<span class="fc-src">${esc((c.source && c.source.name) || "source")}</span>`;
-      // manual-only tags: show the operator WHY auto-air didn't take this card (D4/D11)
+      // R72: nothing is manual-only anymore — these chips are informational flags so the
+      // operator can spot sensitive cards during the veto window (was: D4/D11 manual holds)
       const tags = [];
-      if (c.harm_class === "person_private" || c.harm_class === "person_public") tags.push("MANUAL — person");
-      if (c.harm_class === "quote_attribution") tags.push("MANUAL — quote");
+      if (c.harm_class === "person_private" || c.harm_class === "person_public") tags.push("⚠ person");
+      if (c.harm_class === "quote_attribution") tags.push("⚠ quote");
       if (c.polarity_conflict) tags.push("⚠ polarity");
       const tagHtml = tags.map((t) => `<span class="fc-manual">${esc(t)}</span>`).join("");
       /* correction composer (P3-C): aired cards get a "✎ correct" affordance (control view —
@@ -778,40 +820,29 @@
   function clearOnAir() { if (onAirPacer) onAirPacer.clear(); hideOnAir(); }
   function pullOnAir() { if (tabReadOnly) return warnReadOnly(); clearOnAir(); SESSION.markPulled(); if (fcPublish) fcPublish(null, 0); }   // take the current graphic off-air (locally + overlay)
 
-  // optional auto-air: only definitive, high-confidence, sourced, tier-eligible checks — with a veto window
+  /* auto-air — R72 (2026-08-18 operator ruling): the toggle IS the gate. When Auto-air is
+     on, EVERY settled check arms and fires after the veto window — no category allowlist,
+     no confidence floor, no evidence-tier gate, no harm-class hold, no session cap. This
+     supersedes the pilot-era gates (D4 person-hold, R57 allowlist, D5 tier floor, D18 cap);
+     the veto window and the toggle itself are the operator's only control points. */
+  // 2s (was 4s until 2026-08-18): the pipeline floor is ~3.8s spoken→pending, so the 4s veto
+  // was half the perceived talk→air latency. 2s keeps a real beat for a watching operator.
+  const AUTO_AIR_VETO_MS = 2000;
   function maybeAutoAir(c) {
-    // D4 (PERMANENT — hardcoded, no setting may override): claims about private persons
-    // and polarity-conflicted checks NEVER auto-air. A human airs those or nobody does.
-    if (c.harm_class === "person_private" || c.polarity_conflict) return;
-    if (c.harm_class && c.harm_class !== "none") return;              // person_public / quote_attribution → manual only
-    /* R57 (D18) — pilot category scope is CODE, not protocol: only allowlisted categories
-       may auto-air, same mechanism class as the person-holds above. Session 2's breach
-       ("Silver is worth more than bronze", economics) replays as: never arms. Mirrors
-       PILOT_CATEGORY_ALLOWLIST in src/core/tunables.js (classic script — can't import);
-       change BOTH together. Unknown/missing category = "other" = never arms. */
-    if (c.category !== "science_health") return;
     if (!byId("autoAir").checked) return;
-    if (c.autoAirEligible !== true) return;                          // server-side evidence floor (tier gate, D5)
-    // 0.85 mirrors AUTO_AIR_CONF_FLOOR in src/core/tunables.js (classic script — can't import); change both together
-    if ((c.verdict === "True" || c.verdict === "False") && (c.confidence || 0) >= 0.85 && c.source && c.source.url) {
-      /* H2 closure (P3-F): `streaming` alone is NOT enough — End Stream → Start Stream inside
-         the 4s veto window makes `streaming` true again for the WRONG stream. The card must
-         also belong to the CURRENT generation. Auto-air is autonomous work, so it is gen-guarded
-         (operator AIR clicks are not). */
-      if (autoAirCount >= AUTO_AIR_CAP) {
-        if (!autoAirCapNoted) { autoAirCapNoted = true; DBG.event("warn", `auto-air session cap (${AUTO_AIR_CAP}) reached — remaining cards are manual (D18)`); FT.log("autoair_cap", { cap: AUTO_AIR_CAP }); }
-        return;   // D18: cap reached — no more arming this session
-      }
-      FT.log("autoair_armed", { id: c.id, cid: c._cid || null });
-      c._armT = Date.now();   // R54: veto-window open — input-activity sampling measures against this
-      c._auto = setTimeout(() => { if (streaming && c._gen === gen && c.state === "pending" && autoAirCount < AUTO_AIR_CAP) {
-        autoAirCount++; c._autoAired = true; c._airedAtMs = Date.now();
-        /* R54 objective supplement: did the operator's hands move during THIS card's veto
-           window? (input_activity=false + no tag is the "4s was a formality" signature.) */
-        FT.log("veto_window", { id: c.id, cid: c._cid || null, outcome: "fired", input_activity: lastInputT >= c._armT, ms: Date.now() - c._armT });
-        airCard(c);
-      } }, 4000);
-    }
+    FT.log("autoair_armed", { id: c.id, cid: c._cid || null });
+    c._armT = Date.now();   // R54: veto-window open — input-activity sampling measures against this
+    /* H2 closure (P3-F): `streaming` alone is NOT enough — End Stream → Start Stream inside
+       the veto window makes `streaming` true again for the WRONG stream. The card must
+       also belong to the CURRENT generation. Auto-air is autonomous work, so it is gen-guarded
+       (operator AIR clicks are not). */
+    c._auto = setTimeout(() => { if (streaming && c._gen === gen && c.state === "pending") {
+      autoAirCount++; c._autoAired = true; c._airedAtMs = Date.now();
+      /* R54 objective supplement: did the operator's hands move during THIS card's veto
+         window? (input_activity=false + no tag is the "veto was a formality" signature.) */
+      FT.log("veto_window", { id: c.id, cid: c._cid || null, outcome: "fired", input_activity: lastInputT >= c._armT, ms: Date.now() - c._armT });
+      airCard(c);
+    } }, AUTO_AIR_VETO_MS);
   }
   function clearFactChecks() {
     fcCards.forEach((c) => c._auto && clearTimeout(c._auto));
@@ -1033,7 +1064,7 @@
          captures g at entry; re-checked after the extract fetch AND after the verify fetch.
          Stale results never enqueue/render; they are logged with disposition stale_generation
          (verify-stage staleness also quietly removes the already-queued "checking" card).
-       · maybeAutoAir 4s veto timer — GUARDED: fires only if `streaming && c._gen === gen`.
+       · maybeAutoAir veto timer — GUARDED: fires only if `streaming && c._gen === gen`.
          The round-2 `streaming`-only check missed End→Start inside the veto window.
        · Deepgram WS callbacks (onopen/onmessage/onclose) + reconnect timer (dgRetryT) —
          already g-guarded at every entry point (pre-existing; endStream also clears the timer).
@@ -1292,7 +1323,7 @@
 
   async function startStream() {
     streaming = true; const myGen = ++gen; clearFactChecks();
-    autoAirCount = 0; autoAirCapNoted = false;   // D18: cap is per-session
+    autoAirCount = 0;   // per-session count (R72: informational — no cap)
     winStatsReset();   // W1.3: window_summary is per-stream (belt-and-suspenders — a reload can skip endStream)
     if (applyKeyterms) applyKeyterms();   // R40: keyterms snapshot for this stream
     if (opBridge) opBridge.streamStarted();   // P3-J: start the operator command poll + baseline the queue snapshot
@@ -1346,11 +1377,9 @@
      Mute state survives Start/End Stream on purpose: a surprise-hot mic is worse than
      surprise silence. ---- */
   let muted = false, muteBtnEl = null;
-  /* D18 pilot constraint: hard cap on auto-airs per session. Counted at FIRE time (not
-     arm time — vetoed cards don't consume the cap), reset on Start Stream. At the cap,
-     maybeAutoAir stops arming and the operator is told once. */
-  const AUTO_AIR_CAP = 10;
-  let autoAirCount = 0, autoAirCapNoted = false;
+  // R72: the D18 per-session cap is gone; the count survives for the session record and /op.
+  // Counted at FIRE time (vetoed cards don't count), reset on Start Stream.
+  let autoAirCount = 0;
   let applyKeyterms = null;   // R40: set by the control bridge; called at Start Stream
   function setMuted(on) {
     muted = !!on;
@@ -1814,7 +1843,7 @@
         await fetch("/api/onair", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ room: s.room, writeKey: s.writeKey, op: "queue", cards, onAirId: SESSION.currentOnAir, muted, attn,
             sttStale: clear ? false : sttStale,   // R-transport: dead-air flag — surfaces transport failure on /op even with no card mutation
-            autoair: { on: !!byId("autoAir").checked, count: autoAirCount, cap: AUTO_AIR_CAP } }) });   // R43 latch + W4: cap state visible from the street
+            autoair: { on: !!byId("autoAir").checked, count: autoAirCount } }) });   // R43 latch + W4: arm state visible from the street (R72: no cap)
       } catch {}   // best-effort — next mutation re-pushes; /op's 180s TTL bounds staleness
     }
     function opApplyCmd(cmd) {

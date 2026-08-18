@@ -72,8 +72,8 @@ verdict and raw citations; `finalizeVerification()` then:
 - **cleans and truncates the correction** for the chyron (markdown stripped to a fixpoint,
   surrogate-safe truncation);
 - **computes `autoAirEligible`** — the evidence floor: a tier-3 surfaced source, or ≥2
-  tier-≥2 citations from distinct hostnames. A lone unknown-domain source can't satisfy
-  auto-air at any confidence.
+  tier-≥2 citations from distinct hostnames. (R72: informational — logged on every card
+  and shown to the operator, but it no longer gates auto-air.)
 
 `api/verify.js` is deliberately a thin route: spend gate → rate limit → adapter →
 `finalizeVerification` → polarity → response.
@@ -94,16 +94,18 @@ cheap deterministic consistency check that can't hallucinate.
   always emits the claim in canonical *assertive* form plus a `polarity` field; the
   verifier checks the assertive form; `applyPolarity()` maps the verdict back onto what
   the speaker said (denies flips True↔False, only True/False ever flip). Any malformed
-  polarity value → `conflict: true`, and conflicted cards are held for a human.
+  polarity value → `conflict: true`; conflicted cards carry a ⚠ polarity chip in the
+  queue (R72: they auto-air like any other card when the toggle is on).
 - **Negation tripwire** — in `api/extract.js` (R46, the FS-8 closure): when the extractor
   says `denies` but the utterance contains no negation token, the flip is suspect — the
   polarity is rewritten to a value `applyPolarity` treats as conflict, so the verdict
   never silently inverts. Replay evidence: it catches exactly the FS-8 card with zero
   false positives across four field sessions (`test/field-replay.test.js`).
-- **Harm classes** — the extractor also emits `harm_class`; person-class cards render
-  manual-only and never arm auto-air (36/36 correct in the 08-08 field test), and
-  `person_claims` is a structural NEVER in the calibration gate regardless of score
-  (Decision D4, hardcoded in `eval/report.js`).
+- **Harm classes** — the extractor also emits `harm_class`; person-class cards render a
+  ⚠ person chip so the operator can spot them in the veto window (36/36 classified
+  correctly in the 08-08 field test). R72 superseded the D4 never-auto-air hold;
+  `person_claims` remains a structural NEVER in the *calibration scoring* in
+  `eval/report.js`, which is measurement, not the airing path.
 
 ## The state channel and the capability model
 
@@ -159,6 +161,6 @@ correct for a keyless localhost, worth knowing before you expose a storeless ser
   surface), once mirrored in `app.js` — with a test that byte-compares the marked blocks
   and fails on drift. Examples: `src/core/utterance.js` (dedupe/merge guards) ↔ app.js,
   pinned by `test/utterance-sync.test.js`; the extractor prompt file ↔ its adapter
-  fallback, pinned by `test/prompt-sync.test.js`; `AUTO_AIR_CONF_FLOOR` in
-  `src/core/tunables.js` is mirrored as a bare `0.85` in app.js with a change-both-together
-  comment. If you touch one side of a mirror, the suite tells you about the other.
+  fallback, pinned by `test/prompt-sync.test.js`. (The `AUTO_AIR_CONF_FLOOR` mirror was
+  retired with the R72 gate removal.) If you touch one side of a mirror, the suite tells
+  you about the other.

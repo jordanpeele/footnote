@@ -30,30 +30,18 @@ import {
 } from "../../src/core/utterance.js";
 import { groundedClaim } from "../../src/core/grounding.js";
 
-// Mirrors PILOT_CATEGORY_ALLOWLIST + AUTO_AIR_CONF_FLOOR in src/core/tunables.js and the
-// maybeAutoAir chain in app.js (classic script, can't import — kept in sync by hand there,
-// imported from tunables here so THIS copy can't drift from the server's).
-import { PILOT_CATEGORY_ALLOWLIST, AUTO_AIR_CONF_FLOOR } from "../../src/core/tunables.js";
-
 const WINDOW_MAX = 60;   // app.js caps the rolling buffer at 60 words
 
 /**
- * Decide whether a settled card would AUTO-AIR, mirroring maybeAutoAir() (app.js:735).
- * Returns the reason it was held, or "aired" when the full gate chain passes.
- * `autoAirEnabled` mirrors the operator's Auto-Air checkbox (default on for scoring).
+ * Decide whether a settled card would AUTO-AIR, mirroring maybeAutoAir() in app.js.
+ * R72 (2026-08-18 ruling): the toggle IS the gate — every settled card airs when the
+ * operator's Auto-Air checkbox is on. The pilot-era hold chain (person/harm/category/
+ * tier/confidence) is gone; see git history for the old gate model.
  * @returns {{aired:boolean, reason:string}}
  */
 export function airDecision(card, autoAirEnabled = true) {
-  if (card.harm_class === "person_private" || card.polarity_conflict) return { aired: false, reason: "person-hold" };
-  if (card.harm_class && card.harm_class !== "none") return { aired: false, reason: "harm-hold" };
-  if (!PILOT_CATEGORY_ALLOWLIST.includes(card.category)) return { aired: false, reason: "category-hold" };
   if (!autoAirEnabled) return { aired: false, reason: "autoair-off" };
-  if (card.autoAirEligible !== true) return { aired: false, reason: "tier-hold" };
-  const definitive = card.verdict === "True" || card.verdict === "False";
-  if (definitive && (card.confidence || 0) >= AUTO_AIR_CONF_FLOOR && card.source && card.source.url) {
-    return { aired: true, reason: "aired" };
-  }
-  return { aired: false, reason: "confidence-hold" };
+  return { aired: true, reason: "aired" };
 }
 
 /**
@@ -124,52 +112,59 @@ export async function runPipeline(finals, hooks) {
     const ex = await extractFn(t);
     rec.latency.extract = ex.ms ?? null;
     if (ex.error) { rec.gate = "extract-error"; checks.push(rec); continue; }
-    rec.claim = ex.claim ?? null;
-    rec.polarity = ex.polarity ?? null;
-    rec.category = ex.category ?? null;
-    rec.harm_class = ex.harm_class ?? null;
-    if (ex.claim == null) {
-      // the server route already ran the grounding gate; a null claim with rejected:"ungrounded"
+    // v4 multi-claim: adapters return .claims; legacy fixture/single shapes wrap to one item.
+    const items = Array.isArray(ex.claims) ? ex.claims : (ex.claim != null ? [ex] : []);
+    if (!items.length) {
+      // the server route already ran the grounding gate; no claims with rejected:"ungrounded"
       // is the ground gate firing, otherwise it's a plain no-claim.
       rec.gate = ex.rejected === "ungrounded" ? "ground" : "no-claim";
       checks.push(rec); continue;
     }
-    // Defensive: in --replay the fixture may hand back a claim without having run the
-    // server-side grounding gate. Re-run it locally so the "ground" gate is scored the
-    // same way in both modes (the real server already did this; groundedClaim is pure).
-    if (ex.rejected !== "ungrounded") {
-      const g = groundedClaim(ex.claim, t);
-      if (!g.ok) { rec.gate = "ground"; checks.push(rec); continue; }
+    // One rec per claim (mirrors checkUtterance's per-claim runClaim path); shared
+    // extract latency, same window text — the scored unit stays "one claim's journey".
+    for (const item of items) {
+      const crec = { ...rec, latency: { ...rec.latency } };
+      crec.claim = item.claim;
+      crec.polarity = item.polarity ?? null;
+      crec.category = item.category ?? null;
+      crec.harm_class = item.harm_class ?? null;
+      // Defensive: in --replay the fixture may hand back a claim without having run the
+      // server-side grounding gate. Re-run it locally so the "ground" gate is scored the
+      // same way in both modes (the real server already did this; groundedClaim is pure).
+      if (ex.rejected !== "ungrounded") {
+        const g = groundedClaim(item.claim, t);
+        if (!g.ok) { crec.gate = "ground"; checks.push(crec); continue; }
+      }
+      // R46 negation tripwire: server returns polarity:"suspect_denies" when denies w/o negation.
+      if (item.tripwire === "negation" || (item.polarity === "denies" && !hasNegation(t))) {
+        crec.polarity = "suspect_denies";
+      }
+
+      // ---- F2 claim-level dedupe (uses window `at` as the clock, like Date.now() live) ----
+      const normClaim = normalizeClaim(item.claim);
+      if (withinDupWindow(recentClaims.get(normClaim), w.at)) { crec.gate = "dedupe"; checks.push(crec); continue; }
+      recentClaims.set(normClaim, w.at);
+
+      // ---- /api/verify (real or replayed) ----
+      const vr = await verifyFn(item.claim, crec.polarity, t);
+      crec.latency.verify = vr.ms ?? null;
+      if (vr.error) { crec.gate = "verify-error"; checks.push(crec); continue; }
+      crec.verdict = vr.verdict ?? null;
+      crec.confidence = vr.confidence ?? null;
+      crec.polarity_conflict = Boolean(vr.polarity_conflict) || crec.polarity === "suspect_denies";
+      crec.autoAirEligible = vr.autoAirEligible === true;
+      crec.source = vr.source || null;
+      crec.gate = "checked";   // reached a verdict — passed all upstream gates
+
+      // ---- air decision ----
+      const air = airDecision({
+        harm_class: crec.harm_class, polarity_conflict: crec.polarity_conflict, category: crec.category,
+        autoAirEligible: crec.autoAirEligible, verdict: crec.verdict, confidence: crec.confidence, source: crec.source,
+      }, autoAir);
+      crec.aired = air.aired;
+      crec.airedReason = air.reason;
+      checks.push(crec);
     }
-    // R46 negation tripwire: server returns polarity:"suspect_denies" when denies w/o negation.
-    if (ex.tripwire === "negation" || (ex.polarity === "denies" && !hasNegation(t))) {
-      rec.polarity = "suspect_denies";
-    }
-
-    // ---- F2 claim-level dedupe (uses window `at` as the clock, like Date.now() live) ----
-    const normClaim = normalizeClaim(ex.claim);
-    if (withinDupWindow(recentClaims.get(normClaim), w.at)) { rec.gate = "dedupe"; checks.push(rec); continue; }
-    recentClaims.set(normClaim, w.at);
-
-    // ---- /api/verify (real or replayed) ----
-    const vr = await verifyFn(ex.claim, rec.polarity, t);
-    rec.latency.verify = vr.ms ?? null;
-    if (vr.error) { rec.gate = "verify-error"; checks.push(rec); continue; }
-    rec.verdict = vr.verdict ?? null;
-    rec.confidence = vr.confidence ?? null;
-    rec.polarity_conflict = Boolean(vr.polarity_conflict) || rec.polarity === "suspect_denies";
-    rec.autoAirEligible = vr.autoAirEligible === true;
-    rec.source = vr.source || null;
-    rec.gate = "checked";   // reached a verdict — passed all upstream gates
-
-    // ---- air decision ----
-    const air = airDecision({
-      harm_class: rec.harm_class, polarity_conflict: rec.polarity_conflict, category: rec.category,
-      autoAirEligible: rec.autoAirEligible, verdict: rec.verdict, confidence: rec.confidence, source: rec.source,
-    }, autoAir);
-    rec.aired = air.aired;
-    rec.airedReason = air.reason;
-    checks.push(rec);
   }
 
   const spokenWords = finals.reduce((n, f) => n + f.text.split(/\s+/).filter(Boolean).length, 0);

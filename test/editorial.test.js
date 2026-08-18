@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  cleanText, truncateOnAir, trustTier, prettyName, rankCitations, autoAirEligible, finalizeVerification,
+  cleanText, truncateOnAir, fitOnAir, CORRECTION_MAX_CHARS, trustTier, prettyName, rankCitations, autoAirEligible, finalizeVerification,
 } from "../src/core/editorial.js";
 
 const rv = (over) => ({ verdict: "False", correction: "c", confidence: 0.9, citations: [], ...over });
@@ -66,10 +66,30 @@ test("L4: truncation leaves intact pairs and short strings alone", () => {
   assert.equal(truncateOnAir("hi \u{1F600}", 240), "hi \u{1F600}");
   assert.equal(truncateOnAir("a".repeat(238) + "\u{1F600}", 240), "a".repeat(238) + "\u{1F600}");   // pair fits exactly
 });
-test("L4: finalizeVerification correction is surrogate-safe at the 240 boundary", () => {
-  const out = finalizeVerification(rv({ correction: "a".repeat(239) + "\u{1F600} more text" }));
-  assert.equal(out.correction, "a".repeat(239));
+test("L4/chyron-fit: finalizeVerification correction is surrogate-safe at the CORRECTION_MAX_CHARS boundary", () => {
+  const out = finalizeVerification(rv({ correction: "a".repeat(CORRECTION_MAX_CHARS - 2) + "\u{1F600} more text" }));
+  // no space inside the budget → hard cut just under the cap, ellipsis appended
+  assert.equal(out.correction, "a".repeat(CORRECTION_MAX_CHARS - 2) + "…");
   assert.ok(out.correction.isWellFormed());
+});
+
+// ---- chyron fit: corrections always fit the big chyron (word-boundary cut + ellipsis) ----
+test("chyron-fit: short corrections pass through untouched", () => {
+  assert.equal(fitOnAir("Platinum costs more than titanium."), "Platinum costs more than titanium.");
+});
+test("chyron-fit: long corrections cut at a word boundary with an ellipsis, within budget", () => {
+  const long = "The strait lies between Oman and Iran and is governed by international maritime law " +
+    "with no single country having full sovereign control over the entire waterway according to observers.";
+  const out = fitOnAir(long);
+  assert.ok(out.length <= CORRECTION_MAX_CHARS, "fits the cap");
+  assert.ok(out.endsWith("…"), "truncation is marked");
+  assert.ok(long.startsWith(out.slice(0, -1)), "cut lands on a word-boundary prefix");
+  assert.ok(!out.slice(0, -1).endsWith(" "), "no dangling space before the ellipsis");
+});
+test("chyron-fit: never splits a surrogate pair at the cut", () => {
+  const out = fitOnAir("a".repeat(CORRECTION_MAX_CHARS - 2) + "\u{1F600}\u{1F600}");
+  assert.ok(out.isWellFormed());
+  assert.ok(out.endsWith("…"));
 });
 
 // ---- P5F-3: curated display-name map + never-all-caps fallback ----

@@ -10,7 +10,8 @@ import { runPipeline, airDecision } from "../tools/synthetic/window-sim.js";
 import { score } from "../tools/synthetic/scorecard.js";
 
 // Inline fixture: extract/verify keys are the exact rolling-window texts window-sim emits
-// over `finals`. Exercises checked+aired, F2 dedupe, D4 person-hold, and no-claim.
+// over `finals`. Exercises checked+aired, F2 dedupe, and no-claim. (R72: the D4
+// person-hold is gone — the Dave card now airs like everything else with the toggle on.)
 const FIXTURE = {
   profile: "s2-inline-selftest",
   autoAir: true,
@@ -50,7 +51,7 @@ const FIXTURE = {
   claims: [
     { utterance: "Vitamin C prevents the common cold in healthy adults.", claim: "Vitamin C prevents the common cold in healthy adults", expected_polarity: "asserts", category: "science_health", expected_verdict: "False", expected_gate: "checked", expected_air: true },
     { utterance: "The Great Wall of China is visible from space with the naked eye.", claim: "The Great Wall of China is visible from space with the naked eye", expected_polarity: "asserts", category: "science_health", expected_verdict: "False", expected_gate: "checked", expected_air: true },
-    { utterance: "My neighbor Dave got fired from his job last week for no reason.", claim: "Dave was fired from his job last week", expected_polarity: "asserts", category: "other", expected_verdict: "Unverifiable", expected_gate: "person-hold", expected_air: false },
+    { utterance: "My neighbor Dave got fired from his job last week for no reason.", claim: "Dave was fired from his job last week", expected_polarity: "asserts", category: "other", expected_verdict: "Unverifiable", expected_gate: "checked", expected_air: true },
     { utterance: "What do you all think about that whole situation anyway?", claim: null, expected_gate: "no-claim" },
   ],
 };
@@ -64,28 +65,27 @@ test("S2 --replay is deterministic: identical scorecard across runs", async () =
 test("S2 scorecard scores every gate path correctly on the inline fixture", async () => {
   const { scorecard: sc } = await runReplay(FIXTURE, { profile: FIXTURE.profile, claims: FIXTURE.claims });
   // gate distribution proves each path was exercised
-  assert.equal(sc.gate_distribution.checked, 2, "two claims reach a verdict");
+  assert.equal(sc.gate_distribution.checked, 3, "three claims reach a verdict (R72: Dave's card airs instead of holding)");
   assert.equal(sc.gate_distribution.dedupe, 2, "F2 dedupe drops the repeated vitamin-C windows");
-  assert.equal(sc.gate_distribution["person-hold"], 1, "D4 person_private is held from air");
+  assert.equal(sc.gate_distribution["person-hold"] ?? 0, 0, "R72: the person-hold gate no longer exists");
   assert.equal(sc.gate_distribution["no-claim"], 2, "filler + question produce no claim");
   // perfect scores on the paths the fixture pins
   assert.equal(sc.metrics.gate_correctness_pct, 100, "the right gate fired for every expected claim");
   assert.equal(sc.metrics.verdict_accuracy_pct, 100, "verdicts match ground truth");
   assert.equal(sc.metrics.air_accuracy_pct, 100, "air decisions match ground truth");
   assert.equal(sc.metrics.category_accuracy_pct, 100, "categories match");
-  assert.equal(sc.totals.aired, 2, "both science_health falsehoods auto-air");
+  assert.equal(sc.totals.aired, 3, "every settled check auto-airs (R72 — the toggle is the gate)");
   // latency waterfall carries the RELAY placeholder stage
   assert.equal(sc.latency_waterfall_ms.relay.n, 0);
   assert.ok(sc.latency_waterfall_ms.relay.note.includes("PLACEHOLDER"));
-  assert.equal(sc.latency_waterfall_ms.verify.n, 3); // vitamin-C, Great Wall, Dave all verify; Dave is held at the AIR gate, not before
+  assert.equal(sc.latency_waterfall_ms.verify.n, 3); // vitamin-C, Great Wall, Dave all verify and all air
 });
 
-test("airDecision: D4 person-hold and polarity-conflict never air; science_health falsehood airs", () => {
-  assert.equal(airDecision({ harm_class: "person_private", category: "science_health", verdict: "False", confidence: 0.99, autoAirEligible: true, source: { url: "x" } }).reason, "person-hold");
-  assert.equal(airDecision({ polarity_conflict: true, category: "science_health", verdict: "False", confidence: 0.99, autoAirEligible: true, source: { url: "x" } }).reason, "person-hold");
-  assert.equal(airDecision({ category: "economics", verdict: "False", confidence: 0.99, autoAirEligible: true, source: { url: "x" } }).reason, "category-hold");
-  assert.equal(airDecision({ category: "science_health", verdict: "False", confidence: 0.5, autoAirEligible: true, source: { url: "x" } }).reason, "confidence-hold");
+test("airDecision (R72): the toggle is the whole gate — everything settled airs, off means nothing airs", () => {
+  assert.deepEqual(airDecision({ harm_class: "person_private", category: "other", verdict: "Unverifiable", confidence: 0.3, autoAirEligible: false, source: { url: null } }), { aired: true, reason: "aired" });
+  assert.deepEqual(airDecision({ polarity_conflict: true, category: "economics", verdict: "False", confidence: 0.5 }), { aired: true, reason: "aired" });
   assert.deepEqual(airDecision({ category: "science_health", verdict: "False", confidence: 0.9, autoAirEligible: true, source: { url: "x" } }), { aired: true, reason: "aired" });
+  assert.deepEqual(airDecision({ category: "science_health", verdict: "False", confidence: 0.9 }, false), { aired: false, reason: "autoair-off" });
 });
 
 test("runPipeline drives the shared window state machine (windows == app.js loop)", async () => {

@@ -43,7 +43,7 @@ Footnote transcribes whatever the control page's **Audio in** picker is set to.
 3. On-air controls (queue header + keys):
    - **Hold** — keep the aired check on screen until you Pull it (instead of auto-retiring ~10s).
    - **Pull** — take the current graphic off-air now (button, or `P` key).
-   - **Auto-air** — airs definitive, high-confidence, sourced checks automatically after a short veto.
+   - **Auto-air** — airs every checked claim automatically after a short veto countdown (Skip/Hold during the countdown cancels it).
 
 ---
 

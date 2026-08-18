@@ -1,6 +1,7 @@
-// ClaimExtractor — stage 1 of the Footnote pipeline. Takes one spoken sentence and pulls
-// out the single atomic checkable claim, or null when there is nothing checkable (filler,
-// opinion, question, greeting). Fast + cheap; it gates the pricey verify stage.
+// ClaimExtractor — stage 1 of the Footnote pipeline. Takes one transcript window and pulls
+// out every distinct atomic checkable claim (rapid-fire speech can pack several into one
+// window), or none when nothing is checkable (filler, opinion, question, greeting).
+// Fast + cheap; it gates the pricey verify stage.
 //
 // This repo is no-build plain JS: interfaces are JSDoc @typedefs, importable for docs and
 // optional `tsc --checkJs` runs (jsconfig.json ships with checkJs OFF). Contracts are
@@ -18,11 +19,14 @@
  * @typedef {Object} ClaimExtractor
  * @property {string} name
  *   Stable adapter id (matches its registry key).
- * @property {(text: string) => Promise<{claim: string|null}>} extract
- *   `text` is a raw transcript sentence (already trimmed + length-gated by the route).
- *   Resolve `{claim}` with one short self-contained declarative sentence, or `{claim: null}`
- *   when nothing is checkable. The adapter owns vendor quirks (quote stripping, "NONE"
- *   detection, prompt loading) — callers only ever see the clean claim-or-null shape.
+ * @property {(text: string) => Promise<{claim: string|null, claims?: Array<{claim: string, polarity?: string, harm_class?: string, category?: string}>}>} extract
+ *   `text` is a raw transcript window (already trimmed + length-gated by the route).
+ *   Resolve `{ ...firstClaimFields, claims: [...] }` — one entry per distinct checkable
+ *   claim, each a short self-contained declarative sentence — or `{claim: null, claims: []}`
+ *   when nothing is checkable. The legacy top-level fields mirror claims[0] so pre-multi
+ *   consumers keep working; a single-claim adapter may omit `claims` entirely (the route
+ *   wraps it). The adapter owns vendor quirks (quote stripping, "NONE" detection, prompt
+ *   loading) — callers only ever see the clean validated shape.
  */
 
 export {};

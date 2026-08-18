@@ -51,10 +51,14 @@ Cumulative field record, from the [ledger](./LATENCY_LEDGER.md): **5 sessions ·
 
 ## Calibration — how auto-air earned a pilot
 
-The gate (Decision D3/D15) requires ≥95% verdict precision at the confidence floor, per
-category, both scorers clean — autonomy is measured into existence or it doesn't exist.
-Auto-air failed that bar three times and stayed off; run #4 plus a concurrence eval moved
-it, narrowly, for one category.
+*(Historical record. Ruling R72 — 2026-08-18 — retired calibration as a gate: the
+operator's Auto-air toggle now airs every settled check after the veto window. These
+reports stand as the measurement of the error rate that toggle accepts.)*
+
+The pilot-era gate (Decision D3/D15) required ≥95% verdict precision at the confidence
+floor, per category, both scorers clean — autonomy was measured into existence or it
+didn't exist. Auto-air failed that bar three times and stayed off; run #4 plus a
+concurrence eval moved it, narrowly, for one category.
 
 1. **[CALIBRATION_REPORT_2026-08-07.md](./CALIBRATION_REPORT_2026-08-07.md)** — run #1,
    173 cases. Eligible categories: none (insufficient n, and 94–95% against a 95% bar where

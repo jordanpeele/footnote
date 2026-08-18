@@ -176,9 +176,11 @@
   if (aspectMq.addEventListener) aspectMq.addEventListener("change", applyLayout);
   window.addEventListener("resize", applyLayout);
 
-  // ?y=<px> — override the card's bottom offset (dodge platform UI chrome; wins over both layouts)
+  // ?y=<px> — override the card's bottom offset (dodge platform UI chrome; wins over both
+  // layouts). Portrait default is center-screen, so y also re-anchors to the bottom
+  // (.y-pinned neutralizes the centering transform — see overlay.css).
   const yOff = parseInt(qs.get("y"), 10);
-  if (yOff > 0) onAir.style.bottom = yOff + "px";
+  if (yOff > 0) { onAir.style.bottom = yOff + "px"; onAir.style.top = "auto"; onAir.classList.add("y-pinned"); }
 
   // ---- P1 live bridge: poll the state channel for this room ----
   // Edge-triggered on server-stamped seq; baselines on connect so it never replays a stale card.

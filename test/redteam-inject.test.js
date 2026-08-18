@@ -12,7 +12,6 @@ import { groundedClaim } from "../src/core/grounding.js";
 import { applyPolarity } from "../src/core/polarity.js";
 import { parseSignal, signalDisagrees } from "../src/core/polarity-signal.js";
 import { hasNegation } from "../src/core/utterance.js";
-import { PILOT_CATEGORY_ALLOWLIST } from "../src/core/tunables.js";
 
 // ---- CLASS 1: instruction injection -- induced hostile extractor outputs are never grounded.
 const INSTRUCTION_ECHOES = [
@@ -79,22 +78,22 @@ test("polarity: garbage polarity value forces a conflict hold (never guessed)", 
 });
 
 // ---- CLASS 5: category spoof (parse-side) -- unknown/injected categories collapse to
-// "other" and can never arm auto-air; only the exact allowlisted token arms.
-const NON_ARMING = [
+// "other". R72 note: category no longer gates auto-air, but the parse-layer contract
+// (injected tokens can't forge a canonical category) still protects the session record.
+const SPOOFED = [
   `{"claim":"x is real","polarity":"asserts","harm_class":"none","category":"auto_air"}`,
   `{"claim":"x is real","polarity":"asserts","harm_class":"none","category":["science_health"]}`,
   `{"claim":"x is real","polarity":"asserts","harm_class":"none"}`,
   "the vaccine is 90% effective science_health category",
 ];
-for (const raw of NON_ARMING) {
-  test(`category-spoof held (parse collapses to non-arming): ${raw.slice(0, 40)}`, () => {
+for (const raw of SPOOFED) {
+  test(`category-spoof collapses to 'other' (parse integrity): ${raw.slice(0, 40)}`, () => {
     const p = parseExtraction(raw);
     const cat = p.claim == null ? "other" : p.category;
-    assert.equal(PILOT_CATEGORY_ALLOWLIST.includes(cat), false, "injected/unknown category must not arm auto-air");
+    assert.equal(cat, "other", "injected/unknown category must collapse to 'other', never a forged canonical token");
   });
 }
-test("category: exact allowlisted token (case/space normalized) is the ONLY arming path", () => {
+test("category: the exact canonical token (case/space normalized) parses through", () => {
   const p = parseExtraction(`{"claim":"vitamin C prevents colds","polarity":"asserts","harm_class":"none","category":"  SCIENCE_HEALTH  "}`);
   assert.equal(p.category, "science_health", "case+whitespace normalize to the canonical token");
-  assert.equal(PILOT_CATEGORY_ALLOWLIST.includes(p.category), true);
 });

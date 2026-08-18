@@ -76,8 +76,8 @@ Verifier PRs ship with a golden-set run ([eval/](eval/README.md)) — "seemed ri
 
 The interesting part isn't the API calls — it's the rules about what is allowed to reach the screen, and they're written down to be audited:
 
-- **[HOW_FOOTNOTE_DECIDES.md](HOW_FOOTNOTE_DECIDES.md)** — the editorial policy. What counts as a checkable claim, the four-tier source hierarchy, verdict–evidence floors, the harm classes that can never auto-air, and the corrections rule (wrong verdicts get corrected on air, not deleted). Every rule is marked as either enforced-in-code or planned; divergence between code and an unmarked rule is a bug.
-- **[docs/STREET_PROTOCOL.md](docs/STREET_PROTOCOL.md)** — the operator's one-page rulebook for live sessions. Rule 1: veto everything. Auto-air is calibration-gated per category: after four calibrations, two-verifier concurrence, and a polarity guard, exactly one category (science/health) runs under a [supervised pilot protocol](docs/D18_PILOT_PROTOCOL.md) — operator present, 4-second live veto, 10-per-session cap, machine-aired cards permanently marked. Everything else: a human airs every card.
+- **[HOW_FOOTNOTE_DECIDES.md](HOW_FOOTNOTE_DECIDES.md)** — the editorial policy. What counts as a checkable claim, the four-tier source hierarchy, verdict–evidence floors, harm-class flagging, the auto-air rule (R72: the operator's toggle is the gate; every settled check airs after a 2-second live veto window), and the corrections rule (wrong verdicts get corrected on air, not deleted). Every rule is marked as either enforced-in-code or planned; divergence between code and an unmarked rule is a bug.
+- **[docs/STREET_PROTOCOL.md](docs/STREET_PROTOCOL.md)** — the operator's one-page rulebook for live sessions. Rule 1 with auto-air off: veto everything — a human airs every card. With auto-air on (Ruling R72, 2026-08-18, superseding the [supervised pilot protocol](docs/D18_PILOT_PROTOCOL.md)): operator present, 2-second live veto on every card, machine-aired cards permanently marked.
 
 Changes to the editorial policy get a higher review bar than changes to code ([CONTRIBUTING.md](CONTRIBUTING.md#editorial-policy-changes)).
 

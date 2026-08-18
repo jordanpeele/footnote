@@ -39,24 +39,23 @@ The public record, from the [ledger](./LATENCY_LEDGER.md): **4 sessions · 102 c
 pairing (FS-1, closed by D17).** Under measurement, the verifier is an **~85–94%
 instrument at the auto-air confidence floor** against a 95% bar — measured on a
 deliberately unfriendly 260-case golden set, not a friendly demo diet
-([calibration run #2](./CALIBRATION_REPORT_2_2026-08-07.md)). That gap is exactly why a
-human holds the AIR button. Full evidence: the [calibration reports](./README.md#calibration--why-auto-air-is-off)
+([calibration run #2](./CALIBRATION_REPORT_2_2026-08-07.md)). That gap is why the veto
+window matters. Full evidence: the [calibration reports](./README.md#calibration--why-auto-air-is-off)
 and [field reports](./README.md#field-reports). No number in this paragraph is marketing.
 
 ## Can it run fully automatic?
 
-It's built to — and it doesn't, on evidence. The auto-air path exists end-to-end
-(definitive verdict + confidence ≥ 0.85 + evidence floor + a veto countdown a human can
-interrupt), but the policy is that autonomy is *earned by calibration*, per claim
-category, at ≥95% measured precision (Decisions D3/D15,
-[HOW_FOOTNOTE_DECIDES.md](../HOW_FOOTNOTE_DECIDES.md) §5). Three calibration runs have
-now said "not yet" — [run #1](./CALIBRATION_REPORT_2026-08-07.md),
-[run #2](./CALIBRATION_REPORT_2_2026-08-07.md), and the
-[two-step verifier's promotion eval](./CALIBRATION_REPORT_3_TWOSTEP_2026-08-09.md), which
-failed the bar in a more instructive way (it traded hedges for confident-wrong). So the
-shipped posture is veto-everything: the machine nominates, a human airs. Some claim
-classes never auto-air regardless of any future score — claims about private individuals
-are a permanent carve-out (D4), not a threshold.
+Yes — when the operator turns it on. As of Ruling R72 (2026-08-18,
+[HOW_FOOTNOTE_DECIDES.md](../HOW_FOOTNOTE_DECIDES.md) §5), the Auto-air toggle is the
+whole gate: with it enabled, every settled check airs itself after a 2-second veto
+window the operator can interrupt; with it off, a human airs every card. The pilot-era
+regime — calibration-earned autonomy per category (D3/D15), the person-claim carve-out
+(D4), the science_health-only supervised pilot (D18) — is retired as a set of gates but
+kept as the measurement record: the calibration runs
+([#1](./CALIBRATION_REPORT_2026-08-07.md), [#2](./CALIBRATION_REPORT_2_2026-08-07.md),
+[#3](./CALIBRATION_REPORT_3_TWOSTEP_2026-08-09.md)) quantify the error rate an operator
+accepts when flipping the toggle, and every machine-aired card is still permanently
+marked as machine-aired in the session log.
 
 ## What's the latency?
 
