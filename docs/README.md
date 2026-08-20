@@ -51,9 +51,9 @@ Cumulative field record, from the [ledger](./LATENCY_LEDGER.md): **5 sessions ·
 
 ## Calibration — how auto-air earned a pilot
 
-*(Historical record. Ruling R72 — 2026-08-18 — retired calibration as a gate: the
-operator's Auto-air toggle now airs every settled check after the veto window. These
-reports stand as the measurement of the error rate that toggle accepts.)*
+*(Status: under D19 — 2026-08-20 — calibration gates VERIFIED mode, exactly as these
+reports earned; OPEN mode airs everything with an on-card AI·UNVERIFIED disclosure
+instead. The 8/18–8/20 gate excursion and its resolution are in the CHANGELOG.)*
 
 The pilot-era gate (Decision D3/D15) required ≥95% verdict precision at the confidence
 floor, per category, both scorers clean — autonomy was measured into existence or it

@@ -8,12 +8,12 @@
 //       verbatim from those pinned lines, then drives the adversarial interleaving and
 //       asserts the invariant holds (or fails, if the race were real).
 //
-// R72 (2026-08-18 operator ruling): the D18 session cap is GONE — with the toggle on, every
-// settled card arms. The original RACE 1 (cap race) is therefore moot and removed; its
-// replacement pins that the fire-time guard chain (streaming/gen/pending) survived the
-// cap's removal. RACE 2 (veto), RACE 3 (double-air), and RACE 4 (stale generation) are
-// unchanged in substance — under R72 they are MORE load-bearing, not less, since the veto
-// window and the toggle are now the only control points.
+// D19 (2026-08-20 two-mode architecture): OPEN has no cap (telemetry count only);
+// VERIFIED restores the D18 cap semantics (arm-time guard + fire-time re-check, counted
+// at fire). Both cap shapes are modeled and raced below. RACE 2 (abort/veto), RACE 3
+// (double-air), and RACE 4 (stale generation) are unchanged in substance — in OPEN mode
+// the abort window and the toggle are the only control points, so they are MORE
+// load-bearing there, not less.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -28,14 +28,16 @@ const APP = readFileSync(new URL("../app.js", import.meta.url), "utf8");
  * below preserves that — callbacks and operator acts run atomically, ordered by fire time —
  * so if the real code's ordering were unsafe, the model would expose it.
  * ------------------------------------------------------------------ */
-function makeWorld() {
+function makeWorld(mode = "open") {
   const w = {
     now: 0,
     timers: [],            // { at, fn, id, cleared }
     nextTimerId: 1,
     streaming: true,
     gen: 1,
-    autoAirCount: 0,       // counted at FIRE, reset on Start Stream — informational under R72 (no cap)
+    mode,                  // D19: "open" (no cap) or "verified" (cap enforced)
+    VERIFIED_CAP: 10,
+    autoAirCount: 0,       // counted at FIRE, reset on Start Stream
     aired: [],             // ids that reached airCard via the auto path
   };
   w.setTimeout = (fn, ms) => { const id = w.nextTimerId++; w.timers.push({ at: w.now + ms, fn, id, cleared: false }); return id; };
@@ -57,14 +59,16 @@ function makeWorld() {
 // Synchronous through the state flip — no await before the next queued timer can run.
 function airCard(w, c) { if (c._auto) w.clearTimeout(c._auto); c.state = "aired"; c._autoAired = true; w.aired.push(c.id); }
 
-// maybeAutoAir's arm+fire, ported verbatim from app.js (R72 form: no pre-gates, no cap —
-// the toggle is checked before arming; every armed card fires unless vetoed/stale).
+// maybeAutoAir's arm+fire, ported verbatim from app.js (D19 form: D4/mode pre-gates
+// decide WHICH cards reach here; the model receives already-armable cards — the
+// adversarial worst case for the cap/veto/gen races — plus the VERIFIED fire-time cap).
 function armAutoAir(w, c) {
+  if (w.mode === "verified" && w.autoAirCount >= w.VERIFIED_CAP) return;   // arm-time guard (no increment)
   c._armT = w.now;
   c._auto = w.setTimeout(() => {
-    // the FIRE-time re-check — streaming && gen-match && still pending
-    if (w.streaming && c._gen === w.gen && c.state === "pending") {
-      w.autoAirCount++;                                     // increment AT FIRE (informational)
+    // the FIRE-time re-check — streaming && gen-match && still pending && (open || under cap)
+    if (w.streaming && c._gen === w.gen && c.state === "pending" && (w.mode !== "verified" || w.autoAirCount < w.VERIFIED_CAP)) {
+      w.autoAirCount++;                                     // increment AT FIRE
       airCard(w, c);
     }
   }, 4000);
@@ -93,24 +97,33 @@ function mkCard(w, id) { return { id, _gen: w.gen, state: "pending", _auto: null
  * The cap's removal must NOT have taken the fire-time guard chain with it: the timer
  * callback still requires streaming && current-gen && still-pending before airing.
  * ================================================================== */
-test("R72 pin: fire-time callback keeps the streaming/gen/pending guard chain (cap removed, guards intact)", () => {
+test("D19 pin: fire-time callback re-checks streaming/gen/pending AND the verified cap", () => {
   assert.match(
     APP,
-    /setTimeout\(\(\) => \{ if \(streaming && c\._gen === gen && c\.state === "pending"\)/,
-    "maybeAutoAir's timer must re-check streaming/gen/pending at FIRE — removing any reopens the veto/stale races",
+    /setTimeout\(\(\) => \{ if \(streaming && c\._gen === gen && c\.state === "pending" && \(fcMode\(\) !== "verified" \|\| autoAirCount < verifiedCap\(\)\)\)/,
+    "maybeAutoAir's timer must re-check streaming/gen/pending + the mode-scoped cap at FIRE",
   );
-  assert.doesNotMatch(APP, /AUTO_AIR_CAP/, "R72: the session cap is gone — a cap reference reappearing means the ruling was partially reverted");
+  assert.doesNotMatch(APP, /AUTO_AIR_CAP\b/, "the pre-D19 global cap constant must not return");
 });
 
-test("R72: arming N cards in the same tick fires ALL N (no cap — the toggle is the gate)", () => {
-  const w = makeWorld();
+test("D19 OPEN: arming N cards in the same tick fires ALL N (no cap — telemetry only)", () => {
+  const w = makeWorld("open");
   const N = 15;
+  for (let i = 0; i < N; i++) armAutoAir(w, mkCard(w, i + 1));
+  assert.equal(w.autoAirCount, 0, "count must NOT increment at arm time");
+  w.tick(4000);
+  assert.equal(w.aired.length, N, "OPEN mode has no session cap");
+  assert.equal(w.autoAirCount, N, "the telemetry count reflects every machine air");
+});
+
+test("D19 VERIFIED: arming CAP+5 eligible cards fires EXACTLY the cap (restored D18 semantics)", () => {
+  const w = makeWorld("verified");
+  const N = w.VERIFIED_CAP + 5;
   const cards = [];
   for (let i = 0; i < N; i++) { const c = mkCard(w, i + 1); cards.push(c); armAutoAir(w, c); }
-  assert.equal(w.autoAirCount, 0, "count must NOT increment at arm time (vetoed cards don't count)");
-  w.tick(4000);   // every armed timer comes due in the same advance
-  assert.equal(w.aired.length, N, "every armed card airs — R72 has no session cap");
-  assert.equal(w.autoAirCount, N, "the informational count reflects every machine air");
+  w.tick(4000);
+  assert.equal(w.aired.length, w.VERIFIED_CAP, `exactly ${w.VERIFIED_CAP} cards may auto-air in VERIFIED`);
+  assert.equal(cards.filter((c) => c.state === "pending").length, 5, "surplus cards remain manual (pending)");
 });
 
 /* ================================================================== *
@@ -123,7 +136,7 @@ test("R72: arming N cards in the same tick fires ALL N (no cap — the toggle is
  * ================================================================== */
 test("RACE2 pin: dismiss clears the timer, the callback guards state===pending, and op:cmd guards the caller", () => {
   assert.match(APP, /if \(c\._auto\) \{ clearTimeout\(c\._auto\); c\._auto = null; \}/, "dismiss must clearTimeout the armed veto timer");
-  assert.match(APP, /c\._gen === gen && c\.state === "pending"/, "the fire callback must require state===pending");
+  assert.match(APP, /c\._gen === gen && c\.state === "pending" &&/, "the fire callback must require state===pending");
   // the "can't un-air a fired card" protection lives in the op:cmd callers — both air and
   // skip/hold refuse anything not still pending. Removing these reopens the late-veto un-air.
   const airGuard = /cmd\.action === "air"\) \{\s*if \(!c \|\| c\.state !== "pending"\) return;/;

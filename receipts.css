@@ -80,6 +80,7 @@ a.rc-cite:hover{color:var(--fn);border-color:rgba(0,214,143,.4)}
    cite chips; the AUTO token leads bold, the explanation trails lighter. */
 .rc-auto{font:700 10px var(--mono);letter-spacing:.08em;color:#9db4dd;background:rgba(157,180,221,.09);
   border:1px solid rgba(157,180,221,.42);border-radius:4px;padding:2px 7px;white-space:nowrap;cursor:help}
+.rc-unv{font:700 10px ui-monospace,Menlo,monospace;letter-spacing:.08em;color:#aebfd6;background:rgba(38,48,64,.6);border:1px solid rgba(127,164,212,.35);border-radius:4px;padding:2px 7px;margin-left:6px}
 
 /* R63: field-test airs — visibly TEST, framed as excluded from the ledger. The card stays
    in the record (nothing is hidden) but reads as an artifact: dashed frame, dimmed. */

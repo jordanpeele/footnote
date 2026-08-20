@@ -1,10 +1,10 @@
 # How Footnote Decides
 
-Footnote puts fact-checks on live television. A machine hears a speaker, extracts claims, verifies them against sources, and proposes a verdict card. A human operator airs it, holds it, or kills it — or, when the operator enables Auto-air, the machine airs it itself after a veto window (Ruling R72, §5).
+Footnote puts fact-checks on live television. A machine hears a speaker, extracts claims, verifies them against sources, and proposes a verdict card. A human operator airs it, holds it, or kills it — or, when the operator enables Auto-air, the machine airs it itself after an abort window, under one of two per-room modes (Decision D19, §5).
 
 This document is Footnote's editorial policy. It is written to be audited: every rule below is either **enforced by the running code today** or marked **[PLANNED — packet]**, meaning it is committed policy the code does not yet enforce. If you find the running system behaving differently from an unmarked rule, that is a bug — report it (see §9).
 
-The pipeline this policy governs: Deepgram speech-to-text → Claude Haiku claim extraction (`api/extract.js`) → Perplexity sonar-pro verification with trust-tiered source ranking (`api/verify.js`) → verdict card → operator decision or toggle-gated auto-air (`app.js`).
+The pipeline this policy governs: Deepgram speech-to-text → Claude Haiku claim extraction (`api/extract.js`) → Perplexity sonar-pro verification with trust-tiered source ranking (`api/verify.js`) → verdict card → operator decision or mode-gated auto-air (`app.js`, D19).
 
 ---
 
@@ -28,7 +28,7 @@ Some claims are checkable but carry elevated harm if the machine gets them wrong
 
 - **`person_private`** — a claim about a named private individual (not a public figure acting in public capacity). Accusations of crime, claims about health status, and claims about minors default to `person_private` treatment.
 
-[SHIPPED — the extractor classifies every claim (none | person_public | person_private | quote_attribution) and the queue surfaces the class as a warning chip. **Superseded by R72 (2026-08-18, operator ruling):** the D4 rule that person-classed and polarity-conflicted cards NEVER auto-air is removed — with Auto-air enabled, these cards air after the veto window like any other; the chip exists so the operator can veto them in that window. Historical field record under D4: 36/36 person-claims correctly held to manual in the 2026-08-08 session.]
+[SHIPPED — the extractor classifies every claim (none | person_public | person_private | quote_attribution) and the queue surfaces the class as a warning chip. **D4 is ABSOLUTE (D19, 2026-08-20):** claims about named living individuals — `person_private` AND `person_public` — plus `quote_attribution` and polarity-conflicted cards **never auto-air, in any mode**. They queue for manual AIR with the ⚠ chip; no setting, mode, or flag can override, and the hold sits above the mode switch in code, test-pinned. Honest history: D4 was removed 2026-08-18 by an explicit operator instruction and restored 2026-08-20 by an explicit operator ratification with the risk named (defamation exposure on unreviewed person-verdicts) — both moves are on the public record (CHANGELOG). Field record under D4: 36/36 person-claims correctly held in the 2026-08-08 session.]
 
 ## 2. Source hierarchy
 
@@ -70,21 +70,32 @@ What's enforced today: the verifier's system prompt instructs the model to verif
 
 These five are the entire enum; the server rejects anything else (`VERDICTS` in `api/verify.js`).
 
-## 5. Auto-air
+## 5. Auto-air — the two-mode architecture (Decision D19)
 
-**[Ruling R72 — 2026-08-18, operator ruling]** Auto-air is off by default and operator-enabled per session. When enabled, **the toggle is the whole gate**: every settled check auto-airs after a **2-second veto window** — the card sits in the queue with a visible countdown; the operator's Skip or Hold cancels the timer. Only a card still untouched after 2 seconds airs itself.
+Auto-air posture is a **per-room mode**, set at /control, carried in room state, and stamped on every card, session-export entry, and receipts record. Fresh rooms — and self-hosters — **default to VERIFIED**. In both modes the toggle is off by default, every machine air runs a **2-second abort window** (renamed from "veto window": the attention data showed it is an abort affordance, not review), and every auto-aired card is flagged `autoAired: true` in the record.
 
-There is no verdict restriction, no confidence floor, no source requirement, no category allowlist, no harm-class hold, and no per-session cap. R72 supersedes the pilot-era gate chain (the definitive-verdict/confidence/source conditions below the fold in git history, the D4 person-hold, the D5 evidence-tier floor, the R57 category allowlist, and the D18 10-per-session cap). The operator's veto window — and the decision to enable the toggle at all — are the only checks between the machine and the air.
+**D4 is ABSOLUTE and sits above both modes** (§1): person-classed, quote-attribution, and polarity-conflicted cards never auto-air anywhere.
 
-Every auto-aired card is flagged `autoAired: true` in the session log — the record always distinguishes machine airing from human airing. Harm-class and polarity-conflict chips still render on every card so the operator can spot sensitive checks inside the veto window.
+### VERIFIED mode (default — the earned stack)
 
-Honesty note: this makes the operator's attention load-bearing in a way the pilot-era gates deliberately avoided. The measurement machinery below still runs and is still logged; under R72 it informs the operator rather than gating the machine:
+Exactly what this document has always meant by earned autonomy, restored in full after the 8/18–8/20 excursion (see CHANGELOG):
 
-- [Decision D3 — measurement only under R72] **Calibration-scored eligibility.** Per-category precision is measured against the adjudicated golden set (`eval/`) and `autoAirEligible` is still computed server-side and logged per card. Under R72 it no longer gates airing.
-- [Decision D4 — **SUPERSEDED by R72**] The permanent `person_private` carve-out is removed. The harm class is still extracted, logged, and surfaced as a chip; it no longer holds a card from auto-air.
-- **[Ruling R51 — SUPERSEDED by R72]** `adversarial` claims are no longer manual-only. The gaming-incentive concern R51 documented (a bad actor performing outrageous claims *because* the machine responds autonomously) stands as analysis; under R72 the countermeasure is the operator's veto window, not a structural hold.
-- **[Decision D16/D18 — historical] Second-verifier concurrence and the supervised pilot.** The concurrence bar, the science_health-only pilot, the kill-switch arming checklist, and the 10-per-session cap were the conditions under which auto-air first went live (D18 pilot, 2026-08-12). R72 retires them as gates; the pilot write-ups remain the evidence record of how the machine performed under supervision.
-- **[Ruling R70/R71 — measurement retained] Correlated-prior errors are structurally invisible to concurrence.** Measured (calibration #5, R-concurrence red-team): the two current arms' errors are ~12× more correlated than independence would predict, because both draw verdicts from the same prior-laden public web. The seven measured would-air-wrong cards cluster in `current_events / statistics / historical_events / geography`. Under R72 there is no graduation ladder left for R71 to freeze — this finding now quantifies the *error exposure the operator accepts* when enabling Auto-air, and it is the standing argument for the independent skeptic third arm (R67).
+1. Category must be **calibration-eligible** (currently `science_health` only — R57, earned in calibration run #4).
+2. The **concurrence verifier must be active** — two independent arms agreeing (D16). This fails CLOSED: if the server runs a single-arm verifier, VERIFIED auto-air refuses to arm and says so. Posture is config-owned, not launch-path-owned: `npm start` and the street arming script produce identical posture, the server logs the active verifier at boot, and /control displays it (D19, closing the pilot-ledger §8 drift finding).
+3. Verdict must be **definitive (True/False) with a qualifying source URL** and the `autoAirEligible` evidence floor (D5: tier-3 surfaced source or two distinct tier-≥2 citations).
+4. **Session cap, default 10** (D18 semantics restored) — room-configurable downward always; raising it beyond 10 is what OPEN mode is for.
+
+### OPEN mode (the disclosed show)
+
+Every settled check that clears D4 airs after the abort window — no category gate, no evidence floor, no verdict restriction, no cap (the count is telemetry). In exchange, **every OPEN-mode card wears a production-grade "AI · UNVERIFIED" marker** on the broadcast graphic, mirrored on the receipts page and in the export — visually distinct from the amber TEST watermark, because OPEN is a real mode dressed honestly, not a test. OPEN exists so a desk stream or demo can run "everything airs" as a legitimate, disclosed format instead of requiring the gates to be demolished (which is what happened on 8/18 — the CHANGELOG tells that story plainly).
+
+Known scope limit, stated rather than hidden: R51's `adversarial` hold is structural in VERIFIED (the allowlist excludes everything uncalibrated) but has **no runtime detector in OPEN** — the extractor's category set carries no adversarial class. In OPEN, the UNVERIFIED dress and the operator's abort window are the compensating controls. Ruled and accepted as-is (8/20): no classifier is being built speculatively; the trigger to revisit is the first field evidence of abuse.
+
+### Measurement that rides along in both modes
+
+- [Decision D3] **Calibration-scored eligibility** is computed and logged per card always; it gates only VERIFIED.
+- **[Ruling R70/R71]** Correlated-prior errors are structurally invisible to concurrence (~12× correlation measured, calibration #5). For VERIFIED this is why graduations beyond `science_health` stay frozen pending the independent skeptic third arm (R67); for OPEN it quantifies the error exposure the operator accepts by choosing the mode.
+- **[R53] Denial-watch**: a standing line in every session report until n≥20 clean denial auto-airs (count: 3/20). Reinstated by D19 after lapsing between 8/12 and 8/20.
 
 ## 6. Corrections (Decision D6)
 
@@ -104,10 +115,11 @@ The commitment: **every stream gets a public receipts URL** — the complete ses
 
 ## 8. What Footnote does not do
 
-- **No verdict without a source.** A card with no citable source is Unverifiable by definition. (The pre-R72 rule that auto-air additionally required a source URL is gone — an Unverifiable, sourceless card auto-airs as Unverifiable when the toggle is on.)
+- **No auto-aired claims about named living individuals. Ever. In any mode.** (D4-absolute, §1 and §5 — restored 2026-08-20.)
+- **No verdict without a source.** A card with no citable source is Unverifiable by definition. VERIFIED auto-air additionally requires a qualifying source URL; in OPEN an Unverifiable card may air *as Unverifiable*, wearing the AI·UNVERIFIED marker.
 - **No medical or legal advice.** Footnote may check a factual claim in those domains against qualifying sources (mortality statistics, what a statute says). It never frames a verdict as guidance about what a viewer should do.
 - **No silent memory-holing.** Aired means logged; wrong means corrected on air (§6), not deleted.
-- **The human veto is load-bearing, not decorative.** The operator is part of the trust architecture: with Auto-air off, a human disposes of every card; with it on (R72), the human's veto window is the only check on the machine. Removing or shrinking the veto window itself is a policy change under §9, not a product optimization.
+- **The human abort is load-bearing, not decorative.** The operator is part of the trust architecture: with Auto-air off, a human disposes of every card; in OPEN mode the abort window plus the UNVERIFIED disclosure are the checks; in VERIFIED the full earned chain gates the machine. Removing or shrinking the abort window, or quietly weakening a mode's gates, is a policy change under §9, not a product optimization.
 
 ## 9. Challenging a verdict or changing this policy
 

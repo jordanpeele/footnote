@@ -43,7 +43,7 @@ Footnote transcribes whatever the control page's **Audio in** picker is set to.
 3. On-air controls (queue header + keys):
    - **Hold** — keep the aired check on screen until you Pull it (instead of auto-retiring ~10s).
    - **Pull** — take the current graphic off-air now (button, or `P` key).
-   - **Auto-air** — airs every checked claim automatically after a short veto countdown (Skip/Hold during the countdown cancels it).
+   - **Auto-air** — mode-dependent (D19). In VERIFIED (default): only calibrated, doubly-verified, well-sourced checks air, capped per session. In OPEN: every checked claim airs after a 2-second abort countdown, wearing an AI·UNVERIFIED marker. Person-claims never auto-air in either mode. Pick the mode on the MODE row.
 
 ---
 

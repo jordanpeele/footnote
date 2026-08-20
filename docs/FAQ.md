@@ -45,17 +45,18 @@ and [field reports](./README.md#field-reports). No number in this paragraph is m
 
 ## Can it run fully automatic?
 
-Yes — when the operator turns it on. As of Ruling R72 (2026-08-18,
-[HOW_FOOTNOTE_DECIDES.md](../HOW_FOOTNOTE_DECIDES.md) §5), the Auto-air toggle is the
-whole gate: with it enabled, every settled check airs itself after a 2-second veto
-window the operator can interrupt; with it off, a human airs every card. The pilot-era
-regime — calibration-earned autonomy per category (D3/D15), the person-claim carve-out
-(D4), the science_health-only supervised pilot (D18) — is retired as a set of gates but
-kept as the measurement record: the calibration runs
+Yes — in one of two modes, both honest about what they are (Decision D19,
+[HOW_FOOTNOTE_DECIDES.md](../HOW_FOOTNOTE_DECIDES.md) §5). **VERIFIED** (the default)
+is earned autonomy: the calibrated category only, two independent verifiers agreeing,
+evidence rules, a session cap — what the calibration record
 ([#1](./CALIBRATION_REPORT_2026-08-07.md), [#2](./CALIBRATION_REPORT_2_2026-08-07.md),
-[#3](./CALIBRATION_REPORT_3_TWOSTEP_2026-08-09.md)) quantify the error rate an operator
-accepts when flipping the toggle, and every machine-aired card is still permanently
-marked as machine-aired in the session log.
+[#3](./CALIBRATION_REPORT_3_TWOSTEP_2026-08-09.md)) actually supports. **OPEN** airs
+every settled check after a 2-second abort window — and every card wears a visible
+"AI · UNVERIFIED" marker on the broadcast and the receipts, because disclosure is that
+mode's honesty model. In both modes, claims about named living individuals never
+auto-air (D4 — absolute), and machine airs are permanently marked in the record. For a
+few days in August the gates simply came down operator-present; the repo's CHANGELOG
+tells that story plainly — D19 is its deliberate resolution.
 
 ## What's the latency?
 

@@ -34,13 +34,28 @@ const WINDOW_MAX = 60;   // app.js caps the rolling buffer at 60 words
 
 /**
  * Decide whether a settled card would AUTO-AIR, mirroring maybeAutoAir() in app.js.
- * R72 (2026-08-18 ruling): the toggle IS the gate — every settled card airs when the
- * operator's Auto-Air checkbox is on. The pilot-era hold chain (person/harm/category/
- * tier/confidence) is gone; see git history for the old gate model.
+ * D19 (2026-08-20, two-mode architecture — supersedes the R72 single gate):
+ *   D4-ABSOLUTE first, both modes: person-classed (private OR public), quote-attribution,
+ *   and polarity-conflicted cards NEVER auto-air. Then per-mode:
+ *   OPEN — everything else airs. VERIFIED — R57 allowlist (science_health) + D5 evidence
+ *   tier + definitive True/False + source URL; concurrence verifier required (fail closed).
+ * @param {object} card
+ * @param {{autoAir?: boolean, mode?: string, verifier?: string}} [opts]
  * @returns {{aired:boolean, reason:string}}
  */
-export function airDecision(card, autoAirEnabled = true) {
-  if (!autoAirEnabled) return { aired: false, reason: "autoair-off" };
+export function airDecision(card, opts = {}) {
+  const { autoAir = true, mode = "verified", verifier = "concurrence" } = typeof opts === "boolean" ? { autoAir: opts } : opts;
+  // D4-ABSOLUTE — above the mode switch (no setting may override)
+  if (card.harm_class === "person_private" || card.harm_class === "person_public" || card.harm_class === "quote_attribution") return { aired: false, reason: "person-hold" };
+  if (card.polarity_conflict) return { aired: false, reason: "person-hold" };
+  if (!autoAir) return { aired: false, reason: "autoair-off" };
+  if (mode === "verified") {
+    if (verifier !== "concurrence") return { aired: false, reason: "posture-hold" };
+    if (card.category !== "science_health") return { aired: false, reason: "category-hold" };
+    if (card.autoAirEligible !== true) return { aired: false, reason: "tier-hold" };
+    const definitive = card.verdict === "True" || card.verdict === "False";
+    if (!(definitive && card.source && card.source.url)) return { aired: false, reason: "verdict-hold" };
+  }
   return { aired: true, reason: "aired" };
 }
 
@@ -160,7 +175,7 @@ export async function runPipeline(finals, hooks) {
       const air = airDecision({
         harm_class: crec.harm_class, polarity_conflict: crec.polarity_conflict, category: crec.category,
         autoAirEligible: crec.autoAirEligible, verdict: crec.verdict, confidence: crec.confidence, source: crec.source,
-      }, autoAir);
+      }, { autoAir, mode: hooks.mode || "open", verifier: hooks.verifier || "concurrence" });   // sim default: OPEN (scores the full pipeline; VERIFIED via hooks)
       crec.aired = air.aired;
       crec.airedReason = air.reason;
       checks.push(crec);

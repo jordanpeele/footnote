@@ -109,6 +109,14 @@ body.portrait .onair.v-corr .oa-correction{font-size:20px}
 /* field-test watermark — cards aired by the local TESTAIR flag carry test:true.
    INSIDE the card (top-right): .onair is overflow:hidden, so anything hung outside
    the border box gets clipped — the original top:-14px badge was invisible. */
+/* D19 — OPEN-mode disclosure dress: production-grade AI-unverified marker. Deliberately
+   NOT the amber TEST treatment: OPEN is a real broadcast mode dressed honestly, so the
+   chip is neutral broadcast furniture (mono, dim steel-blue) sitting opposite the TEST
+   corner so both can coexist during local field tests. Mirrored on receipts + export. */
+.onair.unv::before{content:"AI · UNVERIFIED";position:absolute;top:8px;right:10px;z-index:3;padding:2px 9px;
+  border-radius:4px;background:rgba(38,48,64,.92);color:#aebfd6;border:1px solid rgba(127,164,212,.4);
+  font:700 12px/1.4 ui-monospace,Menlo,monospace;letter-spacing:.1em}
+body.portrait .onair.unv::before{font-size:15px;top:auto;bottom:10px;right:12px}
 .onair.test::after{content:"TEST";position:absolute;top:8px;left:10px;z-index:3;padding:2px 10px;
   border-radius:4px;background:#d79321;color:#0b0b0b;font:700 13px/1.4 system-ui,sans-serif;
   letter-spacing:.12em;box-shadow:0 2px 8px rgba(0,0,0,.35)}

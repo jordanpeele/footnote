@@ -93,7 +93,7 @@
     cancelAnimationFrame(raf); clearTimeout(hideT);
     const corr = card.kind === "correction";       // appended correction event — not a verdict
     const m = corr ? { cls: "v-corr", icon: "↺", label: "CORRECTION" } : vmeta(card.verdict);
-    onAir.className = "onair " + m.cls + (card.test === true ? " test" : "");   // TEST watermark (local field-test airs)
+    onAir.className = "onair " + m.cls + (card.test === true ? " test" : "") + (card.mode === "open" && !corr ? " unv" : "");   // TEST watermark (local) · D19 unv = OPEN-mode disclosure dress
     ftLog("render", { claim: (card.claim || "").slice(0, 120), verdict: card.verdict || null, test: card.test === true });
     byId("oaVerdict").textContent = m.icon + " " + m.label;
     // W2: multi-speaker sessions label whose claim this is; solo streams stay plain FACT CHECK

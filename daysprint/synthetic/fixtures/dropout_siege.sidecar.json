@@ -1,7 +1,7 @@
 {
   "schema": "footnote.synthetic.sidecar",
   "schema_version": 1,
-  "generated_at": "2026-08-15T06:33:36.588Z",
+  "generated_at": "2026-08-20T20:26:05.598Z",
   "profile": "dropout_siege",
   "profile_knobs": {
     "wind": false,

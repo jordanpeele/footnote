@@ -8,7 +8,10 @@
 # been dead weight since tailscale-serve replaced it (packet 5de).
 #
 # Usage: arm.sh [--verifier <name>] [--log-name <slug>] [--check]
-#   --verifier <name>  FOOTNOTE_VERIFIER for the server (default: concurrence — the
+#   --verifier <name>  FOOTNOTE_VERIFIER override for THIS arm only. D19 posture rule:
+#                      the DEFAULT lives in .env.local (FOOTNOTE_VERIFIER=…) / the registry,
+#                      exactly like `npm start` — a session must not change posture by how
+#                      the server was launched. (pre-D19 this script defaulted to
 #                      run-era arming default; see src/core/registry.js for the roster)
 #   --log-name <slug>  slug for the dated field-test log:
 #                      eval/results/fieldtest-YYYY-MM-DD[-<slug>].jsonl
@@ -18,7 +21,7 @@
 set -e
 cd "$(dirname "$0")/../.."
 
-VERIFIER="concurrence"; LOG_SLUG=""; CHECK=0
+VERIFIER=""; LOG_SLUG=""; CHECK=0   # D19: empty = defer to .env.local/registry (same as npm start)
 while [ $# -gt 0 ]; do
   case "$1" in
     --verifier) VERIFIER="${2:?--verifier needs a value}"; shift 2 ;;
@@ -49,7 +52,7 @@ DG=$(grep '^DEEPGRAM_API_KEY' .env.local 2>/dev/null | cut -d= -f2 || true)
 if [ "$CHECK" = 1 ]; then
   echo "— check mode (nothing killed, nothing started) — a real arm would:"
   echo "  1. pkill: node src/server, fn-tailnet-relay (legacy reap), srtla_rec"
-  echo "  2. start server: FOOTNOTE_VERIFIER=$VERIFIER"
+  echo "  2. start server: FOOTNOTE_VERIFIER=${VERIFIER:-<from .env.local/registry — same as npm start>}"
   echo "     FOOTNOTE_FIELDTEST_LOG=$FT_LOG"
   if [ -f "$FT_LOG" ]; then echo "     (log exists — a re-arm today APPENDS to it; archive first if that's not intended)"; fi
   echo "  3. start srtla_rec (UDP *:5000 -> SRT 127.0.0.1:9000) + caffeinate -d -u"
@@ -74,10 +77,10 @@ if [ "$CHECK" = 1 ]; then
   exit 0
 fi
 
-DEEPGRAM_API_KEY="$DG" FOOTNOTE_VERIFIER="$VERIFIER" FOOTNOTE_FIELDTEST_LOG="$FT_LOG" \
+DEEPGRAM_API_KEY="$DG" ${VERIFIER:+FOOTNOTE_VERIFIER="$VERIFIER"} FOOTNOTE_FIELDTEST_LOG="$FT_LOG" \
   nohup npm start > /tmp/fn-server.log 2>&1 &
 until curl -sf -o /dev/null http://127.0.0.1:3000/control; do sleep 0.5; done
-echo "server:   UP — verifier=$VERIFIER  fieldtest log=$FT_LOG"
+echo "server:   UP — verifier=${VERIFIER:-config-default}  fieldtest log=$FT_LOG"
 # P7-D (R45): SRTLA bonded uplink — Moblin sends srtla:// over MULTIPLE network
 # paths (cell + hotspot); srtla_rec reassembles and hands plain SRT to the
 # existing OBS listener on 127.0.0.1:9000. Single-path srt://:9000 still works

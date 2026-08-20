@@ -6,22 +6,23 @@ you leave the house. This doc is the editorial rules once you're rolling.
 
 ## The rules
 
-1. **Veto everything (D15) — or own the toggle (R72).** Auto-air defaults OFF: nothing
-   reaches the broadcast without your thumb; the machine nominates, you air. If you
-   enable Auto-air, understand what R72 means: EVERY settled card airs itself after a
-   2-second countdown — any verdict, any confidence, any harm class. Your eyes on the
-   queue during that window are the entire gate. Enable it deliberately or not at all.
+1. **Know your mode (D19).** Auto-air defaults OFF and the room defaults VERIFIED.
+   VERIFIED + toggle = the earned stack (science_health only, concurrence required —
+   single-arm boots simply won't machine-air). OPEN + toggle = EVERY settled card airs
+   after a 2-second abort window wearing the AI·UNVERIFIED marker — any verdict, any
+   category. Person/quote/polarity-conflict cards hold in BOTH modes (D4 — absolute).
+   Switch modes deliberately; the mode is stamped on everything, including receipts.
 
 2. **Don't air Unverifiable (R41).** You keep the discretion, but the norm is DON'T —
    an Unverifiable card tells viewers nothing and spends the chyron's credibility. If
    you air one anyway, know why you did.
 
 3. **Card text ≠ what was said → SKIP (backstop).** Both known machine failure classes
-   are now closed in code — D17 renders the speaker's framing (FS-1), and the R46
-   negation tripwire flags suspect polarity flips with a ⚠ polarity chip (FS-8; under
-   R72 chipped cards DO auto-air when the toggle is on — the chip is your cue to veto).
-   This rule stays as the human backstop for the classes nobody has found yet: if the
-   card misquotes the moment in ANY way, skip it.
+   are closed in code — D17 renders the speaker's framing (FS-1), and the R46 negation
+   tripwire flags suspect polarity flips with a ⚠ polarity chip (FS-8). D19 restored the
+   hold: ⚠-chipped cards never auto-air in any mode — they queue for your thumb. This
+   rule stays as the human backstop for the classes nobody has found yet: if the card
+   misquotes the moment in ANY way, skip it.
 
 4. **Off record = mute.** When someone asks to go off record, or the conversation
    shouldn't be checked: tap MUTE on /op (latched — shipped in round 7) or the M key at

@@ -27,6 +27,7 @@ export const ROUTE_CLASSES = {
   "dg-token": "costed",  // mints Deepgram streaming tokens — spend by proxy
   onair: "gated",        // broadcast control: stop airing while killed
   admin: "free",         // kill/restore/status — gating this would lock the switch shut
+  config: "free",        // D19 posture disclosure (active verifier) — no spend; gating it would blind the VERIFIED fail-closed check
 };
 
 /* In-process kill flag — the SELF-HOST fallback (D18 pilot arming found the gap: without

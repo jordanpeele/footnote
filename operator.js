@@ -221,7 +221,8 @@
     if (!aa || typeof aa !== "object") { aaChip.hidden = true; return; }
     aaChip.hidden = false;
     if (!aa.on) { aaChip.textContent = "AUTO OFF"; aaChip.className = "aa-chip off"; }
-    else { aaChip.textContent = `AUTO ${aa.count}`; aaChip.className = "aa-chip on"; }
+    else if (aa.cap != null && aa.count >= aa.cap) { aaChip.textContent = `AUTO CAP ${aa.count}/${aa.cap}`; aaChip.className = "aa-chip cap"; }
+    else { aaChip.textContent = `AUTO ${aa.count}${aa.cap != null ? "/" + aa.cap : ""}${aa.mode === "open" ? " · OPEN" : ""}`; aaChip.className = "aa-chip on"; }
   }
   /* Glanceability pass: the mute toggle IS the glance strip's MUTE state chip — one
      element carries both the latched state (amber when muted) and the big-thumb control,
@@ -310,6 +311,8 @@
         top.appendChild(el("span", "badge " + m.cls, m.label));
         // W2: whose claim (renders only when control has seen ≥2 diarized speakers)
         if (c.spk) top.appendChild(el("span", "tag spk", c.spk));
+        // D19: posture chip — the phone operator always knows which rules this card is under
+        if (c.mode === "open") top.appendChild(el("span", "tag unv", "OPEN·UNVERIFIED"));
         // sensitive-card cues for the veto window (R72: informational, nothing is manual-only)
         if (c.harm_class === "person_private" || c.harm_class === "person_public") top.appendChild(el("span", "tag", "⚠ person"));
         if (c.harm_class === "quote_attribution") top.appendChild(el("span", "tag", "⚠ quote"));

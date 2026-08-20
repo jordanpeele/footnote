@@ -181,10 +181,22 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+// D19 posture disclosure at boot: the active verifier decides whether VERIFIED-mode
+// auto-air may arm (concurrence required, fails closed) — resolve it once at module
+// scope (top-level await, same pattern as the route loader) and log it where the
+// operator and the harness both see it, identically for npm start and arm.sh launches.
+let POSTURE = "verifier=UNRESOLVED";
+try {
+  const { getAdapter } = await import("../core/registry.js");
+  const v = getAdapter("verifier").name;
+  POSTURE = `verifier=${v} (VERIFIED-mode auto-air ${v === "concurrence" ? "may arm" : "HELD — concurrence required"})`;
+} catch (e) { POSTURE = "verifier=UNRESOLVED (" + (e && e.message) + ")"; }
+
 server.listen(PORT, HOST, () => {
   const shown = HOST === "0.0.0.0" ? "localhost" : HOST;
   console.log(`Footnote up — control: http://${shown}:${PORT}/control   overlay: http://${shown}:${PORT}/overlay?room=<room>`);
   console.log(`state channel: ${process.env.FOOTNOTE_STATE}   routes: ${[...routes.keys()].join(" ")}`);
+  console.log(`posture: ${POSTURE}`);
   const missing = ["ANTHROPIC_API_KEY", "PERPLEXITY_API_KEY", "DEEPGRAM_API_KEY"].filter((k) => !process.env[k]);
   if (missing.length) console.log(`note: missing keys (${missing.join(", ")}) — those pipeline stages will fail until set in .env`);
 });

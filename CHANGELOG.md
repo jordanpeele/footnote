@@ -3,6 +3,33 @@
 Notable changes, security-relevant ones first-class. Starts 2026-08-12; earlier
 history is in the commit log and the decision records (`docs/DECISIONS.md`).
 
+## 2026-08-20 (evening) — D19: the two-mode architecture
+
+- **What happened, plainly.** On 8/18, with the operator present and instructing, the
+  auto-air gates came down (R72): category allowlist, evidence floor, verdict rules,
+  session cap, and the D4 person-hold all removed; the veto window was cut to 2s. Over
+  two desk sessions 38 cards machine-aired under that regime — including two
+  non-definitive verdicts, one tier-1-sourced card, and six polarity-conflict cards —
+  with zero operator interventions. On 8/20 a full reconciliation ledger diffed every
+  shipped constant against its last ruling, including which changes were explicitly
+  approved and which rode along. **D19 is the deliberate resolution**: two first-class
+  modes instead of one demolished gate.
+- **VERIFIED (default)**: the earned stack restored — science_health allowlist,
+  concurrence verifier REQUIRED (fails closed on single-arm servers; posture is
+  config-owned and logged at boot, closing a drift where the launch script silently
+  selected the verifier), definitive+sourced+evidence-floor rules, session cap 10.
+- **OPEN**: every settled check airs after the abort window, wearing a production
+  "AI · UNVERIFIED" marker on the broadcast card, receipts, and export. Disclosure is
+  the model; the marker is not the TEST watermark.
+- **D4 restored ABSOLUTE, both modes** (operator-ratified): person-classed,
+  quote-attribution, and polarity-conflicted cards never auto-air anywhere; the hold
+  sits above the mode switch, test-pinned.
+- **Renames + record fixes**: "veto window" → "abort window" (2s, both modes — the
+  attention data showed it is not review); session exports now persist category,
+  harm_class, mode, and active verifier per entry (the reconciliation needed inference;
+  the next one won't); R53 denial-watch line reinstated (count 3/20); /op shows mode +
+  cap. Replay tests pin both modes against the 8/18+8/20 field sessions.
+
 ## 2026-08-20
 
 - **Speaker attribution (W2).** Deepgram diarization (available, previously unused)

@@ -75,6 +75,13 @@
   let fcAttnPublish = null;   // set in control view → 4a: attention event → aired log (DARK — only fires under ?attn=1, see ATTN_PUBLIC)
   let opBridge = null;    // set in control view → second-phone operator bridge (P3-J): queue snapshot push + command poll
   let fcRoom = null;      // control view's room id — sent on verify calls for per-room caps/BYOK
+  /* D19 (two-mode architecture): auto-air posture is a PER-ROOM MODE — "verified" (the
+     earned stack, DEFAULT for fresh rooms) or "open" (everything airs, wearing the
+     AI·UNVERIFIED dress). Set at /control, persisted with the room, stamped on every
+     card, export entry, publish, and harness event. */
+  let fcModeState = "verified";
+  const fcMode = () => fcModeState;
+  let activeVerifier = null;   // D19 posture: reported by the server (/api/config); null = unknown → VERIFIED fails closed
   let byokActive = false; // room has its own vendor keys registered (caps lifted)
   let audioDeviceId = null;      // chosen input (mic or virtual audio cable) in the control picker
   let refreshAudioDevices = null;   // re-enumerate inputs after mic permission (labels appear)
@@ -165,6 +172,10 @@
         // supports the denial-watch count without the harness log
         polarity: card.polarity || null, polarity_conflict: !!card.polarity_conflict,
         speaker: card.speaker != null ? card.speaker : null,   // W2: whose claim (diarized; null = unattributed/solo)
+        /* D19 auditability (pilot-ledger §11 fix): the next reconciliation must not need
+           inference — the classification and posture ride every entry. */
+        category: card.category || null, harm_class: card.harm_class || null,
+        mode: card.mode || fcMode(), verifier: activeVerifier || null,
         correction: card.correction || null, source: card.source || null, citations: card.citations || null,
         action: card.state === "error" ? "error" : "pending", aired: false, autoAired: false, vetoed: false,
         airedAt: null, pulledAt: null,
@@ -250,7 +261,9 @@
     },
     json() {
       return JSON.stringify({
-        session: { startedAt: this.startedAt, generatedAt: new Date().toISOString(), platform, keyterms: this.keyterms || [], counts: this.counts(), summary: this.summary() },
+        session: { startedAt: this.startedAt, generatedAt: new Date().toISOString(), platform, keyterms: this.keyterms || [],
+          mode: (typeof fcMode === "function" ? fcMode() : null), verifier: (typeof activeVerifier !== "undefined" ? activeVerifier : null),   // D19: session-level posture (entries carry per-card)
+          counts: this.counts(), summary: this.summary() },
         // R54: auto-aired entries always carry an attention value in the export — "uncaptured" when untagged
         entries: this.entries().map((e) => e.autoAired ? Object.assign({}, e, { attention: e.attention || "uncaptured" }) : e),
       }, null, 2);
@@ -286,7 +299,7 @@
   let sessPersistKey = null, sessPersistT = 0, keepQueueOnce = false;   // keepQueueOnce: a restored queue survives the next Start Stream
   const SESS_MAX_AGE = 4 * 3600 * 1000;
   const spkLabel = (c) => (typeof sessionSpeakers !== "undefined" && sessionSpeakers.size >= 2 && c.speaker != null) ? "S" + (c.speaker + 1) : null;   // W2
-  const slimCard = (c) => ({ id: c.id, spoken: c.spoken, claim: c.claim, displayClaim: c.displayClaim || null, state: c.state, speaker: c.speaker != null ? c.speaker : null,
+  const slimCard = (c) => ({ id: c.id, spoken: c.spoken, claim: c.claim, displayClaim: c.displayClaim || null, state: c.state, speaker: c.speaker != null ? c.speaker : null, mode: c.mode || null,
     verdict: c.verdict || null, correction: c.correction || null, source: c.source || null,
     confidence: c.confidence != null ? c.confidence : null, errMsg: c.errMsg || null,
     harm_class: c.harm_class || null, polarity: c.polarity || null, polarity_conflict: !!c.polarity_conflict, autoAirEligible: c.autoAirEligible === true,   // polarity: R53 additive — survives a reload into the restored entry
@@ -624,7 +637,7 @@
          spoken sentence carries the negation the canonical form strips. pickSpokenSentence
          trims multi-sentence utterances to the claim-bearing sentence by content-word overlap. */
       const displayClaim = (polarity === "denies" || polarity === "suspect_denies") ? pickSpokenSentence(t, claim, true) : claim;   // R46: suspect flips show speaker framing from the start
-      const card = { id: ++fcId, _gen: g, _cid: cid, spoken: t, claim, displayClaim, polarity, harm_class: harmClass, category: category || "other", speaker: opts.speaker != null ? opts.speaker : null, state: "checking", spokenAt, extractStartedAt: spokenAt, extractMs: +extractMs.toFixed(0) };   // real claim → checking card now
+      const card = { id: ++fcId, _gen: g, _cid: cid, spoken: t, claim, displayClaim, polarity, harm_class: harmClass, category: category || "other", speaker: opts.speaker != null ? opts.speaker : null, mode: fcMode(), state: "checking", spokenAt, extractStartedAt: spokenAt, extractMs: +extractMs.toFixed(0) };   // real claim → checking card now (D19: mode stamped at creation)
       if (card.speaker != null) sessionSpeakers.add(card.speaker);   // W2: chips/labels render only once a SECOND speaker is seen
       recentClaims.set(normClaim, Date.now());   // F2: register at creation (force-created cards too — they still dedupe later voice repeats)
       if (recentClaims.size > 200) { const nowMs = Date.now(); recentClaims.forEach((at, k) => { if (!withinDupWindow(at, nowMs)) recentClaims.delete(k); }); }
@@ -786,7 +799,7 @@
     if (tabReadOnly) return warnReadOnly();   // M6: read-only tab can't mutate the record
     const veto = !!c._auto && c.state === "pending";
     if (c._auto) { clearTimeout(c._auto); c._auto = null; }
-    if (veto) FT.log("veto_window", { id: c.id, cid: c._cid || null, outcome: "vetoed", input_activity: lastInputT >= (c._armT || 0), ms: Date.now() - (c._armT || Date.now()) });   // R54
+    if (veto) FT.log("abort_window", { id: c.id, cid: c._cid || null, outcome: "aborted", input_activity: lastInputT >= (c._armT || 0), ms: Date.now() - (c._armT || Date.now()), mode: fcMode() });   // R54 (D19 rename)
     c.state = action; renderQueue(); setOps(); SESSION.mark(c.id, action, { veto, reason });
     /* N4 residual closure (P5-E): a dismissal must reach the server's queue snapshot NOW,
        not after the 400ms debounce — that window was the last way a second-phone AIR could
@@ -857,29 +870,57 @@
   function clearOnAir() { if (onAirPacer) onAirPacer.clear(); hideOnAir(); }
   function pullOnAir() { if (tabReadOnly) return warnReadOnly(); clearOnAir(); SESSION.markPulled(); if (fcPublish) fcPublish(null, 0); }   // take the current graphic off-air (locally + overlay)
 
-  /* auto-air — R72 (2026-08-18 operator ruling): the toggle IS the gate. When Auto-air is
-     on, EVERY settled check arms and fires after the veto window — no category allowlist,
-     no confidence floor, no evidence-tier gate, no harm-class hold, no session cap. This
-     supersedes the pilot-era gates (D4 person-hold, R57 allowlist, D5 tier floor, D18 cap);
-     the veto window and the toggle itself are the operator's only control points. */
-  // 2s (was 4s until 2026-08-18): the pipeline floor is ~3.8s spoken→pending, so the 4s veto
-  // was half the perceived talk→air latency. 2s keeps a real beat for a watching operator.
-  const AUTO_AIR_VETO_MS = 2000;
+  /* auto-air — D19 (two-mode architecture, 2026-08-20; supersedes R72's single gate).
+     ABOVE both modes sits D4-ABSOLUTE, restored per the operator's 8/20 ratification
+     ("two modes yes, D4 holds"), deliberately superseding the 8/18 "truly everything"
+     removal (risk named: defamation exposure on unreviewed person-verdicts):
+       claims about named living individuals (person_private, person_public), quote
+       attributions (D11 class — RATIFIED into D4-absolute 8/20; revisit only post-R53
+       n≥20 with a written case), and polarity-conflicted checks NEVER auto-air in ANY mode. A human airs those
+       or nobody does. No config, mode, or flag may override; test-pinned.
+     OPEN mode: every other settled check airs after the abort window; no cap (count =
+     telemetry); every card wears the AI·UNVERIFIED dress — disclosure IS the model.
+     VERIFIED mode (fresh-room default): the earned stack as last ruled — R57
+     science_health allowlist, definitive True/False + source URL + D5 evidence tier,
+     session cap (default 10; dial down always, up only via OPEN), and the concurrence
+     verifier REQUIRED. Fails closed: if the server's active verifier is unknown or
+     single-arm, VERIFIED refuses to arm (a session cannot shed posture silently). */
+  const ABORT_WINDOW_MS = 2000;   // D19 rename (was veto window): attention data says it's an abort affordance, not review
+  const VERIFIED_CAP_DEFAULT = 10;
+  let verifiedCapDial = VERIFIED_CAP_DEFAULT;   // room dial — clamped ≤ default in VERIFIED
+  const verifiedCap = () => Math.min(verifiedCapDial, VERIFIED_CAP_DEFAULT);
+  let verifiedHoldNoted = false;
   function maybeAutoAir(c) {
+    // D4-ABSOLUTE — above the mode switch. No setting may override.
+    if (c.harm_class === "person_private" || c.harm_class === "person_public" || c.harm_class === "quote_attribution") return;
+    if (c.polarity_conflict) return;
     if (!byId("autoAir").checked) return;
-    FT.log("autoair_armed", { id: c.id, cid: c._cid || null });
-    c._armT = Date.now();   // R54: veto-window open — input-activity sampling measures against this
+    if (fcMode() === "verified") {
+      if (activeVerifier !== "concurrence") {   // D19 posture rule — fail closed, tell the operator once
+        if (!verifiedHoldNoted) { verifiedHoldNoted = true; DBG.event("warn", `VERIFIED mode: auto-air held — active verifier is ${activeVerifier || "unknown"}, concurrence required (cards queue for manual AIR)`); }
+        return;
+      }
+      if (c.category !== "science_health") return;                     // R57 allowlist (restored)
+      if (c.autoAirEligible !== true) return;                          // D5 evidence tier (restored)
+      if (!((c.verdict === "True" || c.verdict === "False") && c.source && c.source.url)) return;   // definitive + sourced (restored)
+      if (autoAirCount >= verifiedCap()) {
+        if (!autoAirCapNoted) { autoAirCapNoted = true; DBG.event("warn", `VERIFIED session cap (${verifiedCap()}) reached — remaining cards are manual`); FT.log("autoair_cap", { cap: verifiedCap() }); }
+        return;
+      }
+    }
+    FT.log("autoair_armed", { id: c.id, cid: c._cid || null, mode: fcMode() });
+    c._armT = Date.now();   // R54: abort-window open — input-activity sampling measures against this
     /* H2 closure (P3-F): `streaming` alone is NOT enough — End Stream → Start Stream inside
-       the veto window makes `streaming` true again for the WRONG stream. The card must
+       the abort window makes `streaming` true again for the WRONG stream. The card must
        also belong to the CURRENT generation. Auto-air is autonomous work, so it is gen-guarded
        (operator AIR clicks are not). */
-    c._auto = setTimeout(() => { if (streaming && c._gen === gen && c.state === "pending") {
+    c._auto = setTimeout(() => { if (streaming && c._gen === gen && c.state === "pending" && (fcMode() !== "verified" || autoAirCount < verifiedCap())) {
       autoAirCount++; c._autoAired = true; c._airedAtMs = Date.now();
-      /* R54 objective supplement: did the operator's hands move during THIS card's veto
-         window? (input_activity=false + no tag is the "veto was a formality" signature.) */
-      FT.log("veto_window", { id: c.id, cid: c._cid || null, outcome: "fired", input_activity: lastInputT >= c._armT, ms: Date.now() - c._armT });
+      /* R54 objective supplement: did the operator's hands move during THIS card's abort
+         window? (input_activity=false + no tag is the "window was a formality" signature.) */
+      FT.log("abort_window", { id: c.id, cid: c._cid || null, outcome: "fired", input_activity: lastInputT >= c._armT, ms: Date.now() - c._armT, mode: fcMode() });
       airCard(c);
-    } }, AUTO_AIR_VETO_MS);
+    } }, ABORT_WINDOW_MS);
   }
   const sessionSpeakers = new Set();   // W2: distinct diarized speakers seen this stream
   function clearFactChecks() {
@@ -1370,7 +1411,7 @@
 
   async function startStream() {
     streaming = true; const myGen = ++gen; clearFactChecks();
-    autoAirCount = 0;   // per-session count (R72: informational — no cap)
+    autoAirCount = 0; autoAirCapNoted = false;   // per-session (D19: cap enforced in VERIFIED only)
     winStatsReset();   // W1.3: window_summary is per-stream (belt-and-suspenders — a reload can skip endStream)
     if (applyKeyterms) applyKeyterms();   // R40: keyterms snapshot for this stream
     if (opBridge) opBridge.streamStarted();   // P3-J: start the operator command poll + baseline the queue snapshot
@@ -1424,9 +1465,9 @@
      Mute state survives Start/End Stream on purpose: a surprise-hot mic is worse than
      surprise silence. ---- */
   let muted = false, muteBtnEl = null;
-  // R72: the D18 per-session cap is gone; the count survives for the session record and /op.
-  // Counted at FIRE time (vetoed cards don't count), reset on Start Stream.
-  let autoAirCount = 0;
+  // D19: count at FIRE time; telemetry in OPEN, enforced against verifiedCap() in VERIFIED.
+  // Reset on Start Stream, with the cap-notice latch.
+  let autoAirCount = 0, autoAirCapNoted = false;
   let applyKeyterms = null;   // R40: set by the control bridge; called at Start Stream
   function setMuted(on) {
     muted = !!on;
@@ -1740,6 +1781,46 @@
     const ctrl = $(".control"); if (ctrl) ctrl.insertAdjacentElement("afterend", bar);
     fcRoom = s.room;   // verify calls carry the room for per-room caps / BYOK routing
 
+    /* ---- D19: per-room mode. Fresh rooms (and pre-D19 rooms without a mode) default
+       VERIFIED — the earned stack is the posture you get unless you deliberately leave it.
+       The switch is a first-class control row; switching is logged to DBG + harness. ---- */
+    fcModeState = s.mode === "open" ? "open" : "verified";
+    const modeRow = document.createElement("div");
+    modeRow.className = "obs-bar mode-row";
+    modeRow.innerHTML = `<span class="obs-label">MODE</span>
+      <button class="mode-btn mode-verified" type="button" title="The earned stack: calibrated category only, concurrence verifier required, evidence rules, session cap. What the editorial policy describes.">VERIFIED</button>
+      <button class="mode-btn mode-open" type="button" title="Every settled check airs after the abort window, wearing a visible AI-unverified marker. Person/quote/polarity-conflict cards still hold (D4 — absolute).">OPEN</button>
+      <span class="mode-note"></span>`;
+    bar.insertAdjacentElement("afterend", modeRow);
+    const mBtnV = modeRow.querySelector(".mode-verified"), mBtnO = modeRow.querySelector(".mode-open"), mNote = modeRow.querySelector(".mode-note");
+    const renderMode = () => {
+      mBtnV.classList.toggle("on", fcModeState === "verified");
+      mBtnO.classList.toggle("on", fcModeState === "open");
+      mNote.textContent = fcModeState === "open"
+        ? "every check airs · cards marked AI·UNVERIFIED · D4 holds still apply"
+        : (activeVerifier === "concurrence" ? "earned stack active" : "earned stack — auto-air held (verifier is " + (activeVerifier || "unknown") + ", concurrence required)");
+    };
+    const setMode = (m) => {
+      if (tabReadOnly) return warnReadOnly();
+      if (m === fcModeState) return;
+      fcModeState = m; s.mode = m;
+      try { localStorage.setItem(LS, JSON.stringify(s)); } catch {}
+      DBG.event("info", `mode → ${m.toUpperCase()}`);
+      FT.log("mode_set", { mode: m, room: s.room });
+      renderMode(); setOps();
+      if (opBridge && opBridge.pushNow) opBridge.pushNow();   // /op sees posture immediately
+    };
+    mBtnV.addEventListener("click", () => setMode("verified"));
+    mBtnO.addEventListener("click", () => setMode("open"));
+    /* D19 posture: ask the server who is verifying. Unknown/unreachable means VERIFIED
+       fails closed (activeVerifier stays null). Vercel + self-host both serve /api/config. */
+    fetch("/api/config").then((r) => r.ok ? r.json() : null).then((j) => {
+      if (j && typeof j.verifier === "string") activeVerifier = j.verifier;
+      renderMode();
+      DBG.event("info", `server posture: verifier=${activeVerifier || "unknown"}`);
+    }).catch(() => renderMode());
+    renderMode();
+
     // ---- BYOK pane (D10): keys go straight to the server, are never echoed back (status is
     // booleans only), and expire with the room TTL. Inputs are cleared after every save. ----
     const keysPane = document.createElement("div");
@@ -1825,6 +1906,7 @@
       const body = { room: s.room, writeKey: s.writeKey, durationMs: durationMs === undefined ? DEFAULT_HOLD_MS : durationMs,
         card: card ? { verdict: card.verdict, claim: card.displayClaim || card.claim, canonical: card.claim, correction: card.correction, source: card.source || null,
           speaker: spkLabel(card) || undefined,                               // W2: "S2"-style label; absent for solo/unattributed
+          mode: card.mode || fcMode(),                                        // D19: posture stamp — overlay renders the AI-unverified dress for open-mode cards
           kind: card.kind || undefined,                                       // passthrough (e.g. "correction" — overlay/receipts render it)
           test: card.test === true || undefined,                              // field-test watermark (local TESTAIR only — overlay renders it)
           autoAired: card._autoAired === true || undefined,                   // D18: receipts distinctly mark machine airs
@@ -1876,7 +1958,7 @@
     const operatorUrl = location.origin + "/op?room=" + s.room + "&key=" + s.writeKey;
     let opQueueT = 0, opCmdTimer = 0, opLastCmdId = "", opSessionT0 = 0;
     const opApplied = new Set();
-    const opQCard = (c) => ({ id: c.id, state: c.state, verdict: c.verdict || null, claim: c.displayClaim || c.claim, spk: spkLabel(c),   // D17: /op previews the display framing
+    const opQCard = (c) => ({ id: c.id, state: c.state, verdict: c.verdict || null, claim: c.displayClaim || c.claim, spk: spkLabel(c), mode: c.mode || null,   // D17: /op previews the display framing
       correction: c.correction || null, confidence: c.confidence != null ? c.confidence : null,
       source: c.source || null, harm_class: c.harm_class || null, autoAirEligible: c.autoAirEligible === true,
       polarity_conflict: !!c.polarity_conflict, spokenAt: c.spokenAt || null });
@@ -1891,7 +1973,7 @@
         await fetch("/api/onair", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ room: s.room, writeKey: s.writeKey, op: "queue", cards, onAirId: SESSION.currentOnAir, muted, attn,
             sttStale: clear ? false : sttStale,   // R-transport: dead-air flag — surfaces transport failure on /op even with no card mutation
-            autoair: { on: !!byId("autoAir").checked, count: autoAirCount } }) });   // R43 latch + W4: arm state visible from the street (R72: no cap)
+            autoair: { on: !!byId("autoAir").checked, count: autoAirCount, mode: fcMode(), cap: fcMode() === "verified" ? verifiedCap() : null } }) });   // R43+W4+D19: posture visible from the street
       } catch {}   // best-effort — next mutation re-pushes; /op's 180s TTL bounds staleness
     }
     function opApplyCmd(cmd) {

@@ -176,9 +176,16 @@
     }
     // D18: machine-aired cards are distinctly marked — the record always tells you whether
     // a human thumb or the auto-air gate put this on screen
+    // D19: OPEN-mode cards carry the AI-unverified marker into the public record — the
+    // receipts page is where the disclosure model has to hold up, not just the chyron
+    if (e.mode === "open") {
+      const u = el("span", "rc-unv", "AI · UNVERIFIED");
+      u.title = "aired in OPEN mode (D19): no editorial verification gates — the verdict is a single AI check, disclosed as such on the broadcast card";
+      row.appendChild(u);
+    }
     if (e.autoAired === true) {
       const a = el("span", "rc-auto", "AUTO · machine-aired");
-      a.title = "aired by the auto-air gate under live operator supervision — every machine air runs a 4-second operator veto window (D18)";
+      a.title = "aired by the auto-air gate under live operator supervision — every machine air runs a 2-second operator abort window (D19)";
       top.appendChild(a);
       // 4a (DARK, ?attn=1): the operator's self-reported attention during this card's veto
       // window (R54) — neutral metadata chip, never a judgment dressed as one

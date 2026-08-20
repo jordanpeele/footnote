@@ -17,3 +17,7 @@ daysprint/
 # already covers this path — this line documents intent for when fixtures graduate to a
 # tracked location.
 tools/synthetic/fixtures/*.wav
+# internal infra/architecture docs (Desktop-orchestrator authored — never public)
+docs/BELABOX_*
+docs/FOOTNOTE_BASE_*
+docs/PILOT_LEDGER_*

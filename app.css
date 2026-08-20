@@ -536,6 +536,14 @@ a.fc-src:hover{color:#9db4ee;text-decoration:underline}
 /* warning reason tag on queue cards (harm class / polarity conflict — R72: informational) */
 .fc-manual{font:800 9px var(--mono);letter-spacing:.05em;color:#f5a623;background:rgba(245,166,35,.12);
   border:1px solid rgba(245,166,35,.35);border-radius:4px;padding:2px 6px;white-space:nowrap}
+/* D19 mode row — the two-mode switch is first-class furniture, not a debug flag */
+.mode-row{display:flex;align-items:center;gap:10px}
+.mode-btn{font:800 11px var(--mono);letter-spacing:.08em;color:#8b93a0;background:#141821;
+  border:1px solid #2a2f3a;border-radius:6px;padding:7px 14px;cursor:pointer}
+.mode-btn:hover{color:#f4f6f8}
+.mode-btn.on{color:#0b0b0b;background:var(--fn);border-color:var(--fn)}
+.mode-btn.mode-open.on{color:#dce6f5;background:#2b3850;border-color:#7fa4d4}
+.mode-note{font:500 11px var(--mono);color:#8b93a0}
 /* A-4 (control): optional skip-reason row — labeled vetoes become eval data */
 .fc-skip-reasons{display:flex;gap:5px;margin-top:6px;width:100%}
 .fc-skip-r{font:700 10px var(--mono);color:#9aa3af;background:#141821;border:1px solid #2a2f3a;
