@@ -98,6 +98,10 @@
      path, and the `test` flag rides the card so the overlay shows the watermark. */
   const FT_LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
   const TESTAIR = FT_LOCAL && new URLSearchParams(location.search).has("testair");
+  /* A-2 graduated (2026-08-20): the queue shows LIKELY/UNCERTAIN instead of the saturated
+     raw % (calibration #2/#3: 0.97–0.99 on nearly everything incl. the one wrong aired card).
+     Raw stays one hover away (title) and fully back via ?conf=raw for calibration sessions. */
+  const CONF_RAW = new URLSearchParams(location.search).get("conf") === "raw";
   /* 4a — PUBLIC attention plumbing is DARK BY DEFAULT. Attention tags (R54) stay a
      session-record/harness fact unless the operator opens /control with ?attn=1, in which
      case each tag ALSO lands on the room's aired log (op:"attn" — append-only event, never
@@ -160,6 +164,7 @@
         // R53 (additive, display/telemetry only): polarity rides the entry so the R20 export
         // supports the denial-watch count without the harness log
         polarity: card.polarity || null, polarity_conflict: !!card.polarity_conflict,
+        speaker: card.speaker != null ? card.speaker : null,   // W2: whose claim (diarized; null = unattributed/solo)
         correction: card.correction || null, source: card.source || null, citations: card.citations || null,
         action: card.state === "error" ? "error" : "pending", aired: false, autoAired: false, vetoed: false,
         airedAt: null, pulledAt: null,
@@ -173,7 +178,8 @@
     },
     mark(id, action, opts) {
       const e = this.byId.get(id); if (!e) return;
-      FT.log("mark", { id, action, veto: !!(opts && opts.veto), auto: !!(opts && opts.auto), operator: !!(opts && opts.operator) });
+      FT.log("mark", { id, action, veto: !!(opts && opts.veto), auto: !!(opts && opts.auto), operator: !!(opts && opts.operator), reason: (opts && opts.reason) || undefined });
+      if (opts && opts.reason) e.skipReason = opts.reason;   // A-4: the operator's labeled WHY — rides the R20 export as eval data
       /* correction composer (P3-C): "corrected" is an append-only FLAG, not a disposition —
          it must not clobber action:"aired" (disposition model is the next wave's domain).
          References both stable aired ids: the original's and the correction event's. */
@@ -279,7 +285,8 @@
      mid-session reload doesn't lose the operator's night. Slim cards only — no timers/DOM. ---- */
   let sessPersistKey = null, sessPersistT = 0, keepQueueOnce = false;   // keepQueueOnce: a restored queue survives the next Start Stream
   const SESS_MAX_AGE = 4 * 3600 * 1000;
-  const slimCard = (c) => ({ id: c.id, spoken: c.spoken, claim: c.claim, displayClaim: c.displayClaim || null, state: c.state,
+  const spkLabel = (c) => (typeof sessionSpeakers !== "undefined" && sessionSpeakers.size >= 2 && c.speaker != null) ? "S" + (c.speaker + 1) : null;   // W2
+  const slimCard = (c) => ({ id: c.id, spoken: c.spoken, claim: c.claim, displayClaim: c.displayClaim || null, state: c.state, speaker: c.speaker != null ? c.speaker : null,
     verdict: c.verdict || null, correction: c.correction || null, source: c.source || null,
     confidence: c.confidence != null ? c.confidence : null, errMsg: c.errMsg || null,
     harm_class: c.harm_class || null, polarity: c.polarity || null, polarity_conflict: !!c.polarity_conflict, autoAirEligible: c.autoAirEligible === true,   // polarity: R53 additive — survives a reload into the restored entry
@@ -352,6 +359,11 @@
   const WINDOW_EXTRACT_MS = 3500;
   // TUNABLE — W1.3 window: trailing silence that flushes the last words of a thought.
   const WINDOW_TRAIL_SILENCE_MS = 1500;
+  // TUNABLE — W2 speaker attribution: one speaker must own this share of a run's diarized
+  // words for the run's claims to be attributed; below it the card goes unattributed.
+  const SPEAKER_MIN_SHARE = 0.8;
+  // TUNABLE — W2: minimum diarized words in a run before attribution is even considered.
+  const SPEAKER_MIN_WORDS = 3;
   /**
    * Canonical claim key for dedupe: lowercase, punctuation stripped, whitespace collapsed.
    * @param {string|null|undefined} claim extracted claim text
@@ -464,6 +476,23 @@
     if (preferNegation && best && !hasNegation(best) && hasNegation(spoken)) return String(spoken).trim();
     return best || String(spoken).trim();
   }
+  /**
+   * W2 (speaker attribution) — dominant speaker over a run of diarized words.
+   * Attributes ONLY when one speaker owns >= SPEAKER_MIN_SHARE of the run's diarized words
+   * AND at least SPEAKER_MIN_WORDS words carried a speaker id — a mixed or thin run
+   * attributes to NOBODY (mis-attribution is worse than none; same spirit as D17's
+   * speaker-framing rule). Ids are the STT provider's ints (0-based); null = unknown.
+   * @param {Array<number|null|undefined>} spks per-word speaker ids
+   * @returns {number|null} the dominant speaker id, or null
+   */
+  function dominantSpeaker(spks) {
+    const counts = new Map(); let known = 0;
+    for (const s of (spks || [])) { if (s == null) continue; known++; counts.set(s, (counts.get(s) || 0) + 1); }
+    if (known < SPEAKER_MIN_WORDS) return null;
+    let best = null, bestN = 0;
+    counts.forEach((n, s) => { if (n > bestN) { bestN = n; best = s; } });
+    return bestN / known >= SPEAKER_MIN_SHARE ? best : null;
+  }
   /* ===== END MIRROR BLOCK ===== */
 
   /* Perplexity burst absorber: multi-claim windows (prompt v4) settle several verifies at
@@ -473,7 +502,10 @@
      the backoff sleeps on purpose — when the vendor is shedding load, slowing every lane is
      the fix, not racing it. Cards stay "checking" while queued/retrying; a slower verdict
      beats a dead card with a manual retry button. Kill-switch 503s are never retried. */
-  const VERIFY_MAX_CONCURRENT = 2, VERIFY_RETRIES = 2;
+  // 4 (was 2, 2026-08-20): post tier-bump flood test showed zero vendor 429s — the 2-slot
+  // gate itself became the tail latency (13 claims → p50 10s of queue wait). 4 matches the
+  // max claims one window can settle at once; the retry ladder still absorbs any burst 429.
+  const VERIFY_MAX_CONCURRENT = 4, VERIFY_RETRIES = 2;
   let verifyActive = 0; const verifyWaiters = [];
   const verifySlot = () => new Promise((resolve) => { if (verifyActive < VERIFY_MAX_CONCURRENT) { verifyActive++; resolve(); } else verifyWaiters.push(resolve); });
   const verifyRelease = () => { const next = verifyWaiters.shift(); if (next) next(); else verifyActive--; };
@@ -592,7 +624,8 @@
          spoken sentence carries the negation the canonical form strips. pickSpokenSentence
          trims multi-sentence utterances to the claim-bearing sentence by content-word overlap. */
       const displayClaim = (polarity === "denies" || polarity === "suspect_denies") ? pickSpokenSentence(t, claim, true) : claim;   // R46: suspect flips show speaker framing from the start
-      const card = { id: ++fcId, _gen: g, _cid: cid, spoken: t, claim, displayClaim, polarity, harm_class: harmClass, category: category || "other", state: "checking", spokenAt, extractStartedAt: spokenAt, extractMs: +extractMs.toFixed(0) };   // real claim → checking card now
+      const card = { id: ++fcId, _gen: g, _cid: cid, spoken: t, claim, displayClaim, polarity, harm_class: harmClass, category: category || "other", speaker: opts.speaker != null ? opts.speaker : null, state: "checking", spokenAt, extractStartedAt: spokenAt, extractMs: +extractMs.toFixed(0) };   // real claim → checking card now
+      if (card.speaker != null) sessionSpeakers.add(card.speaker);   // W2: chips/labels render only once a SECOND speaker is seen
       recentClaims.set(normClaim, Date.now());   // F2: register at creation (force-created cards too — they still dedupe later voice repeats)
       if (recentClaims.size > 200) { const nowMs = Date.now(); recentClaims.forEach((at, k) => { if (!withinDupWindow(at, nowMs)) recentClaims.delete(k); }); }
       fcCards.unshift(card); renderQueue(); setOps();
@@ -670,16 +703,18 @@
       // R72: nothing is manual-only anymore — these chips are informational flags so the
       // operator can spot sensitive cards during the veto window (was: D4/D11 manual holds)
       const tags = [];
+      if (sessionSpeakers.size >= 2 && c.speaker != null) tags.push("S" + (c.speaker + 1));   // W2: 1-based display label
       if (c.harm_class === "person_private" || c.harm_class === "person_public") tags.push("⚠ person");
       if (c.harm_class === "quote_attribution") tags.push("⚠ quote");
       if (c.polarity_conflict) tags.push("⚠ polarity");
-      const tagHtml = tags.map((t) => `<span class="fc-manual">${esc(t)}</span>`).join("");
+      const tagHtml = tags.map((t) => `<span class="${/^S\d+$/.test(t) ? "fc-spk" : "fc-manual"}">${esc(t)}</span>`).join("");
       /* correction composer (P3-C): aired cards get a "✎ correct" affordance (control view —
          publishing needs the overlay channel). Corrections are append-only events (D6): the
          original card just gets a "corrected" tag, its log entry is never mutated. */
       const canCorrect = c.state === "aired" && CONTROL_VIEW() && !c.corrected && !c._composing;
       const acts = c.state === "pending"
         ? `<span class="fc-acts"><button class="fc-air" data-id="${c.id}">AIR</button><button class="fc-hold" data-id="${c.id}">HOLD</button><button class="fc-skip" data-id="${c.id}">SKIP</button></span>`
+          + (c._skipAsk ? `<div class="fc-skip-reasons">${SKIP_REASONS.map((r) => `<button class="fc-skip-r" data-id="${c.id}" data-reason="${r}">${r.replace("wrong-entity", "wrong")}</button>`).join("")}<button class="fc-skip-r plain" data-id="${c.id}" data-reason="">skip</button></div>` : "")
         : `<span class="fc-acts"><span class="fc-state-tag">${c.state === "aired" ? "● AIRED" : c.state.toUpperCase()}</span>${c.corrected ? `<span class="fc-corrected-tag">↺ corrected</span>` : ""}${canCorrect ? `<button class="fc-correct" data-id="${c.id}" title="Air an on-record correction for this check">✎ correct</button>` : ""}${attnHtml(c)}</span>`;
       /* correction composer (P3-C): inline, not a modal — original claim + verdict read-only,
          one-line correction text, optional source URL. Drafts live on the card (c._corrDraft /
@@ -691,7 +726,7 @@
           <input class="fc-cc-url" data-id="${c.id}" placeholder="source URL (optional)" value="${esc(c._corrUrl || "")}" spellcheck="false">
           <div class="fc-cc-acts"><button class="fc-cc-air" data-id="${c.id}">AIR CORRECTION</button><button class="fc-cc-cancel" data-id="${c.id}">cancel</button></div>
         </div>` : "";
-      el.innerHTML = `<div class="fc-top"><span class="fc-badge ${m.cls}">${m.icon} ${m.label}</span>${tagHtml}<span class="fc-conf">${Math.round((c.confidence || 0) * 100)}%</span></div>
+      el.innerHTML = `<div class="fc-top"><span class="fc-badge ${m.cls}">${m.icon} ${m.label}</span>${tagHtml}<span class="fc-conf${CONF_RAW ? "" : " fc-conf-bucket"}" title="${Math.round((c.confidence || 0) * 100)}% — model self-report; measured saturated, so the label is coarse on purpose">${CONF_RAW ? Math.round((c.confidence || 0) * 100) + "%" : ((c.confidence || 0) >= 0.9 ? "LIKELY" : "UNCERTAIN")}</span></div>
         <div class="fc-claim">“${esc(c.displayClaim || c.claim)}”</div>
         <div class="fc-correction">${esc(c.correction || "")}</div>
         <div class="fc-foot">${src}${acts}</div>${composer}`;
@@ -703,7 +738,8 @@
     const id = +b.dataset.id, c = fcCards.find((x) => x.id === id); if (!c) return;
     if (b.classList.contains("fc-attn-b")) applyAttention(c, b.dataset.attn, "control");
     else if (b.classList.contains("fc-air")) airCard(c);
-    else if (b.classList.contains("fc-skip")) dismissCard(c, "skipped");
+    else if (b.classList.contains("fc-skip")) { c._skipAsk = !c._skipAsk; renderQueue(); }   // A-4: first tap opens the optional reason row
+    else if (b.classList.contains("fc-skip-r")) { c._skipAsk = false; dismissCard(c, "skipped", b.dataset.reason || undefined); }
     else if (b.classList.contains("fc-hold")) dismissCard(c, "held");
     else if (b.classList.contains("fc-retry")) { fcCards = fcCards.filter((x) => x.id !== id); checkUtterance(c.claim, { force: true }); }
     /* correction composer (P3-C) */
@@ -745,12 +781,13 @@
   }
 
   // skip/hold share one path so the auto-air veto is always recorded (timer live = operator veto)
-  function dismissCard(c, action) {
+  const SKIP_REASONS = ["wrong-entity", "dull", "risky", "other"];   // A-4 taxonomy — must match /op's reason row
+  function dismissCard(c, action, reason) {
     if (tabReadOnly) return warnReadOnly();   // M6: read-only tab can't mutate the record
     const veto = !!c._auto && c.state === "pending";
     if (c._auto) { clearTimeout(c._auto); c._auto = null; }
     if (veto) FT.log("veto_window", { id: c.id, cid: c._cid || null, outcome: "vetoed", input_activity: lastInputT >= (c._armT || 0), ms: Date.now() - (c._armT || Date.now()) });   // R54
-    c.state = action; renderQueue(); setOps(); SESSION.mark(c.id, action, { veto });
+    c.state = action; renderQueue(); setOps(); SESSION.mark(c.id, action, { veto, reason });
     /* N4 residual closure (P5-E): a dismissal must reach the server's queue snapshot NOW,
        not after the 400ms debounce — that window was the last way a second-phone AIR could
        land on a just-dismissed card. Best-effort immediate push; the debounced path still
@@ -844,8 +881,10 @@
       airCard(c);
     } }, AUTO_AIR_VETO_MS);
   }
+  const sessionSpeakers = new Set();   // W2: distinct diarized speakers seen this stream
   function clearFactChecks() {
     fcCards.forEach((c) => c._auto && clearTimeout(c._auto));
+    sessionSpeakers.clear();   // W2: a new broadcast may be solo — labels re-earn themselves
     if (keepQueueOnce) keepQueueOnce = false;   // first Start Stream after a reload-restore keeps the queue actionable
     else fcCards = [];
     // gate-decision completeness: any logged claim whose card is gone can never be actioned → close it out
@@ -1151,7 +1190,7 @@
      (windowShouldExtract) regardless of how Deepgram shredded the finals. winTimer runs
      per stream (killed at End Stream). Overlapping windows re-extracting the same claim
      are absorbed by F2 dedupe; hallucination is fenced by the P4-F1 grounding gate. */
-  let winWords = [], winLastAt = 0, winNewWords = 0, winLastExtract = 0, winEndsTerminal = false, winTimer = 0, winLastSent = "";
+  let winWords = [], winSpks = [], winLastAt = 0, winNewWords = 0, winLastExtract = 0, winEndsTerminal = false, winTimer = 0, winLastSent = "";   // winSpks: W2 per-word speaker ids, parallel to winWords
   /* W1.3 window hardening — per-STREAM window lifecycle accounting for the morning field
      read: windows fired by trigger reason, words that entered the window vs words handed
      to extraction, and how often the winLastSent identical-window suppressor consumed a
@@ -1164,13 +1203,16 @@
   winStatsReset();
   function windowExtract(reason) {
     const text = winWords.slice(-WINDOW_WORDS).join(" ").trim();
+    // W2: the claim that triggers a window extract lives in the words that JUST arrived —
+    // attribute by their dominant speaker (mixed/thin runs → null, never a guess)
+    const winSpk = dominantSpeaker(winSpks.slice(-Math.min(winNewWords, WINDOW_WORDS)));
     winNewWords = 0; winLastExtract = Date.now(); winEndsTerminal = false;
     if (!text || text === winLastSent) { if (text) winStats.suppressed++; return; }
     winLastSent = text;
     const wordCount = text.split(/\s+/).length;
     winStats.windows++; winStats.by_reason[reason] = (winStats.by_reason[reason] || 0) + 1; winStats.words_sent += wordCount;
     FT.log("window_extract", { reason, words: wordCount, text: text.slice(0, 200) });
-    checkUtterance(text, { merged: true });   // merged: word-min bypass only — F2 + grounding still gate
+    checkUtterance(text, { merged: true, speaker: winSpk });   // merged: word-min bypass only — F2 + grounding still gate
   }
   let dgEverWorked = false, dgRetryN = 0, dgRetryT = 0;   // mid-session drop → auto-reconnect (unattended/auto-air safe)
   /* ---- R-transport: dead-air detector (FS-2 lineage — make silent transport failure LOUD).
@@ -1222,7 +1264,7 @@
   let customKeyterms = [];
   const activeKeyterms = () => DG_KEYTERMS.concat(customKeyterms).slice(0, 100);
   const dgUrl = (sr) => `wss://api.deepgram.com/v1/listen?model=nova-3&language=en&encoding=linear16&sample_rate=${sr}`
-    + `&channels=1&punctuate=true&smart_format=true&interim_results=true&`
+    + `&channels=1&punctuate=true&smart_format=true&interim_results=true&diarize=true&`
     + (DG_EP ? `endpointing=${DG_EP}&` : "") + activeKeyterms().map((t) => "keyterm=" + encodeURIComponent(t)).join("&");
   function floatTo16(f32) {
     const out = new Int16Array(f32.length);
@@ -1246,7 +1288,7 @@
     if (!auth) { DBG.event("err", "no Deepgram auth available"); return false; }
     DBG.event("info", auth[0] === "bearer" ? "Deepgram auth · server token" : "Deepgram auth · inlined key (legacy)");
     dgFinalWords = []; dgGotResult = false; prevFinalText = ""; prevFinalAt = 0;
-    winWords = []; winNewWords = 0; winLastAt = 0; winLastExtract = Date.now(); winLastSent = "";   // never window across a (re)connect boundary
+    winWords = []; winSpks = []; winNewWords = 0; winLastAt = 0; winLastExtract = Date.now(); winLastSent = "";   // never window across a (re)connect boundary
     clearInterval(winTimer);
     winTimer = setInterval(() => {
       if (g !== gen || !winNewWords) return;
@@ -1277,7 +1319,10 @@
       if (!tr) return;
       dgGotResult = true; dgEverWorked = true; dgRetryN = 0;
       if (d.is_final) noteFinalHeard();   // R-transport: audio is reaching STT — clears any dead-air flag
-      if (d.is_final) FT.log("stt_final", { transcript: tr, words: tr.split(/\s+/).length });
+      // W2 diarization: per-word speaker ids ride alt.words; align to the transcript's
+      // whitespace tokens by index (Deepgram's word list tracks the transcript closely).
+      const wordsMeta = (d.is_final && alt && alt.words) || [];
+      if (d.is_final) FT.log("stt_final", { transcript: tr, words: tr.split(/\s+/).length, speaker: dominantSpeaker(wordsMeta.map((w) => w.speaker)) });
       else if (Date.now() - ftLastInterim > 400) { ftLastInterim = Date.now(); FT.log("stt_interim", { transcript: tr.slice(-120) }); }
       // live transcript on every result; fact-check each COMPLETED (final) sentence
       let tail;
@@ -1285,7 +1330,8 @@
       else { tail = (dgFinalWords.slice(-10).join(" ") + " " + tr).trim().split(/\s+/).slice(-18).join(" "); }
       ssTranscript.textContent = tail;
       if (d.is_final) {
-        checkUtterance(tr);
+        const spkArr = tr.split(/\s+/).map((_, i) => (wordsMeta[i] && wordsMeta[i].speaker != null) ? wordsMeta[i].speaker : null);
+        checkUtterance(tr, { speaker: dominantSpeaker(spkArr) });
         /* W1.2 — rolling final-assembler (supersedes the F3 pair-join; session 2: bonded
            audio shredded claims across 2-5 pre-punctuated finals that pairs can't rebuild).
            Every final ALSO lands in a buffer; the buffer flushes as ONE joined utterance
@@ -1297,6 +1343,7 @@
         const nowAt = Date.now();
         const ws_ = tr.split(/\s+/).filter(Boolean);
         winWords.push(...ws_); if (winWords.length > 60) winWords = winWords.slice(-60);
+        winSpks.push(...spkArr); if (winSpks.length > 60) winSpks = winSpks.slice(-60);
         winNewWords += ws_.length; winLastAt = nowAt; winEndsTerminal = /[.!?]$/.test(tr);
         winStats.words_in += ws_.length;   // W1.3 summary: every word that entered the window
         if (winEndsTerminal && windowShouldExtract(winNewWords, nowAt - winLastExtract, 0, true)) windowExtract("terminal");
@@ -1450,7 +1497,7 @@
     if (dgWs) { try { dgWs.send(JSON.stringify({ type: "CloseStream" })); } catch {} try { dgWs.close(); } catch {} dgWs = null; }
     if (dgProc) { try { dgProc.disconnect(); } catch {} dgProc = null; }
     dgSource = null; dgCtx = null; dgFinalWords = []; prevFinalText = ""; prevFinalAt = 0;
-    clearInterval(winTimer); winTimer = 0; winWords = []; winNewWords = 0;   // window dies with the stream — never extract into a dead broadcast
+    clearInterval(winTimer); winTimer = 0; winWords = []; winSpks = []; winNewWords = 0;   // window dies with the stream — never extract into a dead broadcast
     // W1.3 summary: one per-stream lifecycle event — windows by trigger reason, words in vs
     // sent, suppressor hits. Emitted before reset so the morning read gets the whole stream.
     if (winStats.windows || winStats.words_in || winStats.suppressed) FT.log("window_summary", winStats);
@@ -1777,6 +1824,7 @@
       if (tabReadOnly) { warnReadOnly(); return null; }   // M6: read-only tab never touches the overlay channel
       const body = { room: s.room, writeKey: s.writeKey, durationMs: durationMs === undefined ? DEFAULT_HOLD_MS : durationMs,
         card: card ? { verdict: card.verdict, claim: card.displayClaim || card.claim, canonical: card.claim, correction: card.correction, source: card.source || null,
+          speaker: spkLabel(card) || undefined,                               // W2: "S2"-style label; absent for solo/unattributed
           kind: card.kind || undefined,                                       // passthrough (e.g. "correction" — overlay/receipts render it)
           test: card.test === true || undefined,                              // field-test watermark (local TESTAIR only — overlay renders it)
           autoAired: card._autoAired === true || undefined,                   // D18: receipts distinctly mark machine airs
@@ -1828,7 +1876,7 @@
     const operatorUrl = location.origin + "/op?room=" + s.room + "&key=" + s.writeKey;
     let opQueueT = 0, opCmdTimer = 0, opLastCmdId = "", opSessionT0 = 0;
     const opApplied = new Set();
-    const opQCard = (c) => ({ id: c.id, state: c.state, verdict: c.verdict || null, claim: c.displayClaim || c.claim,   // D17: /op previews the display framing
+    const opQCard = (c) => ({ id: c.id, state: c.state, verdict: c.verdict || null, claim: c.displayClaim || c.claim, spk: spkLabel(c),   // D17: /op previews the display framing
       correction: c.correction || null, confidence: c.confidence != null ? c.confidence : null,
       source: c.source || null, harm_class: c.harm_class || null, autoAirEligible: c.autoAirEligible === true,
       polarity_conflict: !!c.polarity_conflict, spokenAt: c.spokenAt || null });
@@ -1865,7 +1913,10 @@
         DBG.event("info", "operator AIR (second phone)", { claim: (c.claim || "").slice(0, 60), id: cmd.airedId || null });
       } else if (cmd.action === "skip" || cmd.action === "hold") {
         if (!c || c.state !== "pending") return;
-        dismissCard(c, cmd.action === "skip" ? "skipped" : "held");
+        // A-4 completion: the phone's optional reason previously died on the cmd log —
+        // validate against the taxonomy and land it in the session record like a local skip
+        const reason = cmd.action === "skip" && SKIP_REASONS.includes(cmd.reason) ? cmd.reason : undefined;
+        dismissCard(c, cmd.action === "skip" ? "skipped" : "held", reason);
         DBG.event("info", `operator ${cmd.action.toUpperCase()} (second phone)`, { claim: (c.claim || "").slice(0, 60) });
       } else if (cmd.action === "mute" || cmd.action === "unmute") {
         // R43: latched mute from the street phone — same semantics as the Mac M-key

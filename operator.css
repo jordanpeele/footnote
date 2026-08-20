@@ -102,6 +102,7 @@ body{background:var(--bg);color:var(--txt);font-family:var(--disp);min-height:10
 .oa-verdict.v-warn{color:var(--warn);background:rgba(245,166,35,.14)}
 .oa-verdict.v-gray{color:var(--gray);background:rgba(120,130,145,.16)}
 .oa-verdict.v-corr{color:#5aa7f0;background:rgba(79,155,232,.14)}
+.tag.spk{color:#7fd4ff;background:rgba(88,166,255,.12);border-color:rgba(88,166,255,.35)}   /* W2 speaker chip — neutral */
 .tag{font:800 9px var(--mono);letter-spacing:.05em;color:var(--warn);background:rgba(245,166,35,.12);
   border:1px solid rgba(245,166,35,.35);border-radius:4px;padding:2px 6px;white-space:nowrap}
 .conf{margin-left:auto;font:700 12px var(--mono);color:var(--dim)}

@@ -252,6 +252,7 @@ body{background:#050506;color:#f4f6f8;font-family:var(--disp);
 .fc-badge.v-warn{color:#f5a623;background:rgba(245,166,35,.14)}
 .fc-badge.v-gray{color:#9aa3af;background:rgba(120,130,145,.16)}
 .fc-conf{font:700 11px var(--mono);color:#8b93a0}
+.fc-conf-bucket{font-size:9px;letter-spacing:.08em;text-transform:uppercase}   /* A-2: coarse honest label */
 .fc-claim{font:700 13.5px/1.32 var(--disp);color:#eef1f4}
 .fc-correction{font:500 12.5px/1.4 var(--disp);color:#b7bec8}
 .fc-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:1px}
@@ -532,9 +533,18 @@ a.fc-src:hover{color:#9db4ee;text-decoration:underline}
    obs-bar element styles; the tinted border marks it as the sensitive (write-key) row. */
 .obs-bar.op-row{border-color:#1e3a2e;margin-top:-4px}
 .obs-bar.op-row .obs-url{color:#bfeeda}
-/* manual-only reason tag on queue cards (harm class / polarity conflict) */
+/* warning reason tag on queue cards (harm class / polarity conflict — R72: informational) */
 .fc-manual{font:800 9px var(--mono);letter-spacing:.05em;color:#f5a623;background:rgba(245,166,35,.12);
   border:1px solid rgba(245,166,35,.35);border-radius:4px;padding:2px 6px;white-space:nowrap}
+/* A-4 (control): optional skip-reason row — labeled vetoes become eval data */
+.fc-skip-reasons{display:flex;gap:5px;margin-top:6px;width:100%}
+.fc-skip-r{font:700 10px var(--mono);color:#9aa3af;background:#141821;border:1px solid #2a2f3a;
+  border-radius:5px;padding:4px 8px;cursor:pointer}
+.fc-skip-r:hover{background:#1c212b;color:#f4f6f8}
+.fc-skip-r.plain{margin-left:auto;color:#6b7280}
+/* W2 speaker chip — neutral (it's attribution, not a warning); renders only multi-speaker */
+.fc-spk{font:800 9px var(--mono);letter-spacing:.05em;color:#7fd4ff;background:rgba(88,166,255,.12);
+  border:1px solid rgba(88,166,255,.35);border-radius:4px;padding:2px 6px;white-space:nowrap}
 
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}

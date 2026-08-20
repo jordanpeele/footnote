@@ -50,6 +50,7 @@ function slimCard(c) {
      the substrate for accountability review; same strip/cut budget as claim. */
   if (typeof c.canonical === "string" && c.canonical) slim.canonical = cut(strip(c.canonical), 300);
   if (typeof c.kind === "string") slim.kind = cut(strip(c.kind), 24);   // passthrough (e.g. "correction" cards — overlay renders)
+  if (typeof c.speaker === "string" && /^S\d{1,2}$/.test(c.speaker)) slim.speaker = c.speaker;   // W2: validated display label ("S2") — overlay kicker + receipts
   if (c.test === true) slim.test = true;   // field-test watermark flag (local TESTAIR) — boolean only, overlay renders "TEST"
   if (c.autoAired === true) slim.autoAired = true;   // D18: machine airs are distinctly marked on receipts
   if (typeof c.refId === "string" && c.refId) slim.refId = cut(strip(c.refId), 32);         // correction → original join key (R9)

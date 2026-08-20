@@ -3,6 +3,34 @@
 Notable changes, security-relevant ones first-class. Starts 2026-08-12; earlier
 history is in the commit log and the decision records (`docs/DECISIONS.md`).
 
+## 2026-08-20
+
+- **Speaker attribution (W2).** Deepgram diarization (available, previously unused)
+  now rides the streaming connection; every card records WHOSE claim it's checking.
+  The editorial rule is conservative on purpose: a claim is attributed only when one
+  speaker owns ≥80% of the run's diarized words (≥3 words) — mixed or thin runs
+  attribute to nobody, because a wrong name on a broadcast graphic is worse than no
+  name. Labels (S1/S2…) render on the queue, /op, the chyron kicker, and the session
+  record — and only once a second speaker has actually been seen, so solo streams are
+  visually unchanged. Typed claims and the chunked STT fallback stay unattributed.
+- **Confidence display: bucketed by default (A-2 graduated).** Calibration measured
+  the raw confidence as saturated (0.97–0.99 on nearly everything, including the one
+  wrong card ever aired) — so the queue and /op now show LIKELY/UNCERTAIN instead of
+  implying precision that isn't there. Raw % is one hover away and fully back via
+  `?conf=raw`.
+- **Skip reasons on /control (A-4 completed).** SKIP now opens the same optional
+  one-tap reason row /op has (wrong-entity / dull / risky / other); the reason lands
+  in the session record as `skipReason`. Also fixed: /op's phone-side reasons were
+  being dropped on the control side — they now reach the record too. Every veto is
+  labeled eval data.
+- **Latency ledger:** honest entries for the v4 multi-claim extract cost and the
+  hosted-serverless path (cold-start + vendor-caching caveats included).
+- **Verify concurrency gate 2 → 4.** After the operator raised the Perplexity API
+  tier, the post-tier flood test showed zero vendor 429s — the 2-slot gate itself
+  had become the tail latency (13 simultaneous claims queued ~10s at p50). Four
+  slots matches the most claims one window can settle at once; the 429 retry
+  ladder stays as the burst guard (it absorbed exactly one transient in testing).
+
 ## 2026-08-18
 
 - **Extraction — prompt v4: multi-claim windows (rapid-fire speech).** The v3

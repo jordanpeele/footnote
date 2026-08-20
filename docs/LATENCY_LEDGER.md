@@ -175,6 +175,30 @@ default wins on BOTH axes. Decision: no default change, ever, absent new evidenc
 the `?ep=` hatch stays for experiments. Also this session: F2 dedupe FIELD-FIRED
 (duplicate suppressed live), 3/3 verdicts correct, air→render p50 306ms.
 
+## V4 · multi-claim extraction cost (2026-08-18/20)
+
+Prompt v4 (multi-claim windows, `{"claims":[...]}`) moved local extract from
+~0.8–1.0s p50 (v3) to **~0.9–1.7s** (desk sessions 8/18 + 8/20; flood-load p50 1.7s).
+The cost is prefill + a bigger output envelope; the buy is rapid-fire claims no longer
+silently dropped (the v3 contract lost all but one claim per window — 8/18 desk session,
+CHANGELOG). Verdict: worth it — extraction is not the block (verify is), and a dropped
+claim is a 100% latency penalty on that claim.
+
+## W3 · hosted-path honesty numbers (2026-08-20, footnote-live/Vercel serverless)
+
+Measured against the production deployment, single-region client, 6 extract + 3 verify:
+
+- **extract**: first-hit 1.9s, warm 0.9–1.7s — roughly the local single-process numbers
+  plus cold-start variance; budget ~+1s on a function's first hit.
+- **verify**: first-hit 4.1s, then 1.7–2.0s — CAVEAT: repeats of the SAME claim run
+  suspiciously under the 2.6–3.0s field p50, consistent with vendor-side caching, so the
+  warm repeats are NOT representative of distinct-claim traffic. Treat hosted verify as
+  field-equivalent (~2.6–3.0s) + cold-start on first hit.
+
+Bottom line for self-hosters on serverless: spoken→pending ≈ the ledger's ~3.8s machine
+floor, plus ~1–2s ONCE per cold function. The single-process `npm start` path avoids
+cold starts entirely.
+
 Cumulative field record (R47, superseding R38): **4 sessions · 102 checks ·
 1 wrong-verdict card aired (FS-8, closed by the R46 negation tripwire — shipped,
 live-probed, regression-replayed in test/field-replay.test.js) · 1 display-incoherent

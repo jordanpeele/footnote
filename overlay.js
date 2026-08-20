@@ -96,6 +96,9 @@
     onAir.className = "onair " + m.cls + (card.test === true ? " test" : "");   // TEST watermark (local field-test airs)
     ftLog("render", { claim: (card.claim || "").slice(0, 120), verdict: card.verdict || null, test: card.test === true });
     byId("oaVerdict").textContent = m.icon + " " + m.label;
+    // W2: multi-speaker sessions label whose claim this is; solo streams stay plain FACT CHECK
+    const kick = onAir.querySelector(".oa-kicker");
+    if (kick) kick.textContent = card.speaker ? "FACT CHECK · " + card.speaker : "FACT CHECK";
     byId("oaClaim").textContent = corr ? (card.correction || "") : "“" + (card.claim || "") + "”";
     const sub = byId("oaCorrection");
     const tok = ++refToken;

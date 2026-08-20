@@ -30,6 +30,11 @@ const WINDOW_MIN_NEW_WORDS = 3;
 const WINDOW_EXTRACT_MS = 3500;
 // TUNABLE — W1.3 window: trailing silence that flushes the last words of a thought.
 const WINDOW_TRAIL_SILENCE_MS = 1500;
+// TUNABLE — W2 speaker attribution: one speaker must own this share of a run's diarized
+// words for the run's claims to be attributed; below it the card goes unattributed.
+const SPEAKER_MIN_SHARE = 0.8;
+// TUNABLE — W2: minimum diarized words in a run before attribution is even considered.
+const SPEAKER_MIN_WORDS = 3;
 /**
  * Canonical claim key for dedupe: lowercase, punctuation stripped, whitespace collapsed.
  * @param {string|null|undefined} claim extracted claim text
@@ -142,6 +147,23 @@ function pickSpokenSentence(spoken, claim, preferNegation) {
   if (preferNegation && best && !hasNegation(best) && hasNegation(spoken)) return String(spoken).trim();
   return best || String(spoken).trim();
 }
+/**
+ * W2 (speaker attribution) — dominant speaker over a run of diarized words.
+ * Attributes ONLY when one speaker owns >= SPEAKER_MIN_SHARE of the run's diarized words
+ * AND at least SPEAKER_MIN_WORDS words carried a speaker id — a mixed or thin run
+ * attributes to NOBODY (mis-attribution is worse than none; same spirit as D17's
+ * speaker-framing rule). Ids are the STT provider's ints (0-based); null = unknown.
+ * @param {Array<number|null|undefined>} spks per-word speaker ids
+ * @returns {number|null} the dominant speaker id, or null
+ */
+function dominantSpeaker(spks) {
+  const counts = new Map(); let known = 0;
+  for (const s of (spks || [])) { if (s == null) continue; known++; counts.set(s, (counts.get(s) || 0) + 1); }
+  if (known < SPEAKER_MIN_WORDS) return null;
+  let best = null, bestN = 0;
+  counts.forEach((n, s) => { if (n > bestN) { bestN = n; best = s; } });
+  return bestN / known >= SPEAKER_MIN_SHARE ? best : null;
+}
 /* ===== END MIRROR BLOCK ===== */
 
-export { DUP_CLAIM_WINDOW_MS, MERGE_MAX_GAP_MS, MERGE_SHORT_WORDS, ASSEMBLE_SILENCE_MS, ASSEMBLE_MAX_FINALS, WINDOW_WORDS, WINDOW_MIN_NEW_WORDS, WINDOW_EXTRACT_MS, WINDOW_TRAIL_SILENCE_MS, normalizeClaim, withinDupWindow, shouldMergeFinals, assemblyShouldFlush, windowShouldExtract, pickSpokenSentence, hasNegation };
+export { DUP_CLAIM_WINDOW_MS, MERGE_MAX_GAP_MS, MERGE_SHORT_WORDS, ASSEMBLE_SILENCE_MS, ASSEMBLE_MAX_FINALS, WINDOW_WORDS, WINDOW_MIN_NEW_WORDS, WINDOW_EXTRACT_MS, WINDOW_TRAIL_SILENCE_MS, normalizeClaim, withinDupWindow, shouldMergeFinals, assemblyShouldFlush, windowShouldExtract, pickSpokenSentence, hasNegation, SPEAKER_MIN_SHARE, SPEAKER_MIN_WORDS, dominantSpeaker };

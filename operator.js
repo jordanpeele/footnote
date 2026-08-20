@@ -23,8 +23,12 @@
      DEFAULT IS OFF — raw % is unchanged for the owner until they append ?conf=bucket and
      see it. Trivially reversible (drop the param). This is the ONLY behavior-changing item
      in this sprint, and it ships dark. */
-  const CONF_MODE_DEFAULT = "raw";                     // must stay "raw" — nothing changes until flipped
-  const confMode = qs.get("conf") === "bucket" ? "bucket" : CONF_MODE_DEFAULT;
+  /* A-2 GRADUATED (2026-08-20, sprint ruling): bucketed is now the DEFAULT. Calibration
+     #2/#3 measured the raw % as saturated (0.97–0.99 on nearly everything, including the
+     one wrong card ever aired) — a number that doesn't discriminate, displayed as if it
+     does, is the exact "false signal to the operator" the roadmap orders fixed first.
+     ?conf=raw is the escape hatch for calibration/debug sessions. */
+  const confMode = qs.get("conf") === "raw" ? "raw" : "bucket";
   const confBucket = (v) => v >= 0.9 ? "likely" : "uncertain";
 
   const VERDICT_META = {
@@ -304,9 +308,11 @@
       } else {
         const m = vmeta(c.verdict);
         top.appendChild(el("span", "badge " + m.cls, m.label));
-        // manual-hold tags — why auto-air won't touch this card (D4/D11); the human decides
-        if (c.harm_class === "person_private" || c.harm_class === "person_public") top.appendChild(el("span", "tag", "MANUAL — person"));
-        if (c.harm_class === "quote_attribution") top.appendChild(el("span", "tag", "MANUAL — quote"));
+        // W2: whose claim (renders only when control has seen ≥2 diarized speakers)
+        if (c.spk) top.appendChild(el("span", "tag spk", c.spk));
+        // sensitive-card cues for the veto window (R72: informational, nothing is manual-only)
+        if (c.harm_class === "person_private" || c.harm_class === "person_public") top.appendChild(el("span", "tag", "⚠ person"));
+        if (c.harm_class === "quote_attribution") top.appendChild(el("span", "tag", "⚠ quote"));
         if (c.polarity_conflict) top.appendChild(el("span", "tag", "⚠ polarity"));
         if (mark === "air") {
           // P7-B state machine: AIRING… → AIRED ✓ → ON AIR ✓✓ | STALL (see airs map above)
@@ -317,7 +323,7 @@
         } else if (mark) top.appendChild(el("span", "sent-tag", mark === "hold" ? "HELD" : "SKIPPED"));
         else if (c.confidence != null) top.appendChild(
           confMode === "bucket"
-            ? el("span", "conf conf-bucket", confBucket(c.confidence))   // A-2: coarse label (flag on)
+            ? el("span", "conf conf-bucket", confBucket(c.confidence))   // A-2 default: coarse honest label
             : el("span", "conf", Math.round(c.confidence * 100) + "%"),  // default: raw %, unchanged
         );
       }
